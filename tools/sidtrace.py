@@ -1,20 +1,35 @@
 """Trace SID register writes of a PSID or C64 PRG under jennings and compare them."""
 
 import argparse
+import hashlib
+import re
 import sys
 
 from jennings.devices.mpu6502 import MPU
 from jennings.memory import NativeMemory
+from jennings.coverage.elf import load_elf
 from tqdm import tqdm
 
-from gen_data import parse_labels
-
 SID = range(0xD400, 0xD41D)
-PAL_FRAME = 63 * 312
-PLAY_LINE = 0xFF
 MAX_CYCLES = 1_000_000
 KERNAL_JUMPS = range(0xFF81, 0xFFF6, 3)
 RTS = 0x60
+
+
+def parse_labels(text):
+    """Parse an ACME label dump into {name: address}."""
+    return {
+        m[1]: int(m[2], 16)
+        for m in re.finditer(r"^\s*(\S+)\s*=\s*\$([0-9a-fA-F]+)", text, re.M)
+    }
+
+
+def sid_ranges(data):
+    """SID register ranges a PSID writes: $d400 plus any v3/v4 extra SIDs."""
+    extra = [data[o] for o in (0x7A, 0x7B) if len(data) > 0x7B and data[5] >= 3]
+    return [
+        range(a, a + 0x1D) for a in [0xD400] + [0xD000 | b << 4 for b in extra if b]
+    ]
 
 
 def _mpu(load, image):
@@ -33,61 +48,82 @@ def psid_parts(data):
     return load, word(0x0A), word(0x0C), image
 
 
-def trace_psid(data, frames, watch=None, on_watch=None):
+def trace_psid(data, frames, watch=None, on_watch=None, song=None):
     """SID writes of init then `frames` play calls: a list per frame, init first.
 
     Writes to `watch` addresses are passed to on_watch(frame, addr, value)."""
     load, init, play, image = psid_parts(data)
     mem, mpu = _mpu(load, image)
+    sids = sid_ranges(data)
     out = [[]]
     frame = [0]
 
     def on_write(addr, value):
-        if addr in SID:
+        if any(addr in r for r in sids):
             out[-1].append((addr, value))
         else:
             on_watch(frame[0], addr, value)
 
-    mem.observe_data_access(None, on_write, writes=[SID] + ([watch] if watch else []))
-    mpu.run_to_rts(init, 0, MAX_CYCLES)
+    mem.observe_data_access(None, on_write, writes=sids + ([watch] if watch else []))
+    mpu.run_to_rts(init, data[0x11] - 1 if song is None else song, MAX_CYCLES)
     for frame[0] in tqdm(range(1, frames + 1), desc="psid", unit="frame"):
         out.append([])
         mpu.run_to_rts(play, 0, MAX_CYCLES)
     return out
 
 
-def prg_entry(prg):
-    """Return (load, sys address, image) of a PRG with a BASIC SYS stub."""
-    load = prg[0] | prg[1] << 8
-    line = prg[6:]
-    sys_at = line.index(0x9E) + 1
-    digits = bytes(line[sys_at : line.index(0, sys_at)]).strip()
-    return load, int(digits), prg[2:]
+def trace_prg(prg, frames, sids=(SID,), song=0):
+    """SID writes of a C build: frame n holds the writes after its n-th frame_wait.
 
-
-def trace_prg(prg, frames):
-    """SID writes of a PRG playing once per PAL frame at raster line PLAY_LINE.
-
-    Writes before the first play are frame 0, matching trace_psid."""
-    load, entry, image = prg_entry(prg)
-    mem, mpu = _mpu(load, image)
-    for addr in KERNAL_JUMPS:  # no ROMs: KERNAL calls return at once
+    `prg` links c64/driver.c, with symbols in `prg`.elf; the harness sets
+    song_number on entry to main and returns from each frame_wait at once."""
+    _, syms = load_elf(f"{prg}.elf")
+    with open(prg, "rb") as f:
+        data = f.read()
+    mem, mpu = _mpu(data[0] | data[1] << 8, data[2:])
+    for addr in KERNAL_JUMPS:
         mem.write(addr, bytes([RTS]))
-    mem.io = True
-    mem.raster_model(False)
     out = [[] for _ in range(frames + 1)]
-    start = PLAY_LINE * 63
+    frame = [0]
 
     def on_write(addr, value):
-        frame = (mpu.processorCycles - start) // PAL_FRAME + 1
-        if frame <= frames:
-            out[max(frame, 0)].append((addr, value))
+        out[frame[0]].append((addr, value))
 
-    mem.observe_data_access(None, on_write, writes=SID)
-    mpu.pc = entry
-    for _ in tqdm(range(frames), desc="prg", unit="frame"):
-        mpu.run_until(max_cycles=PAL_FRAME)
+    mem.observe_data_access(None, on_write, writes=list(sids))
+    mpu.pc = syms["_start"]
+    assert mpu.run_until(max_cycles=MAX_CYCLES, stop_pcs=[syms["main"]]) == "pc"
+    mem[syms["song_number"]] = song
+
+    def to_wait():
+        reason = mpu.run_until(max_cycles=MAX_CYCLES, stop_pcs=[syms["frame_wait"]])
+        assert reason == "pc", f"frame {frame[0]}: {reason} at ${mpu.pc:04x}"
+
+    to_wait()
+    for frame[0] in tqdm(range(1, frames + 1), desc="prg", unit="frame"):
+        lo, hi = mem[0x100 + (mpu.sp + 1) % 256], mem[0x100 + (mpu.sp + 2) % 256]
+        mpu.sp = (mpu.sp + 2) & 0xFF
+        mpu.pc = (lo | hi << 8) + 1
+        to_wait()
     return out
+
+
+def songlengths(path):
+    """{md5: [frames per subtune]} from an HVSC Songlengths.md5."""
+    out = {}
+    with open(path, encoding="latin-1") as f:
+        for line in f:
+            if "=" in line and not line.startswith(";"):
+                md5, times = line.strip().split("=", 1)
+                out[md5] = [
+                    round((int(m) * 60 + float(sec)) * 50)
+                    for m, sec in (t.split("(")[0].split(":") for t in times.split())
+                ]
+    return out
+
+
+def songlength(path, data, song):
+    """Frames of subtune `song` (0-based) from an HVSC Songlengths.md5."""
+    return songlengths(path)[hashlib.md5(data).hexdigest()][song]
 
 
 def loop_frame(psid, posoff, limit):
@@ -118,32 +154,64 @@ def diff(ref, got):
     return None
 
 
+def compare(psid, prg, frames, song):
+    """(frames, writes, first mismatch or None) of one subtune."""
+    ref = trace_psid(psid, frames, song=song)
+    got = trace_prg(prg, frames, sid_ranges(psid), song)
+    return frames, sum(map(len, ref)), diff(ref, got)
+
+
 def main(argv=None):
-    """Compare a PRG's SID writes against a reference PSID up to the tune's loop."""
+    """Compare a C build's SID writes against a reference PSID, per subtune."""
     ap = argparse.ArgumentParser(description=main.__doc__)
     ap.add_argument("psid")
-    ap.add_argument("prg")
-    ap.add_argument("labels", help="ACME label dump of the reference (for posoff)")
-    ap.add_argument("--limit", type=int, default=50_000)
+    ap.add_argument("prg", help="C build, with symbols in PRG.elf")
     ap.add_argument(
-        "--frames", type=int, help="compare this many frames, not to the loop"
+        "--songs", help="0-based subtunes, e.g. 0,3-5 (default: start song)"
     )
+    end = ap.add_mutually_exclusive_group(required=True)
+    end.add_argument("--frames", type=int, help="compare this many frames")
+    end.add_argument(
+        "--songlengths", help="HVSC Songlengths.md5: each subtune's length"
+    )
+    end.add_argument(
+        "--wrap",
+        nargs=2,
+        metavar=("LABELS", "LABEL"),
+        help="compare until every byte of LABEL[0..2] in an ACME label dump is reset",
+    )
+    ap.add_argument("--limit", type=int, default=50_000)
     args = ap.parse_args(argv)
     with open(args.psid, "rb") as f:
         psid = f.read()
-    with open(args.prg, "rb") as f:
-        prg = f.read()
-    with open(args.labels, encoding="ascii") as f:
-        posoff = parse_labels(f.read())["posoff"]
-    frames = args.frames or loop_frame(psid, posoff, args.limit)
-    ref, got = trace_psid(psid, frames), trace_prg(prg, frames)
-    writes = sum(map(len, ref))
-    bad = diff(ref, got)
-    if bad:
-        print(f"MISMATCH frame {bad[0]} write {bad[1]}: ref {bad[2]} got {bad[3]}")
-        return 1
-    print(f"OK: {frames} frames, {writes} SID writes identical")
-    return 0
+    songs = parse_songs(args.songs) if args.songs else [psid[0x11] - 1]
+    failed = 0
+    for song in songs:
+        frames = args.frames
+        if args.songlengths:
+            frames = songlength(args.songlengths, psid, song)
+        elif args.wrap:
+            with open(args.wrap[0], encoding="ascii") as f:
+                addr = parse_labels(f.read())[args.wrap[1]]
+            frames = loop_frame(psid, addr, args.limit)
+        frames, writes, bad = compare(psid, args.prg, frames, song)
+        if bad:
+            failed += 1
+            print(
+                f"song {song} MISMATCH frame {bad[0]} write {bad[1]}: ref {bad[2]} got {bad[3]}"
+            )
+        else:
+            print(f"song {song} OK: {frames} frames, {writes} SID writes identical")
+    return 1 if failed else 0
+
+
+def parse_songs(text):
+    """'0,3-5' -> [0, 3, 4, 5]."""
+    out = []
+    for part in text.split(","):
+        lo, _, hi = part.partition("-")
+        out.extend(range(int(lo), int(hi or lo) + 1))
+    return out
 
 
 if __name__ == "__main__":

@@ -1,24 +1,50 @@
-"""Tests for tools/sidtrace.py: the C translation against the original."""
+"""Tests for the generic parts of tools/sidtrace.py."""
+
+import hashlib
 
 import pytest
 
-from conftest import BUILD, build_prg
 import sidtrace
 
-STOP_FRAMES = 2500
+
+def _psid(version=2, extra=b""):
+    head = bytearray(0x7C)
+    head[:4] = b"PSID"
+    head[5] = version
+    head[0x7A : 0x7A + len(extra)] = extra
+    return bytes(head)
 
 
-def test_prg_entry():
-    """SYS address is parsed from the BASIC stub."""
-    prg = bytes([0x01, 0x08, 0x0B, 0x08, 0x0A, 0x00, 0x9E]) + b"2061\x00\x00\x00"
-    assert sidtrace.prg_entry(prg) == (0x0801, 2061, prg[2:])
+def test_sid_ranges():
+    """Second and third SID addresses come from a v3/v4 header."""
+    assert sidtrace.sid_ranges(_psid()) == [range(0xD400, 0xD41D)]
+    assert sidtrace.sid_ranges(_psid(4, b"\x42\x50"))[1:] == [
+        range(0xD420, 0xD43D),
+        range(0xD500, 0xD51D),
+    ]
 
 
-def test_psid_parts(ref_psid, labels):
-    """PSID header fields come from the reference."""
-    load, init, play, image = sidtrace.psid_parts(ref_psid)
-    assert (load, init, play) == (0x1000, labels["init"], labels["play"])
-    assert len(image) == len(ref_psid) - 0x7E
+def test_parse_labels():
+    """ACME label dumps parse to addresses."""
+    text = "\tfoo\t= $1000\t; ?\n\tbar\t= $14a2\t; unused\n"
+    assert sidtrace.parse_labels(text) == {"foo": 0x1000, "bar": 0x14A2}
+
+
+def test_parse_songs():
+    """Subtune lists and ranges."""
+    assert sidtrace.parse_songs("0,3-5") == [0, 3, 4, 5]
+
+
+def test_songlength(tmp_path):
+    """HVSC lengths, with optional milliseconds and attributes, become frames."""
+    data = b"tune"
+    md5 = hashlib.md5(data).hexdigest()
+    path = tmp_path / "Songlengths.md5"
+    path.write_text(f"; x\n{md5}=1:02 0:00.5(G)\n", encoding="latin-1")
+    assert sidtrace.songlength(path, data, 0) == 3100
+    assert sidtrace.songlength(path, data, 1) == 25
+    with pytest.raises(KeyError):
+        sidtrace.songlength(path, b"other", 0)
 
 
 def test_diff():
@@ -27,57 +53,3 @@ def test_diff():
     assert sidtrace.diff(ref, ref) is None
     assert sidtrace.diff(ref, [[(1, 2)], [(3, 4), (5, 7)]]) == (1, 1, (5, 6), (5, 7))
     assert sidtrace.diff(ref, [[(1, 2)], [(3, 4)]]) == (1, 1, (5, 6), None)
-
-
-def test_loop_frame(ref_psid, labels):
-    """A limit shorter than the tune loop is an error."""
-    with pytest.raises(AssertionError):
-        sidtrace.loop_frame(ref_psid, labels["posoff"], 100)
-
-
-def test_whole_tune_identical(capsys):
-    """Every SID write matches the original up to the tune loop."""
-    args = [str(BUILD / n) for n in ("ref.sid", "commando.prg", "ref.labels")]
-    assert sidtrace.main(args) == 0
-    assert "OK" in capsys.readouterr().out
-
-
-def _patched(psid, labels, patches):
-    data = bytearray(psid)
-    for label, offset, value in patches:
-        data[labels[label] - 0x1000 + 0x7E + offset] = value
-    return bytes(data)
-
-
-INS = 8
-VARIANTS = {
-    "stop": [("song1t1", 4, 0xFE)],
-    "skydive_vibrato_pwl": [
-        ("ins_pwl", 2 * INS + 5, 1),
-        ("ins_pwl", 2 * INS + 7, 0x0A),
-        ("ins_pwl", 3 * INS + 7, 0x07),
-        ("p02", 0, 0x86),
-        ("p02", 2, 0x5F),
-    ],
-}
-
-
-@pytest.mark.parametrize("name", sorted(VARIANTS))
-def test_variant_identical(name, ref_psid, labels, tmp_path):
-    """Patched songs exercise stop, skydive and vibrato carry paths."""
-    psid = _patched(ref_psid, labels, VARIANTS[name])
-    prg = build_prg(psid, labels, tmp_path)
-    ref = sidtrace.trace_psid(psid, STOP_FRAMES)
-    assert sidtrace.diff(ref, sidtrace.trace_prg(prg, STOP_FRAMES)) is None
-    if name == "stop":
-        assert not ref[-1] and (0xD418, 0x0F) in sum(ref[2:], [])
-
-
-def test_mismatch_reported(ref_psid, labels, tmp_path, capsys):
-    """A differing song is reported as a mismatch."""
-    psid = _patched(ref_psid, labels, VARIANTS["stop"])
-    prg = tmp_path / "x.prg"
-    prg.write_bytes(build_prg(psid, labels, tmp_path))
-    args = [str(BUILD / "ref.sid"), str(prg), str(BUILD / "ref.labels")]
-    assert sidtrace.main(args + ["--frames", str(STOP_FRAMES)]) == 1
-    assert "MISMATCH" in capsys.readouterr().out

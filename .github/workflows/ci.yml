@@ -10,6 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/cache@v4
+        with:
+          path: fixtures
+          key: fixtures-${{ hashFiles('tunes/*/Makefile') }}
+          restore-keys: fixtures-
+      - run: make fixture
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:

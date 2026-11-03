@@ -1,14 +1,13 @@
 # gravity-inversion
 
-Rob Hubbard's *Commando* (title) playroutine translated from 6502 assembly to C,
-built with the [llvm-mos SDK](https://github.com/anarkiwi/docker-mos-llvm-sdk). The C
-player issues the same SID register writes, in the same order and frame, as the
-original.
+C64 SID playroutines translated from 6502 machine code to C with the
+[llvm-mos SDK](https://github.com/anarkiwi/docker-mos-llvm-sdk). Each translation issues
+the same SID register writes, in the same order and play call, as the original up to the
+tune's end.
 
-The song data is not part of this repository. The build fetches the
-[annotated original](https://github.com/realdmx/c64_6581_sid_players/blob/main/Hubbard_Rob/Hubbard_Rob_Commando.asm)
-(pinned commit), assembles it with ACME, and generates `build/commando_data.h` with
-the tables byte-identical to the assembled image.
+Tunes and their data are not part of this repository: each tune's build fetches its
+original (MD5-pinned) into `fixtures/`, which CI caches, and generates the C data header
+from it byte-identical.
 
 ## Use
 
@@ -16,19 +15,23 @@ the tables byte-identical to the assembled image.
 
 or, with `mos-c64-clang`, `acme` and `requirements-dev.txt` installed:
 
-    make                      # build/commando.prg (C64, plays at raster line $ff)
-    make check                # compare SID writes against the original
+    make                      # tunes/*/build/*.prg
+    make check                # compare each tune's SID writes against its original
     make test lint
 
 ## Layout
 
 | Path | Content |
 |---|---|
-| `src/commando.c` | C playroutine |
-| `src/main.c` | C64 PRG driver |
-| `tools/gen_data.py` | assembled PSID + labels → data header |
-| `tools/sidtrace.py` | SID write tracer and comparator (jennings) |
-| `tests/` | byte identity of tables, SID write identity of tune and patched variants |
+| `tunes/<name>/` | one translation: C player, data generator, tests, notes |
+| `c64/driver.c` | shared C64 driver: `tune_init`, then `frame_wait` / `tune_play` per call |
+| `common.mk` | shared make rules: fixtures, the C build |
+| `tools/sidtrace.py` | SID write tracer and comparator (jennings), per subtune |
+| `tools/disasm.py` | jennings coverage-driven disassembly listing of a PSID |
+| `tools/survey.py` | rank tunes by the playroutine code they execute |
 
-See [docs/translation.md](docs/translation.md) for how the original's behaviour is
-preserved.
+## Tunes
+
+| Tune | Notes |
+|---|---|
+| [Commando](tunes/commando/README.md) | Rob Hubbard, 1985 |
