@@ -106,3 +106,12 @@ def test_mutate(tmp_path, capsys):
     assert src.read_text(encoding="utf-8") == "a = 1;\n"
     with pytest.raises(AssertionError):
         list(mutate.mutants("aa", [["a", "b"]]))
+
+
+def test_mutate_apply():
+    """Edits apply together, in order, each to a unique occurrence."""
+    assert (
+        mutate.apply("a = 1;", [["1", "2"], ["a", "b"], ["= 2", "+= 2"]]) == "b += 2;"
+    )
+    with pytest.raises(AssertionError):
+        mutate.apply("a = 1;", [["1", "a"], ["a", "b"]])

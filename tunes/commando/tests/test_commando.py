@@ -2,10 +2,8 @@
 
 import pytest
 
-from support import BUILD, build_prg
+from support import BUILD, STOP_FRAMES, VARIANTS, build_prg, patched
 import sidtrace
-
-STOP_FRAMES = 2500
 
 
 def test_psid_parts(ref_psid, labels):
@@ -29,30 +27,10 @@ def test_whole_tune_identical(capsys):
     assert "OK" in capsys.readouterr().out
 
 
-def _patched(psid, labels, patches):
-    data = bytearray(psid)
-    for label, offset, value in patches:
-        data[labels[label] - 0x1000 + 0x7E + offset] = value
-    return bytes(data)
-
-
-INS = 8
-VARIANTS = {
-    "stop": [("song1t1", 4, 0xFE)],
-    "skydive_vibrato_pwl": [
-        ("ins_pwl", 2 * INS + 5, 1),
-        ("ins_pwl", 2 * INS + 7, 0x0A),
-        ("ins_pwl", 3 * INS + 7, 0x07),
-        ("p02", 0, 0x86),
-        ("p02", 2, 0x5F),
-    ],
-}
-
-
 @pytest.mark.parametrize("name", sorted(VARIANTS))
 def test_variant_identical(name, ref_psid, labels, tmp_path):
     """Patched songs exercise stop, skydive and vibrato carry paths."""
-    psid = _patched(ref_psid, labels, VARIANTS[name])
+    psid = patched(ref_psid, labels, VARIANTS[name])
     prg = build_prg(psid, labels, tmp_path)
     ref = sidtrace.trace_psid(psid, STOP_FRAMES)
     assert sidtrace.diff(ref, sidtrace.trace_prg(prg, STOP_FRAMES)) is None
@@ -62,7 +40,7 @@ def test_variant_identical(name, ref_psid, labels, tmp_path):
 
 def test_mismatch_reported(ref_psid, labels, tmp_path, capsys):
     """A differing song is reported as a mismatch."""
-    psid = _patched(ref_psid, labels, VARIANTS["stop"])
+    psid = patched(ref_psid, labels, VARIANTS["stop"])
     prg = build_prg(psid, labels, tmp_path)
     args = [str(BUILD / "ref.sid"), str(prg)]
     assert sidtrace.main(args + ["--frames", str(STOP_FRAMES)]) == 1

@@ -1,0 +1,76 @@
+{
+ "smc": [
+  [
+   "getnote tay\n        lda patpl,y\n        sta PATT\n        lda patph,y\n        sta PATT + 1\n",
+   "getnote tay\n        lda patpl,y\n        sta PATT\n        sta rd1+1\n        sta rd2+1\n        sta rd3+1\n        sta rd4+1\n        lda patph,y\n        sta PATT + 1\n        sta rd1+2\n        sta rd2+2\n        sta rd3+2\n        sta rd4+2\n"
+  ],
+  [
+   "        lda (PATT),y\n        sta notelen,x",
+   "rd1     lda $ffff,y\n        sta notelen,x"
+  ],
+  [
+   "        lda (PATT),y            ; instr or pitch bend",
+   "rd2     lda $ffff,y"
+  ],
+  [
+   "        lda (PATT),y            ; note\n",
+   "rd3     lda $ffff,y\n"
+  ],
+  [
+   "        lda (PATT),y\n        cmp #$ff                ; end of pattern?",
+   "rd4     lda $ffff,y\n        cmp #$ff"
+  ],
+  [
+   "_play   inc frc\n        bit status",
+   "_play   inc frc\nplayop  bit status"
+  ],
+  [
+   "        sta status\n+       rts",
+   "        sta status\n        lda #$60\n        sta playop\n+       rts"
+  ],
+  [
+   "lda #%01000000          ; bit 6 = music ready\n        sta status",
+   "lda #$2c\n        sta playop\n        lda #%01000000\n        sta status"
+  ]
+ ],
+ "jumps": [
+  [
+   "dec notec,x\n        bmi steptrack\n        jmp soundup",
+   "dec notec,x\n        lda notec,x\n        asl\n        lda #0\n        rol\n        asl\n        tay\n        lda jtab,y\n        sta jvec\n        lda jtab+1,y\n        sta jvec+1\n        jmp (jvec)\njtab    !wo soundup, steptrack"
+  ],
+  [
+   "lda pdir,x              ; which direction\n        bne +\n",
+   "lda pdir,x\n        beq pd0\n        lda #2\npd0     tay\n        lda ptab+1,y\n        pha\n        lda ptab,y\n        pha\n        ldy instroff\n        rts\nptab    !wo pdup-1, pddown-1\npdup\n"
+  ],
+  [
+   "+       sec                     ; down",
+   "pddown  sec"
+  ],
+  [
+   "sidoff  \t!h 00\n",
+   "sidoff  \t!h 00\njvec    !h 00 00\n"
+  ]
+ ],
+ "illegal": [
+  [
+   "ADDR    = $1000",
+   "!cpu 6510\nADDR    = $1000"
+  ],
+  [
+   "musicon ldx #2\n        dec tempoc\n        bpl mainloop\n        lda tempo\n        sta tempoc\nmainloop",
+   "musicon dec tempoc\n        bpl tdone\n        lax tempo\n        sax tempoc\ntdone   ldx #2\nmainloop"
+  ],
+  [
+   "inc pdir,x\n        jmp pup",
+   "isc pdir,x\n        jmp pup"
+  ],
+  [
+   "dec pdir,x\npup",
+   "dcp pdir,x\npup"
+  ],
+  [
+   "lda frc\n        and #1\n        beq arpeggio",
+   "lda frc\n        anc #1\n        beq arpeggio"
+  ]
+ ]
+}

@@ -36,6 +36,21 @@ The tests also patch the assembled PSID to exercise paths the tune does not use:
 a stop byte, and skydive, vibrato with pulse-width-low modulation, a 6 frame
 vibrato note and the top note (read past the table) on the bass instrument.
 
+## Generated translation
+
+`make` also builds `build/gen.prg` from `build/gen/commando.c` and `.h`, generated from
+the PSID by `tools/transliterate.py`; `make check` compares it to the tune loop.
+`tests/test_gen.py` checks that:
+
+- the song variants above give the same `.c` (only the `.h` differs) and identical writes;
+- the code permutations in `permutations.json` (self-modified pattern reads and an
+  opcode cell, `JMP (ind)` and RTS dispatch, illegal opcodes), each and all together,
+  keep the original's writes, and their generated C does too, alone and crossed with
+  both variants;
+- assembled at `$2345` the `.c` is unchanged and the writes match that PSID's own (the
+  original reads an address high byte as data, so its writes depend on the load address);
+- the `.c` has no `goto` and is under twice the playroutine source.
+
 ## Size
 
 `tests/test_size.py` checks that `src/commando.c` is under twice the size of the
