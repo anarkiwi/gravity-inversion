@@ -14,6 +14,9 @@ SID = range(0xD400, 0xD41D)
 MAX_CYCLES = 1_000_000
 KERNAL_JUMPS = range(0xFF81, 0xFFF6, 3)
 RTS = 0x60
+PAL_CLOCK = 985248
+CIA_TIMER = range(0xDC04, 0xDC06)
+CIA_DEFAULT = 0x4025
 
 
 def parse_labels(text):
@@ -32,9 +35,14 @@ def sid_ranges(data):
     ]
 
 
-def _mpu(load, image):
+def ram_mpu(load, image, poke=None):
+    """MPU over RAM holding `image` at `load`, `poke` {addr: byte} and a PAL raster."""
     mem = NativeMemory(bytes(0x10000))
     mem.write(load, bytes(image))
+    for addr, value in (poke or {}).items():
+        mem.write(addr, bytes([value]))
+    mem.raster_model(False)
+    mem.io = True
     return mem, MPU(memory=mem)
 
 
@@ -48,12 +56,12 @@ def psid_parts(data):
     return load, word(0x0A), word(0x0C), image
 
 
-def trace_psid(data, frames, watch=None, on_watch=None, song=None):
+def trace_psid(data, frames, watch=None, on_watch=None, song=None, *, poke=None):
     """SID writes of init then `frames` play calls: a list per frame, init first.
 
     Writes to `watch` addresses are passed to on_watch(frame, addr, value)."""
     load, init, play, image = psid_parts(data)
-    mem, mpu = _mpu(load, image)
+    mem, mpu = ram_mpu(load, image, poke)
     sids = sid_ranges(data)
     out = [[]]
     frame = [0]
@@ -72,7 +80,7 @@ def trace_psid(data, frames, watch=None, on_watch=None, song=None):
     return out
 
 
-def trace_prg(prg, frames, sids=(SID,), song=0):
+def trace_prg(prg, frames, sids=(SID,), song=0, *, poke=None):
     """SID writes of a C build: frame n holds the writes after its n-th frame_wait.
 
     `prg` links c64/driver.c, with symbols in `prg`.elf; the harness sets
@@ -80,7 +88,7 @@ def trace_prg(prg, frames, sids=(SID,), song=0):
     _, syms = load_elf(f"{prg}.elf")
     with open(prg, "rb") as f:
         data = f.read()
-    mem, mpu = _mpu(data[0] | data[1] << 8, data[2:])
+    mem, mpu = ram_mpu(data[0] | data[1] << 8, data[2:], poke)
     for addr in KERNAL_JUMPS:
         mem.write(addr, bytes([RTS]))
     out = [[] for _ in range(frames + 1)]
@@ -107,23 +115,39 @@ def trace_prg(prg, frames, sids=(SID,), song=0):
     return out
 
 
-def songlengths(path):
-    """{md5: [frames per subtune]} from an HVSC Songlengths.md5."""
+def play_rate(data, song=None):
+    """Play calls per second of a subtune: 50, or with its PSID speed bit set the PAL
+    clock over the CIA 1 timer A period (default $4025 unless init sets it)."""
+    song = data[0x11] - 1 if song is None else song
+    if not int.from_bytes(data[0x12:0x16], "big") >> min(song, 31) & 1:
+        return 50
+    latch = [CIA_DEFAULT & 0xFF, CIA_DEFAULT >> 8]
+
+    def on_watch(_, addr, value):
+        latch[addr - CIA_TIMER.start] = value
+
+    trace_psid(data, 0, CIA_TIMER, on_watch, song)
+    return PAL_CLOCK / ((latch[0] | latch[1] << 8) + 1)
+
+
+def songlengths(path, rate=50):
+    """{md5: [play calls per subtune at `rate` per second]} from an HVSC Songlengths.md5."""
     out = {}
     with open(path, encoding="latin-1") as f:
         for line in f:
             if "=" in line and not line.startswith(";"):
                 md5, times = line.strip().split("=", 1)
                 out[md5] = [
-                    round((int(m) * 60 + float(sec)) * 50)
+                    round((int(m) * 60 + float(sec)) * rate)
                     for m, sec in (t.split("(")[0].split(":") for t in times.split())
                 ]
     return out
 
 
 def songlength(path, data, song):
-    """Frames of subtune `song` (0-based) from an HVSC Songlengths.md5."""
-    return songlengths(path)[hashlib.md5(data).hexdigest()][song]
+    """Play calls of subtune `song` (0-based) from an HVSC Songlengths.md5."""
+    rate = play_rate(data, song)
+    return songlengths(path, rate)[hashlib.md5(data).hexdigest()][song]
 
 
 def loop_frame(psid, posoff, limit):

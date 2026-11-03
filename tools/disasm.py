@@ -6,17 +6,20 @@ from jennings.coverage import CoverageMPU, call
 from jennings.coverage.listing import Listing
 from tqdm import tqdm
 
-from sidtrace import psid_parts
+from sidtrace import MAX_CYCLES, psid_parts, ram_mpu
 
 
 def listing(data, frames, song=None):
-    """jennings Listing of the payload after init and `frames` play calls."""
+    """jennings Listing of the payload after init and `frames` play calls.
+
+    Init runs on the native core (with its raster model); the play calls under coverage.
+    """
     load, init, play, image = psid_parts(data)
-    mem = [0] * 0x10000
-    mem[load : load + len(image)] = image
+    ram, native = ram_mpu(load, image)
+    native.run_to_rts(init, data[0x11] - 1 if song is None else song, MAX_CYCLES)
+    mem = list(bytes(ram))
     mpu = CoverageMPU()
     mpu.memory = mem
-    call(mpu, init, a=data[0x11] - 1 if song is None else song)
     for _ in tqdm(range(frames), desc="cover", unit="frame"):
         call(mpu, play)
     mem[load : load + len(image)] = image
