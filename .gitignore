@@ -1,0 +1,4 @@
+.claude/worktrees/
+build/
+__pycache__/
+.coverage
