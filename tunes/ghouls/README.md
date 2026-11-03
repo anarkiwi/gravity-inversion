@@ -49,7 +49,7 @@ original's jump table out of range and are not supported.
 ## Verification
 
 `make check` compares every SID write of all 32 subtunes, from init to each
-HVSC song length, against the original under jennings (`tools/sidtrace.py`).
+HVSC song length, against the original (`tools/sidtrace.py`).
 
 `tests/test_ghouls.py` also patches song 4 to play one pattern on all three
 voices that drives the paths no subtune takes (listed with the pattern), and

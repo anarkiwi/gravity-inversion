@@ -5,18 +5,16 @@ import hashlib
 import re
 import sys
 
-from jennings.devices.mpu6502 import MPU
-from jennings.memory import NativeMemory
 from jennings.coverage.elf import load_elf
+from pysidtracker.emu import run_to_rts, wire_mpu
+from pysidtracker.header import parse_sid_header
 from tqdm import tqdm
+from vagrant_moses.c64 import poweron_ram
+from vagrant_moses.memmap import CIA1_BASE, PAL, TA_HI, TA_LO
 
 SID = range(0xD400, 0xD41D)
 MAX_CYCLES = 1_000_000
-KERNAL_JUMPS = range(0xFF81, 0xFFF6, 3)
-RTS = 0x60
-PAL_CLOCK = 985248
-CIA_TIMER = range(0xDC04, 0xDC06)
-CIA_DEFAULT = 0x4025
+CIA_TIMER = range(CIA1_BASE + TA_LO, CIA1_BASE + TA_HI + 1)
 
 
 def parse_labels(text):
@@ -29,39 +27,47 @@ def parse_labels(text):
 
 def sid_ranges(data):
     """SID register ranges a PSID writes: $d400 plus any v3/v4 extra SIDs."""
-    extra = [data[o] for o in (0x7A, 0x7B) if len(data) > 0x7B and data[5] >= 3]
-    return [
-        range(a, a + 0x1D) for a in [0xD400] + [0xD000 | b << 4 for b in extra if b]
-    ]
+    head = parse_sid_header(data)
+    extra = [b for b in (head.second_sid, head.third_sid) if b]
+    return [range(a, a + 0x1D) for a in [0xD400] + [0xD000 | b << 4 for b in extra]]
 
 
-def ram_mpu(load, image, poke=None):
-    """MPU over RAM holding `image` at `load`, `poke` {addr: byte} and a PAL raster."""
-    mem = NativeMemory(bytes(0x10000))
-    mem.write(load, bytes(image))
+def machine(load, image, poke=None, sid_model="6581"):
+    """(mem, mpu): pysidtracker's C64 (vagrant-moses flat_mpu) over power-on RAM
+    holding `image` at `load` and `poke` {addr: byte}."""
+    ram = bytearray(poweron_ram())
+    ram[load : load + len(image)] = image
     for addr, value in (poke or {}).items():
-        mem.write(addr, bytes([value]))
-    mem.raster_model(False)
-    mem.io = True
-    return mem, MPU(memory=mem)
+        ram[addr] = value
+    mpu, mem = wire_mpu(ram, sid_model=sid_model)
+    return mem, mpu
+
+
+def default_song(data):
+    """0-based start song of a PSID."""
+    return parse_sid_header(data).start_song - 1
 
 
 def psid_parts(data):
     """Return (load, init, play, image) of a PSID file."""
-    assert data[:4] == b"PSID", "not a PSID file"
-    word = lambda o: data[o] << 8 | data[o + 1]  # pylint: disable=C3001
-    off = word(6)
-    load = word(8) or data[off] | data[off + 1] << 8
-    image = data[off + (0 if word(8) else 2) :]
-    return load, word(0x0A), word(0x0C), image
+    head = parse_sid_header(data)
+    assert head.is_psid, "not a PSID file"
+    return (
+        head.real_load_address,
+        head.init_address or head.real_load_address,
+        head.play_address,
+        data[head.data_start :],
+    )
 
 
-def trace_psid(data, frames, watch=None, on_watch=None, song=None, *, poke=None):
+def trace_psid(  # pylint: disable=too-many-arguments
+    data, frames, watch=None, on_watch=None, song=None, *, poke=None, sid_model="6581"
+):
     """SID writes of init then `frames` play calls: a list per frame, init first.
 
     Writes to `watch` addresses are passed to on_watch(frame, addr, value)."""
     load, init, play, image = psid_parts(data)
-    mem, mpu = ram_mpu(load, image, poke)
+    mem, mpu = machine(load, image, poke, sid_model)
     sids = sid_ranges(data)
     out = [[]]
     frame = [0]
@@ -73,14 +79,17 @@ def trace_psid(data, frames, watch=None, on_watch=None, song=None, *, poke=None)
             on_watch(frame[0], addr, value)
 
     mem.observe_data_access(None, on_write, writes=sids + ([watch] if watch else []))
-    mpu.run_to_rts(init, data[0x11] - 1 if song is None else song, MAX_CYCLES)
+    song = default_song(data) if song is None else song
+    run_to_rts(mpu, mem, init, song, MAX_CYCLES)
     for frame[0] in tqdm(range(1, frames + 1), desc="psid", unit="frame"):
         out.append([])
-        mpu.run_to_rts(play, 0, MAX_CYCLES)
+        run_to_rts(mpu, mem, play, 0, MAX_CYCLES)
     return out
 
 
-def trace_prg(prg, frames, sids=(SID,), song=0, *, poke=None):
+def trace_prg(  # pylint: disable=too-many-arguments
+    prg, frames, sids=(SID,), song=0, *, poke=None, sid_model="6581"
+):
     """SID writes of a C build: frame n holds the writes after its n-th frame_wait.
 
     `prg` links c64/driver.c, with symbols in `prg`.elf; the harness sets
@@ -88,9 +97,7 @@ def trace_prg(prg, frames, sids=(SID,), song=0, *, poke=None):
     _, syms = load_elf(f"{prg}.elf")
     with open(prg, "rb") as f:
         data = f.read()
-    mem, mpu = ram_mpu(data[0] | data[1] << 8, data[2:], poke)
-    for addr in KERNAL_JUMPS:
-        mem.write(addr, bytes([RTS]))
+    mem, mpu = machine(data[0] | data[1] << 8, data[2:], poke, sid_model)
     out = [[] for _ in range(frames + 1)]
     frame = [0]
 
@@ -118,16 +125,17 @@ def trace_prg(prg, frames, sids=(SID,), song=0, *, poke=None):
 def play_rate(data, song=None):
     """Play calls per second of a subtune: 50, or with its PSID speed bit set the PAL
     clock over the CIA 1 timer A period (default $4025 unless init sets it)."""
-    song = data[0x11] - 1 if song is None else song
-    if not int.from_bytes(data[0x12:0x16], "big") >> min(song, 31) & 1:
+    head = parse_sid_header(data)
+    song = head.start_song - 1 if song is None else song
+    if not head.cia_speed(song):
         return 50
-    latch = [CIA_DEFAULT & 0xFF, CIA_DEFAULT >> 8]
+    latch = [PAL.kernal_latch & 0xFF, PAL.kernal_latch >> 8]
 
     def on_watch(_, addr, value):
         latch[addr - CIA_TIMER.start] = value
 
     trace_psid(data, 0, CIA_TIMER, on_watch, song)
-    return PAL_CLOCK / ((latch[0] | latch[1] << 8) + 1)
+    return PAL.clock_hz / ((latch[0] | latch[1] << 8) + 1)
 
 
 def songlengths(path, rate=50):
@@ -208,7 +216,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     with open(args.psid, "rb") as f:
         psid = f.read()
-    songs = parse_songs(args.songs) if args.songs else [psid[0x11] - 1]
+    songs = parse_songs(args.songs) if args.songs else [default_song(psid)]
     failed = 0
     for song in songs:
         frames = args.frames

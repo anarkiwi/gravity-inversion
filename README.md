@@ -26,7 +26,7 @@ or, with `mos-c64-clang`, `acme` and `requirements-dev.txt` installed:
 | `tunes/<name>/` | one translation: C player, data generator, tests, notes |
 | `c64/driver.c` | shared C64 driver: `tune_init`, then `frame_wait` / `tune_play` per call |
 | `common.mk` | shared make rules: fixtures, the C build |
-| `tools/sidtrace.py` | SID write tracer and comparator (jennings), per subtune |
+| `tools/sidtrace.py` | SID write tracer and comparator per subtune, on pysidtracker's C64 (vagrant-moses machine, jennings CPU, power-on RAM) |
 | `tools/disasm.py` | jennings coverage-driven disassembly listing of a PSID |
 | `tools/survey.py` | rank tunes by the playroutine code they execute; branch outcome gaps |
 | `tools/mutate.py` | mutation check: run a test command against source edits |
