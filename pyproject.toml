@@ -2,4 +2,6 @@
 generated-members = ["run_to_rts", "run_until"]
 
 [tool.pytest.ini_options]
-addopts = "-p no:cacheprovider"
+addopts = "-p no:cacheprovider --import-mode=importlib"
+testpaths = ["tests", "tunes"]
+pythonpath = ["tools"]

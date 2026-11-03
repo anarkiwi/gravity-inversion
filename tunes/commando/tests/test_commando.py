@@ -2,7 +2,7 @@
 
 import pytest
 
-from conftest import BUILD, build_prg
+from support import BUILD, build_prg
 import sidtrace
 
 STOP_FRAMES = 2500
@@ -37,7 +37,8 @@ def test_loop_frame(ref_psid, labels):
 
 def test_whole_tune_identical(capsys):
     """Every SID write matches the original up to the tune loop."""
-    args = [str(BUILD / n) for n in ("ref.sid", "commando.prg", "ref.labels")]
+    args = [str(BUILD / n) for n in ("ref.sid", "commando.prg")]
+    args += ["--wrap", str(BUILD / "ref.labels"), "posoff"]
     assert sidtrace.main(args) == 0
     assert "OK" in capsys.readouterr().out
 
@@ -78,6 +79,6 @@ def test_mismatch_reported(ref_psid, labels, tmp_path, capsys):
     psid = _patched(ref_psid, labels, VARIANTS["stop"])
     prg = tmp_path / "x.prg"
     prg.write_bytes(build_prg(psid, labels, tmp_path))
-    args = [str(BUILD / "ref.sid"), str(prg), str(BUILD / "ref.labels")]
+    args = [str(BUILD / "ref.sid"), str(prg)]
     assert sidtrace.main(args + ["--frames", str(STOP_FRAMES)]) == 1
     assert "MISMATCH" in capsys.readouterr().out

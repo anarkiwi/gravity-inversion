@@ -1,13 +1,12 @@
 """Trace SID register writes of a PSID or C64 PRG under jennings and compare them."""
 
 import argparse
+import re
 import sys
 
 from jennings.devices.mpu6502 import MPU
 from jennings.memory import NativeMemory
 from tqdm import tqdm
-
-from gen_data import parse_labels
 
 SID = range(0xD400, 0xD41D)
 PAL_FRAME = 63 * 312
@@ -15,6 +14,20 @@ PLAY_LINE = 0xFF
 MAX_CYCLES = 1_000_000
 KERNAL_JUMPS = range(0xFF81, 0xFFF6, 3)
 RTS = 0x60
+
+
+def parse_labels(text):
+    """Parse an ACME label dump into {name: address}."""
+    return {
+        m[1]: int(m[2], 16)
+        for m in re.finditer(r"^\s*(\S+)\s*=\s*\$([0-9a-fA-F]+)", text, re.M)
+    }
+
+
+def sid_ranges(data):
+    """SID register ranges a PSID writes: $d400 plus any v3/v4 extra SIDs."""
+    extra = [data[o] for o in (0x7A, 0x7B) if len(data) > 0x7B and data[5] >= 3]
+    return [range(a, a + 0x1D) for a in [0xD400] + [0xD000 | b << 4 for b in extra if b]]
 
 
 def _mpu(load, image):
@@ -39,17 +52,18 @@ def trace_psid(data, frames, watch=None, on_watch=None):
     Writes to `watch` addresses are passed to on_watch(frame, addr, value)."""
     load, init, play, image = psid_parts(data)
     mem, mpu = _mpu(load, image)
+    sids = sid_ranges(data)
     out = [[]]
     frame = [0]
 
     def on_write(addr, value):
-        if addr in SID:
+        if any(addr in r for r in sids):
             out[-1].append((addr, value))
         else:
             on_watch(frame[0], addr, value)
 
-    mem.observe_data_access(None, on_write, writes=[SID] + ([watch] if watch else []))
-    mpu.run_to_rts(init, 0, MAX_CYCLES)
+    mem.observe_data_access(None, on_write, writes=sids + ([watch] if watch else []))
+    mpu.run_to_rts(init, data[0x11] - 1, MAX_CYCLES)
     for frame[0] in tqdm(range(1, frames + 1), desc="psid", unit="frame"):
         out.append([])
         mpu.run_to_rts(play, 0, MAX_CYCLES)
@@ -65,7 +79,7 @@ def prg_entry(prg):
     return load, int(digits), prg[2:]
 
 
-def trace_prg(prg, frames):
+def trace_prg(prg, frames, sids=(SID,)):
     """SID writes of a PRG playing once per PAL frame at raster line PLAY_LINE.
 
     Writes before the first play are frame 0, matching trace_psid."""
@@ -83,7 +97,7 @@ def trace_prg(prg, frames):
         if frame <= frames:
             out[max(frame, 0)].append((addr, value))
 
-    mem.observe_data_access(None, on_write, writes=SID)
+    mem.observe_data_access(None, on_write, writes=list(sids))
     mpu.pc = entry
     for _ in tqdm(range(frames), desc="prg", unit="frame"):
         mpu.run_until(max_cycles=PAL_FRAME)
@@ -119,24 +133,30 @@ def diff(ref, got):
 
 
 def main(argv=None):
-    """Compare a PRG's SID writes against a reference PSID up to the tune's loop."""
+    """Compare a PRG's SID writes against a reference PSID."""
     ap = argparse.ArgumentParser(description=main.__doc__)
     ap.add_argument("psid")
     ap.add_argument("prg")
-    ap.add_argument("labels", help="ACME label dump of the reference (for posoff)")
-    ap.add_argument("--limit", type=int, default=50_000)
-    ap.add_argument(
-        "--frames", type=int, help="compare this many frames, not to the loop"
+    end = ap.add_mutually_exclusive_group(required=True)
+    end.add_argument("--frames", type=int, help="compare this many frames")
+    end.add_argument(
+        "--wrap",
+        nargs=2,
+        metavar=("LABELS", "LABEL"),
+        help="compare until every byte of LABEL[0..2] in an ACME label dump is reset",
     )
+    ap.add_argument("--limit", type=int, default=50_000)
     args = ap.parse_args(argv)
     with open(args.psid, "rb") as f:
         psid = f.read()
     with open(args.prg, "rb") as f:
         prg = f.read()
-    with open(args.labels, encoding="ascii") as f:
-        posoff = parse_labels(f.read())["posoff"]
-    frames = args.frames or loop_frame(psid, posoff, args.limit)
-    ref, got = trace_psid(psid, frames), trace_prg(prg, frames)
+    frames = args.frames
+    if args.wrap:
+        with open(args.wrap[0], encoding="ascii") as f:
+            frames = loop_frame(psid, parse_labels(f.read())[args.wrap[1]], args.limit)
+    ref = trace_psid(psid, frames)
+    got = trace_prg(prg, frames, sid_ranges(psid))
     writes = sum(map(len, ref))
     bad = diff(ref, got)
     if bad:

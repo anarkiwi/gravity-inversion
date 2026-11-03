@@ -1,17 +1,9 @@
 """Generate commando_data.h from the assembled original PSID and its ACME labels."""
 
 import argparse
-import re
+from sidtrace import parse_labels
 
 PSID_HEADER = 0x7C
-
-
-def parse_labels(text):
-    """Parse an ACME label dump into {name: address}."""
-    return {
-        m[1]: int(m[2], 16)
-        for m in re.finditer(r"^\s*(\S+)\s*=\s*\$([0-9a-fA-F]+)", text, re.M)
-    }
 
 
 def load_psid(data):
