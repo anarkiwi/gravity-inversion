@@ -40,3 +40,4 @@ or, with `mos-c64-clang`, `acme` and `requirements-dev.txt` installed:
 | [Automatas](tunes/automatas/README.md) | Goto80, 2009, defMON, CIA-timed |
 | [Ghouls'n'Ghosts](tunes/ghouls/README.md) | Tim Follin, 1989 |
 | [Incoherent Nightmare (tune 2)](tunes/incoherent/README.md) | Linus & Fanta, 2016, GoatTracker 2 |
+| [Emomyst](tunes/emomyst/README.md) | Hermit, SID-Wizard 1.x |
