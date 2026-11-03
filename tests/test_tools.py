@@ -1,9 +1,13 @@
 """Tests for tools/disasm.py and tools/survey.py on a real PSID."""
 
 import hashlib
+import json
 import re
 
+import pytest
+
 import disasm
+import mutate
 import sidtrace
 import survey
 
@@ -62,3 +66,43 @@ def test_survey_songlengths(sample_psid, tmp_path):
     sid = tmp_path / "a.sid"
     sid.write_bytes(sample_psid)
     assert survey._job(str(sid), lengths)[1][2] == 50  # pylint: disable=W0212
+
+
+def test_disasm_songs(sample_psid, tmp_path):
+    """Coverage of several subtunes merges; lengths may come from Songlengths."""
+    sid, out = tmp_path / "t.sid", tmp_path / "t.s"
+    sid.write_bytes(sample_psid)
+    lengths = tmp_path / "Songlengths.md5"
+    lengths.write_text(
+        f"{hashlib.md5(sample_psid).hexdigest()}=0:01 0:02\n", encoding="latin-1"
+    )
+    disasm.main([str(sid), str(out), "--song", "0-1", "--songlengths", str(lengths)])
+
+    def code(text):
+        return set(re.findall(r"^([0-9A-F]{4})  (?!.*\.byte)", text, re.M))
+
+    merged = code(out.read_text(encoding="ascii"))
+    assert code(disasm.listing(sample_psid, 50, 0).source) <= merged
+    assert merged == code(disasm.listing(sample_psid, [50, 100], [0, 1]).source)
+
+
+def test_branch_gaps(sample_psid):
+    """Gaps are untaken outcomes of executed branches, and shrink with longer runs."""
+    short, long_ = (survey.transitions(sample_psid, n) for n in (5, 400))
+    gaps = survey.branch_gaps(sample_psid, short)
+    pcs = {e >> 16 for e in short}
+    assert gaps and all(pc in pcs and pc << 16 | t not in short for pc, t in gaps)
+    assert survey.branch_gaps(sample_psid, short | long_) < gaps
+
+
+def test_mutate(tmp_path, capsys):
+    """Mutants the command passes survive; the source is restored."""
+    src = tmp_path / "s.c"
+    src.write_text("a = 1;\n", encoding="utf-8")
+    edits = tmp_path / "e.json"
+    edits.write_text(json.dumps([["1", "2"], ["a", "b"]]), encoding="utf-8")
+    assert mutate.main([str(src), str(edits), "grep", "-q", "= 1", str(src)]) == 1
+    assert "SURVIVED 1: 'a' -> 'b'" in capsys.readouterr().out
+    assert src.read_text(encoding="utf-8") == "a = 1;\n"
+    with pytest.raises(AssertionError):
+        list(mutate.mutants("aa", [["a", "b"]]))

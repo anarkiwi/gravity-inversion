@@ -7,7 +7,9 @@ import hashlib
 import sys
 
 import numpy as np
+from jennings.coverage.cfg import successors
 from jennings.devices.mpu6502 import MPU
+from jennings.isa import is_branch
 from jennings.memory import NativeMemory
 from tqdm import tqdm
 
@@ -25,7 +27,8 @@ def coverage(data, frames, song=None):
     return len(pcs), cycles, frames
 
 
-def _run(data, frames, song):
+def _traces(data, frames, song):
+    """(PC trace per call of init + `frames` play calls, play cycles)."""
     load, init, play, image = psid_parts(data)
     song = data[0x11] - 1 if song is None else song
     mem = NativeMemory(bytes(0x10000))
@@ -35,7 +38,39 @@ def _run(data, frames, song):
     start = mpu.processorCycles
     for _ in range(frames):
         pcs.append(np.asarray(mpu.run_to_rts_traced(play, 0, MAX_CYCLES).pc))
-    return np.unique(np.concatenate(pcs)), mpu.processorCycles - start
+    return pcs, mpu.processorCycles - start
+
+
+def _run(data, frames, song):
+    pcs, cycles = _traces(data, frames, song)
+    return np.unique(np.concatenate(pcs)), cycles
+
+
+def transitions(data, frames, song=None):
+    """Set of executed (PC, next PC) pairs, encoded PC << 16 | next, of init +
+    `frames` play calls."""
+    pcs = _traces(data, frames, song)[0]
+    return set(
+        np.unique(
+            np.concatenate([p[:-1].astype(np.int64) << 16 | p[1:] for p in pcs])
+        ).tolist()
+    )
+
+
+def branch_gaps(data, seen):
+    """Outcomes {(branch PC, target)} of the branches executed in `seen`
+    transitions (see transitions()) that were never taken."""
+    load, _, _, image = psid_parts(data)
+    mem = np.zeros(0x10000, np.uint8)
+    code = np.frombuffer(image, np.uint8)[: 0x10000 - load]
+    mem[load : load + len(code)] = code
+    gaps = set()
+    for pc in {e >> 16 for e in seen}:
+        if is_branch(int(mem[pc])):
+            gaps.update(
+                (pc, t) for _, t in successors(mem, pc)[0] if pc << 16 | t not in seen
+            )
+    return gaps
 
 
 def _job(path, frames):

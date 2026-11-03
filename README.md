@@ -28,7 +28,9 @@ or, with `mos-c64-clang`, `acme` and `requirements-dev.txt` installed:
 | `common.mk` | shared make rules: fixtures, the C build |
 | `tools/sidtrace.py` | SID write tracer and comparator (jennings), per subtune |
 | `tools/disasm.py` | jennings coverage-driven disassembly listing of a PSID |
-| `tools/survey.py` | rank tunes by the playroutine code they execute |
+| `tools/survey.py` | rank tunes by the playroutine code they execute; branch outcome gaps |
+| `tools/mutate.py` | mutation check: run a test command against source edits |
+| `tools/header.py` | shared CLI of the tune data generators |
 
 ## Tunes
 
@@ -36,3 +38,4 @@ or, with `mos-c64-clang`, `acme` and `requirements-dev.txt` installed:
 |---|---|
 | [Commando](tunes/commando/README.md) | Rob Hubbard, 1985 |
 | [Automatas](tunes/automatas/README.md) | Goto80, 2009, defMON, CIA-timed |
+| [Ghouls'n'Ghosts](tunes/ghouls/README.md) | Tim Follin, 1989 |

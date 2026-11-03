@@ -1,5 +1,5 @@
 [tool.pylint.main]
-source-roots = ["tools", "tunes/commando", "tunes/automatas"]
+source-roots = ["tools", "tunes/commando", "tunes/automatas", "tunes/ghouls"]
 init-hook = "import glob, sys; sys.path[:0] = ['tools'] + sorted(glob.glob('tunes/*/'))"
 
 [tool.pylint.design]
