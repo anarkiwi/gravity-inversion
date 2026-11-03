@@ -35,3 +35,4 @@ or, with `mos-c64-clang`, `acme` and `requirements-dev.txt` installed:
 | Tune | Notes |
 |---|---|
 | [Commando](tunes/commando/README.md) | Rob Hubbard, 1985 |
+| [Automatas](tunes/automatas/README.md) | Goto80, 2009, defMON, CIA-timed |

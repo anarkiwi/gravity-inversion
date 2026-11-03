@@ -1,0 +1,48 @@
+# Automatas
+
+Goto80, 2009, defMON player. `src/automatas.c` is the playroutine in C; `gen_automatas.py`
+generates `build/automatas_data.h` from the HVSC PSID.
+
+## Data
+
+`DATA` is the original image from `$1554` to its end, byte-identical: the 156-word
+note/slide table, sidTAB pointer and wait tables, pattern pointer and arranger tables,
+pattern and sidTAB streams. Addresses in the C are the original ones, read through `at()`.
+The player keeps most of its state in code operands; init does not reset all of it, so
+`VOICE_INIT` and `CUT_SUB` carry the image's initial values (pulse, frequency, slide,
+note base, detune, filter routing bits, cutoff step direction).
+
+## Timing
+
+Init sets CIA 1 timer A to `$0998`, about 401 play calls per second; the C sets the same
+latch and builds with `FRAME_CIA`. Every eighth call (from the first) also steps the
+arranger and pattern rows; the original does this by patching an `RTS` into its own code.
+
+## Behaviour kept from the 6502 code
+
+- Init detects the SID model on raster line `$fc` from bit 0 of `$d41b`: on an 8580 the
+  cutoff high byte is shifted left and clamped below at 0, otherwise clamped at 2.
+- The cutoff step and the CP extra chain the 6502 carry: low step, high step, then CP.
+  An absolute cutoff clears the step but keeps its direction, so a later step of 0 after a
+  downward one still subtracts the borrow; the direction also survives init.
+- Pitch mode 0 adds the detune to the low byte only, dropping the carry.
+- A downward pulse sweep subtracts with the carry left by the pitch computation.
+- Pitch and slide reads index the word table up to 291 entries, past its end into the
+  following player code, which `DATA` includes.
+- A pattern row with bit 7 ends the pattern for all voices after it is applied; the next
+  full call reloads every voice's delay from its low nibble.
+- An arranger jump is followed once; a sidTAB jump once.
+
+Not reproduced: a sidTAB jump onto another jump row reads the row from page zero, whose
+contents depend on the host.
+
+## Verification
+
+`make check` traces the PSID and the C64 PRG under jennings (raster model on, so init's
+raster wait runs) and compares every SID write per play call over the HVSC length, converted
+to play calls at the CIA rate. The tests also compare through the arranger loop twice, and
+patched songs: semitone pitch mode, a plain routing byte, high semitone offsets reading
+far past the table, a large detune whose carry is dropped, and an 8580 (`$d41b` bit 0 set).
+
+`tests/test_size.py` checks `src/automatas.c` is under twice the size of the jennings
+listing's instruction lines for the image.
