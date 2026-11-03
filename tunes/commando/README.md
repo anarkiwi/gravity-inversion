@@ -25,6 +25,12 @@ writable.
 - A `$fe` track byte stops the tune; the next play silences the voices and sets
   volume `$f`.
 
+## Voice structure in the original
+
+`mainloop` iterates the voices with X (`ldx #2` ... `dex` / `bmi`), Y = `sid,x`; the C keeps the
+loop. `putfreq` and `instrument` are code the original repeats inline. `tests/test_structure.py`
+checks the generated C keeps the voice loop.
+
 ## Verification
 
 `tools/sidtrace.py` runs the reference PSID (init, then one play per frame) and the

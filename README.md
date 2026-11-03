@@ -33,6 +33,7 @@ A tune Makefile setting `GEN := 1` (with `PSID` and `CHECK_ARGS`) before includi
 | `tools/sidtrace.py` | SID write tracer and comparator per subtune, on pysidtracker's C64 (vagrant-moses machine, jennings CPU, power-on RAM) |
 | `tools/disasm.py` | jennings coverage-driven disassembly listing of a PSID |
 | `tools/survey.py` | rank tunes by the playroutine code they execute; branch outcome gaps |
+| `tools/copies.py` | repeated playroutine code: unrolled copies with operand strides, JSR targets, fall-through entries |
 | `tools/mutate.py` | mutation check: run a test command against source edits |
 | `tools/transliterate.py` | PSID → `.c` + `.h` with vagrant-moses' `cgen` (needs `mlir-opt` 22, `clang-format`) |
 | `tools/header.py` | shared CLI of the tune data generators |

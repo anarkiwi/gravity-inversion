@@ -46,6 +46,15 @@ original's jump table out of range and are not supported.
   resets only the operands the original resets.
 - The filter cutoff high byte is written rotated: `hi << 5 | hi >> 4 | lo >> 3`.
 
+## Voice structure in the original
+
+The voice routine is unrolled three times, at `$6234`/`$6421`/`$6610` chained by `JMP`; the
+copies are identical up to operand strides (+1 zero-page bytes, +2 words, +7 SID, +`$1ED`/`$1EF`
+own operands) and a `CMP #v` voice 0 omits. Command handlers `$6858-$6C75` are per-voice copies
+too, and effect init patches the copies' operands through the table at `$622E`/`$6231`. The C
+runs `play_voice(v)` per voice. `tools/copies.py` lists the copies; `tests/test_structure.py`
+xfails while the generated C keeps them.
+
 ## Verification
 
 `make check` compares every SID write of all 32 subtunes, from init to each

@@ -461,6 +461,8 @@ void tune_play(void) {
     SIDREG(CUTOFF_LO) = 0;
     filter.ctrl = filter.ptr = 0;
     init_song = 0xff;
+    /* 6502: loop $0905 clears the first fields of all voices; then
+     * JSR $0922 (X=0), LDX #7 / JSR $0922, LDX #$0E falling into $0922. */
     for (k = 0; k < 3; ++k) {
       struct voice *v = &voices[k];
       v->song_pos = v->transpose = v->patt_pos = v->repeat = v->cmd = 0;
@@ -473,6 +475,8 @@ void tune_play(void) {
     return;
   }
   filter_step();
+  /* 6502: JSR $0996 (X=0), LDX #7 / JSR $0996, LDX #$0E falling into $0996,
+   * whose RTS returns from play. */
   for (k = 0; k < 3; ++k)
     voice_play(&voices[k], k * 7);
 }

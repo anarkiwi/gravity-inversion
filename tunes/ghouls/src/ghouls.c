@@ -109,7 +109,7 @@ static struct state {
 } zp;
 
 /* State the original keeps in its own instruction operands, with their
- * values in the image. */
+ * values in the image: one operand per voice copy ($1ED, $1EF apart). */
 static uint8_t vib_dir[3];               /* 0 = down */
 static uint8_t trill_phase[3];           /* $ff = upper note */
 static uint8_t pulse_dir[3] = {1, 1, 1}; /* 0 down, bit 7 up, else none */
@@ -227,6 +227,8 @@ static void read_pattern(volatile uint8_t *reg, uint8_t v) {
       }
       break;
     }
+    /* 6502: per-voice handler copies at $6858-$6C75, dispatched through split
+     * tables $6C37/$6C76,X and jumping back into their voice copy. */
     switch (b) {
     case CMD_PULSE:
       zp.pulse_speed[v] = ARG();
@@ -410,6 +412,9 @@ static void filter_sweep(void) {
 
 void tune_play(void) {
   uint8_t v;
+  /* 6502: no loop; voice copies at $6234/$6421/$6610 chained by JMP,
+   * identical up to operand strides (+1 zp, +2 zp words, +7 SID, +$1ED/$1EF
+   * own operands) and a CMP #v voice 0 omits. */
   for (v = 0; v < 3; ++v)
     play_voice(v);
   filter_sweep();
@@ -419,7 +424,7 @@ static void copy_block(uint8_t n) {
   uint8_t i = n << 1;
   uint16_t src = peek16(BLOCK_SRC + i), dst = peek16(BLOCK_DST + i);
   uint16_t k, len = peek16(BLOCK_LEN + i);
-  for (k = 0; k != len; ++k)
+  for (k = 0; k != len; ++k) /* 6502 loop $29C6-$29E0 */
     poke(dst + k, peek(src + k));
 }
 
@@ -428,13 +433,15 @@ static void music_init(uint8_t song) {
   copy_block(peek(SONG_BLOCK_A + song));
   copy_block(peek(SONG_BLOCK_B + song));
   x = peek(SONG_INDEX + song);
-  while (r--) {
+  while (r--) { /* 6502 loop $61AA */
     SID[r] = 8;
     SID[r] = 0;
   }
   for (r = 0; r < sizeof zp; ++r)
     ((uint8_t *)&zp)[r] = 0;
   cutoff_dir = 0;
+  /* 6502: unrolled stores, $6153-$61A5 and into each voice copy's operands
+   * at $61BF-$61D9. */
   for (v = 0; v < 3; ++v) {
     fixed_dur[v] = raw_notes[v] = 0;
     pulse_dir[v] = 1;
@@ -455,8 +462,10 @@ static void effect_init(uint8_t x) {
   uint16_t p = peek(EFFECT_LO + x) | peek(EFFECT_HI + x) << 8;
   uint8_t y = 0, v;
   SID[VOLUME] = 0xf;
-  for (v = 0; v < sizeof off; ++v)
+  for (v = 0; v < sizeof off; ++v) /* 6502: six stores, $7328-$7337 */
     SID[off[v]] = 0;
+  /* 6502 loop $61E9-$622B; X picks the voice copy's operand to patch through
+   * the table at $622E/$6231. */
   while (!((v = peek(p + y)) & 0x80)) {
     v >>= 1;
     zp.ptr[v] = peek(p + y + 1) | peek(p + y + 2) << 8;

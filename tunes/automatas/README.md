@@ -36,6 +36,15 @@ arranger and pattern rows; the original does this by patching an `RTS` into its 
 Not reproduced: a sidTAB jump onto another jump row reads the row from page zero, whose
 contents depend on the host.
 
+## Voice structure in the original
+
+Most per-voice code is unrolled, each copy holding its voice's state in its own operands: the
+SID writes at `$1022`/`$1053`/`$1084` (`$31` apart, chained by `JMP`), the pattern rows at
+`$112A`/`$11B2`/`$123A` (`$88` apart, fall-through), and six sidTAB copies from `$12BE`
+(`$31` apart, each calling `$168C`). Pitch and pulse is a real loop over X = `$62`, `$31`, 0
+(`SBX #$31`). The C loops over `struct voice`. `tools/copies.py` lists the copies;
+`tests/test_structure.py` xfails while the generated C keeps them.
+
 ## Verification
 
 `make check` traces the PSID and the C64 PRG on `tools/sidtrace.py`'s emulated C64 (so
