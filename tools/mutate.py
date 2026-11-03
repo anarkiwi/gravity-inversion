@@ -5,6 +5,7 @@ once in the source. A mutant is killed when the command exits nonzero. The
 source is restored afterwards."""
 
 import argparse
+import functools
 import json
 import pathlib
 import subprocess
@@ -13,11 +14,21 @@ import sys
 from tqdm import tqdm
 
 
+def edit(text, old, new):
+    """`text` with its only occurrence of `old` replaced by `new`."""
+    assert text.count(old) == 1, f"edit not unique: {old!r}"
+    return text.replace(old, new)
+
+
+def apply(text, edits):
+    """`text` with every (old, new) edit applied in order."""
+    return functools.reduce(lambda t, e: edit(t, *e), edits, text)
+
+
 def mutants(text, edits):
     """Yield the source text with each (old, new) edit applied alone."""
     for old, new in edits:
-        assert text.count(old) == 1, f"edit not unique: {old!r}"
-        yield text.replace(old, new)
+        yield edit(text, old, new)
 
 
 def run(source, edits, command):

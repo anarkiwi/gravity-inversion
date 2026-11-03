@@ -1,4 +1,5 @@
-# Shared rules for tunes/<name>/Makefile. A tune sets FIXTURE, URL and MD5.
+# Shared rules for tunes/<name>/Makefile. A tune sets FIXTURE, URL and MD5; with
+# GEN set before the include, also PSID and CHECK_ARGS (its sidtrace comparison).
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 FIX := $(ROOT)/fixtures
 B := build
@@ -33,6 +34,26 @@ $(FIX)/$(FIXTURE):
 
 $(SONGLENGTHS):
 	$(call fetch,$@,$(SONGLENGTHS_URL),$(SONGLENGTHS_MD5))
+
+ifdef GEN
+TUNE := $(notdir $(CURDIR))
+
+all: $(B)/gen.prg
+
+$(B)/gen/$(TUNE).c $(B)/gen/$(TUNE).h &: $(PSID) $(ROOT)/tools/transliterate.py
+	mkdir -p $(B)/gen
+	$(PY) $(ROOT)/tools/transliterate.py $< $(B)/gen/$(TUNE).c --header $(B)/gen/$(TUNE).h
+
+$(B)/gen.prg: $(B)/gen/$(TUNE).c $(B)/gen/$(TUNE).h $(DRIVER)
+	$(call mosbuild,$@,$(B)/gen,$<)
+
+check: check-gen
+
+check-gen: $(B)/gen.prg
+	$(PY) $(ROOT)/tools/sidtrace.py $(PSID) $< $(CHECK_ARGS)
+
+.PHONY: check-gen
+endif
 
 clean:
 	rm -rf $(B)

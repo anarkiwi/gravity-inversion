@@ -13,3 +13,4 @@ generated-members = ["run_to_rts", "run_until"]
 addopts = "-p no:cacheprovider --import-mode=importlib"
 testpaths = ["tests", "tunes"]
 pythonpath = ["tools"]
+markers = ["slow: whole-tune and permutation traces of generated C"]
