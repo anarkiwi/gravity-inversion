@@ -1,7 +1,6 @@
 """Generate automatas_data.h from the original PSID."""
 
-import argparse
-
+from header import cli
 from sidtrace import psid_parts
 
 DATA_ORG = 0x1554
@@ -57,14 +56,7 @@ def generate(psid):
 
 def main(argv=None):
     """CLI entry point."""
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("psid")
-    ap.add_argument("out")
-    args = ap.parse_args(argv)
-    with open(args.psid, "rb") as f:
-        psid = f.read()
-    with open(args.out, "w", encoding="ascii") as f:
-        f.write(generate(psid))
+    cli(generate, __doc__, argv)
 
 
 if __name__ == "__main__":
