@@ -1,5 +1,5 @@
 FIXTURE := Ghouls_n_Ghosts.sid
-URL := $(HVSC)/MUSICIANS/F/Follin_Tim/Ghouls_n_Ghosts.sid
+URL = $(HVSC)/MUSICIANS/F/Follin_Tim/Ghouls_n_Ghosts.sid
 MD5 := 87e0a687004730aaf3d2e6f0d450dec7
 include ../../common.mk
 
