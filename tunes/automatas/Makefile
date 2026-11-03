@@ -16,4 +16,4 @@ $(B)/automatas.prg: src/automatas.c $(B)/automatas_data.h $(DRIVER)
 fixture: $(SONGLENGTHS)
 
 check: $(B)/automatas.prg $(SONGLENGTHS)
-	$(PY) $(ROOT)/tools/sidtrace.py $(FIX)/$(FIXTURE) $< --songlengths $(SONGLENGTHS)
+	$(PY) $(ROOT)/tools/sidtrace.py $(FIX)/$(FIXTURE) $< --hvsc $(FIX)

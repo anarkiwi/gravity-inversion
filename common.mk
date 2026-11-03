@@ -8,7 +8,7 @@ endif
 CFLAGS := -Os -Wall -Wextra -Werror
 PY := PYTHONPATH=$(ROOT)/tools python3
 DRIVER := $(ROOT)/c64/driver.c $(ROOT)/c64/driver.h
-SONGLENGTHS := $(FIX)/Songlengths.md5
+SONGLENGTHS := $(FIX)/DOCUMENTS/Songlengths.md5
 SONGLENGTHS_URL := https://www.hvsc.c64.org/download/C64Music/DOCUMENTS/Songlengths.md5
 SONGLENGTHS_MD5 := 792a3e49c08f3c9908d3a5f097a6fb3b
 HVSC := https://www.hvsc.c64.org/download/C64Music

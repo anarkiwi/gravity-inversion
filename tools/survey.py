@@ -3,15 +3,12 @@
 import argparse
 import concurrent.futures
 import csv
-import hashlib
 import sys
 
 import numpy as np
-from jennings.coverage.cfg import successors
-from jennings.isa import is_branch
 from tqdm import tqdm
 
-from sidtrace import MAX_CYCLES, default_song, machine, psid_parts, songlengths
+from sidtrace import MAX_CYCLES, default_song, machine, psid_parts, song_calls
 
 
 def executed(data, frames, song=None):
@@ -42,45 +39,16 @@ def _run(data, frames, song):
     return np.unique(np.concatenate(pcs)), cycles
 
 
-def transitions(data, frames, song=None):
-    """Set of executed (PC, next PC) pairs, encoded PC << 16 | next, of init +
-    `frames` play calls."""
-    pcs = _traces(data, frames, song)[0]
-    return set(
-        np.unique(
-            np.concatenate([p[:-1].astype(np.int64) << 16 | p[1:] for p in pcs])
-        ).tolist()
-    )
-
-
-def branch_gaps(data, seen):
-    """Outcomes {(branch PC, target)} of the branches executed in `seen`
-    transitions (see transitions()) that were never taken."""
-    load, _, _, image = psid_parts(data)
-    mem = np.zeros(0x10000, np.uint8)
-    code = np.frombuffer(image, np.uint8)[: 0x10000 - load]
-    mem[load : load + len(code)] = code
-    gaps = set()
-    for pc in {e >> 16 for e in seen}:
-        if is_branch(int(mem[pc])):
-            gaps.update(
-                (pc, t) for _, t in successors(mem, pc)[0] if pc << 16 | t not in seen
-            )
-    return gaps
-
-
 def _job(path, frames):
     try:
         with open(path, "rb") as f:
             data = f.read()
         if data[:4] != b"PSID" or psid_parts(data)[2] == 0:
             return path, None
-        if isinstance(frames, dict):
-            frames = frames.get(hashlib.md5(data).hexdigest(), [3000])[
-                default_song(data)
-            ]
+        if isinstance(frames, str):
+            frames = song_calls(data, default_song(data), frames)
         return path, coverage(data, frames)
-    except (AssertionError, RuntimeError, ValueError, IndexError):
+    except (AssertionError, KeyError, RuntimeError, ValueError, IndexError):
         return path, None
 
 
@@ -89,12 +57,10 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--frames", type=int, default=3000)
     ap.add_argument("--jobs", type=int, default=32)
-    ap.add_argument(
-        "--songlengths", help="HVSC Songlengths.md5: play each tune's length"
-    )
+    ap.add_argument("--hvsc", help="HVSC root: play each tune's Songlengths.md5 length")
     args = ap.parse_args(argv)
     paths = [line.strip() for line in sys.stdin if line.strip()]
-    frames = songlengths(args.songlengths) if args.songlengths else args.frames
+    frames = args.hvsc or args.frames
     rows = []
     with concurrent.futures.ThreadPoolExecutor(args.jobs) as ex:
         futs = [ex.submit(_job, p, frames) for p in paths]

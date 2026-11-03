@@ -15,4 +15,4 @@ $(B)/ghouls.prg: src/ghouls.c $(B)/ghouls_data.h $(DRIVER)
 	$(call mosbuild,$@,$(B),src/ghouls.c)
 
 check: $(B)/ghouls.prg $(SONGLENGTHS)
-	$(PY) $(ROOT)/tools/sidtrace.py $(FIX)/$(FIXTURE) $< --songs 0-31 --songlengths $(SONGLENGTHS)
+	$(PY) $(ROOT)/tools/sidtrace.py $(FIX)/$(FIXTURE) $< --songs all --hvsc $(FIX)

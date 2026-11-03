@@ -19,15 +19,15 @@ def _wraps(psid, calls):
 
 
 def test_cia_rate(psid):
-    """Play calls run at the CIA 1 timer A period init sets."""
-    assert sidtrace.play_rate(psid) == PAL.clock_hz / 0x999
+    """The HVSC length (5:23) spans play calls at the CIA 1 timer A period init sets."""
+    assert sidtrace.song_calls(psid, 0, FIX) == int(323 * PAL.clock_hz / 0x999)
 
 
 def test_song_identical(capsys):
     """Every SID write matches the original over the HVSC song length."""
     args = [str(SID), str(BUILD / "automatas.prg")]
-    assert sidtrace.main(args + ["--songlengths", str(FIX / "Songlengths.md5")]) == 0
-    assert "OK: 129522 frames" in capsys.readouterr().out
+    assert sidtrace.main(args + ["--hvsc", str(FIX)]) == 0
+    assert "OK: 129521 frames" in capsys.readouterr().out
 
 
 def test_loop_identical(psid):

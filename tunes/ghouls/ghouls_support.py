@@ -11,7 +11,7 @@ ROOT = pathlib.Path(__file__).resolve().parent
 BUILD = ROOT / "build"
 FIXTURES = ROOT.parent.parent / "fixtures"
 PSID = FIXTURES / "Ghouls_n_Ghosts.sid"
-SONGLENGTHS = FIXTURES / "Songlengths.md5"
+HVSC = FIXTURES
 DRIVER = ROOT.parent.parent / "c64"
 
 SONG_PTRS_SRC = 0x2A44  # block 0, copied to the song pointer tables at $730e

@@ -1,20 +1,17 @@
-"""Trace SID register writes of a PSID or C64 PRG under jennings and compare them."""
+"""Trace SID register writes of a PSID or C64 PRG on pysidtracker's C64 and compare them."""
 
 import argparse
-import hashlib
 import re
 import sys
 
 from jennings.coverage.elf import load_elf
-from pysidtracker.emu import run_to_rts, wire_mpu
+from pysidtracker.emu import SidWriteLog, run_to_rts, wire_mpu
 from pysidtracker.header import parse_sid_header
+from pysidtracker.survey import song_frames, song_list
 from tqdm import tqdm
 from vagrant_moses.c64 import poweron_ram
-from vagrant_moses.memmap import CIA1_BASE, PAL, TA_HI, TA_LO
 
-SID = range(0xD400, 0xD41D)
 MAX_CYCLES = 1_000_000
-CIA_TIMER = range(CIA1_BASE + TA_LO, CIA1_BASE + TA_HI + 1)
 
 
 def parse_labels(text):
@@ -23,13 +20,6 @@ def parse_labels(text):
         m[1]: int(m[2], 16)
         for m in re.finditer(r"^\s*(\S+)\s*=\s*\$([0-9a-fA-F]+)", text, re.M)
     }
-
-
-def sid_ranges(data):
-    """SID register ranges a PSID writes: $d400 plus any v3/v4 extra SIDs."""
-    head = parse_sid_header(data)
-    extra = [b for b in (head.second_sid, head.third_sid) if b]
-    return [range(a, a + 0x1D) for a in [0xD400] + [0xD000 | b << 4 for b in extra]]
 
 
 def machine(load, image, poke=None, sid_model="6581"):
@@ -60,6 +50,12 @@ def psid_parts(data):
     )
 
 
+def _log(mpu):
+    """pysidtracker's per-call SID write log, kept as (register, value)."""
+    log = SidWriteLog(mpu)
+    return log, lambda: [[(w[0], w[3]) for w in call] for call in log.calls]
+
+
 def trace_psid(  # pylint: disable=too-many-arguments
     data, frames, watch=None, on_watch=None, song=None, *, poke=None, sid_model="6581"
 ):
@@ -68,28 +64,19 @@ def trace_psid(  # pylint: disable=too-many-arguments
     Writes to `watch` addresses are passed to on_watch(frame, addr, value)."""
     load, init, play, image = psid_parts(data)
     mem, mpu = machine(load, image, poke, sid_model)
-    sids = sid_ranges(data)
-    out = [[]]
-    frame = [0]
-
-    def on_write(addr, value):
-        if any(addr in r for r in sids):
-            out[-1].append((addr, value))
-        else:
-            on_watch(frame[0], addr, value)
-
-    mem.observe_data_access(None, on_write, writes=sids + ([watch] if watch else []))
-    song = default_song(data) if song is None else song
-    run_to_rts(mpu, mem, init, song, MAX_CYCLES)
-    for frame[0] in tqdm(range(1, frames + 1), desc="psid", unit="frame"):
-        out.append([])
-        run_to_rts(mpu, mem, play, 0, MAX_CYCLES)
-    return out
+    log, writes = _log(mpu)
+    if watch:
+        mem.subscribe_to_write(
+            watch, lambda addr, value: on_watch(len(log.calls) - 1, addr, value)
+        )
+    log.start()
+    run_to_rts(mpu, mem, init, default_song(data) if song is None else song, MAX_CYCLES)
+    for _ in tqdm(range(frames), desc="psid", unit="frame"):
+        log.call(mem, play, MAX_CYCLES)
+    return writes()
 
 
-def trace_prg(  # pylint: disable=too-many-arguments
-    prg, frames, sids=(SID,), song=0, *, poke=None, sid_model="6581"
-):
+def trace_prg(prg, frames, song=0, *, poke=None, sid_model="6581"):
     """SID writes of a C build: frame n holds the writes after its n-th frame_wait.
 
     `prg` links c64/driver.c, with symbols in `prg`.elf; the harness sets
@@ -98,64 +85,35 @@ def trace_prg(  # pylint: disable=too-many-arguments
     with open(prg, "rb") as f:
         data = f.read()
     mem, mpu = machine(data[0] | data[1] << 8, data[2:], poke, sid_model)
-    out = [[] for _ in range(frames + 1)]
-    frame = [0]
-
-    def on_write(addr, value):
-        out[frame[0]].append((addr, value))
-
-    mem.observe_data_access(None, on_write, writes=list(sids))
+    log, writes = _log(mpu)
     mpu.pc = syms["_start"]
     assert mpu.run_until(max_cycles=MAX_CYCLES, stop_pcs=[syms["main"]]) == "pc"
     mem[syms["song_number"]] = song
 
     def to_wait():
         reason = mpu.run_until(max_cycles=MAX_CYCLES, stop_pcs=[syms["frame_wait"]])
-        assert reason == "pc", f"frame {frame[0]}: {reason} at ${mpu.pc:04x}"
+        assert reason == "pc", f"call {len(log.calls)}: {reason} at ${mpu.pc:04x}"
 
+    log.start()
     to_wait()
-    for frame[0] in tqdm(range(1, frames + 1), desc="prg", unit="frame"):
+    for _ in tqdm(range(frames), desc="prg", unit="frame"):
+        log.start()
         lo, hi = mem[0x100 + (mpu.sp + 1) % 256], mem[0x100 + (mpu.sp + 2) % 256]
         mpu.sp = (mpu.sp + 2) & 0xFF
         mpu.pc = (lo | hi << 8) + 1
         to_wait()
-    return out
+    return writes()
 
 
-def play_rate(data, song=None):
-    """Play calls per second of a subtune: 50, or with its PSID speed bit set the PAL
-    clock over the CIA 1 timer A period (default $4025 unless init sets it)."""
-    head = parse_sid_header(data)
-    song = head.start_song - 1 if song is None else song
-    if not head.cia_speed(song):
-        return 50
-    latch = [PAL.kernal_latch & 0xFF, PAL.kernal_latch >> 8]
-
-    def on_watch(_, addr, value):
-        latch[addr - CIA_TIMER.start] = value
-
-    trace_psid(data, 0, CIA_TIMER, on_watch, song)
-    return PAL.clock_hz / ((latch[0] | latch[1] << 8) + 1)
+def song_calls(data, song, hvsc):
+    """Play calls of 0-based subtune `song` over its HVSC length, at the tune's cadence;
+    `hvsc` is a directory holding DOCUMENTS/Songlengths.md5."""
+    return song_frames(data, song + 1, hvsc=hvsc)
 
 
-def songlengths(path, rate=50):
-    """{md5: [play calls per subtune at `rate` per second]} from an HVSC Songlengths.md5."""
-    out = {}
-    with open(path, encoding="latin-1") as f:
-        for line in f:
-            if "=" in line and not line.startswith(";"):
-                md5, times = line.strip().split("=", 1)
-                out[md5] = [
-                    round((int(m) * 60 + float(sec)) * rate)
-                    for m, sec in (t.split("(")[0].split(":") for t in times.split())
-                ]
-    return out
-
-
-def songlength(path, data, song):
-    """Play calls of subtune `song` (0-based) from an HVSC Songlengths.md5."""
-    rate = play_rate(data, song)
-    return songlengths(path, rate)[hashlib.md5(data).hexdigest()][song]
+def songs(spec, data):
+    """0-based subtunes of an HVSC-style 1-based spec ('all', '1,3-5')."""
+    return [s - 1 for s in song_list(spec, parse_sid_header(data).songs)]
 
 
 def loop_frame(psid, posoff, limit):
@@ -166,7 +124,7 @@ def loop_frame(psid, posoff, limit):
         if frame > 1 and value == 0:
             wrapped.setdefault(addr, frame)
 
-    trace_psid(psid, limit, range(posoff, posoff + 3), on_watch)
+    trace_psid(psid, limit, list(range(posoff, posoff + 3)), on_watch)
     assert len(wrapped) == 3, "tune did not loop within limit"
     return max(wrapped.values())
 
@@ -189,7 +147,7 @@ def diff(ref, got):
 def compare(psid, prg, frames, song):
     """(frames, writes, first mismatch or None) of one subtune."""
     ref = trace_psid(psid, frames, song=song)
-    got = trace_prg(prg, frames, sid_ranges(psid), song)
+    got = trace_prg(prg, frames, song)
     return frames, sum(map(len, ref)), diff(ref, got)
 
 
@@ -199,12 +157,12 @@ def main(argv=None):
     ap.add_argument("psid")
     ap.add_argument("prg", help="C build, with symbols in PRG.elf")
     ap.add_argument(
-        "--songs", help="0-based subtunes, e.g. 0,3-5 (default: start song)"
+        "--songs", help="1-based subtunes: all, or e.g. 1,3-5 (default: start song)"
     )
     end = ap.add_mutually_exclusive_group(required=True)
     end.add_argument("--frames", type=int, help="compare this many frames")
     end.add_argument(
-        "--songlengths", help="HVSC Songlengths.md5: each subtune's length"
+        "--hvsc", help="HVSC root (DOCUMENTS/Songlengths.md5): song lengths"
     )
     end.add_argument(
         "--wrap",
@@ -216,12 +174,12 @@ def main(argv=None):
     args = ap.parse_args(argv)
     with open(args.psid, "rb") as f:
         psid = f.read()
-    songs = parse_songs(args.songs) if args.songs else [default_song(psid)]
+    picked = songs(args.songs, psid) if args.songs else [default_song(psid)]
     failed = 0
-    for song in songs:
+    for song in picked:
         frames = args.frames
-        if args.songlengths:
-            frames = songlength(args.songlengths, psid, song)
+        if args.hvsc:
+            frames = song_calls(psid, song, args.hvsc)
         elif args.wrap:
             with open(args.wrap[0], encoding="ascii") as f:
                 addr = parse_labels(f.read())[args.wrap[1]]
@@ -235,15 +193,6 @@ def main(argv=None):
         else:
             print(f"song {song} OK: {frames} frames, {writes} SID writes identical")
     return 1 if failed else 0
-
-
-def parse_songs(text):
-    """'0,3-5' -> [0, 3, 4, 5]."""
-    out = []
-    for part in text.split(","):
-        lo, _, hi = part.partition("-")
-        out.extend(range(int(lo), int(hi or lo) + 1))
-    return out
 
 
 if __name__ == "__main__":
