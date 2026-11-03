@@ -359,7 +359,7 @@ static void read_row(struct voice *v) {
     v->ad = HR_AD;
   }
   v->gate = GATE_OFF;
-next:
+next: /* 6502 $0BED, reached from $0B9E/$0BBB/$0BC4/$0BD5 */
   ++y;
   v->patt_pos = at(p + y) ? y : 0;
 }
@@ -451,7 +451,7 @@ static void voice_play(struct voice *v, uint8_t r) {
     read_row(v);
   else if (v->pulse_ptr && (v->tick | v->patt_pos))
     pulse_step(v);
-regs:
+regs: /* 6502 $0BF6, reached from $0A68/$0B71/$0BA0 and $0BED */
   write_regs(v, r);
 }
 
