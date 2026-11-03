@@ -40,6 +40,13 @@ Hermit, SID-Wizard 1.x, SWP export (player at `$1000`, music at `$1c00`). HVSC
   reads with pitch `$81` reach it. The big-fx jump operand at `$19d0` (frequency low
   of pitch `$ff`) keeps its load value.
 
+## Voice structure in the original
+
+Play calls the track routine `$124D` with X = `$0E`, `$07`, `$00` (`$11F4-$11FE`); init loops
+over the voices (`$1143-$1160`). `seq_read` (`$17C8`) picks one of three per-voice paths by X,
+and the slide effects enter a shared tail at `$1AB4` with Y preset. `tests/test_structure.py`
+xfails while the generated C specialises the calls per voice.
+
 ## Verification
 
 `make check` compares every SID write of the C build against the PSID under jennings

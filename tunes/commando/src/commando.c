@@ -50,10 +50,12 @@ static uint8_t *at(uint8_t lo, uint8_t hi) {
   return song + (uint16_t)((lo | hi << 8) - SONG_ORG);
 }
 
+/* 6502: repeated inline at getinstr and vibrato (lda instr,x / asl x3). */
 static uint8_t *instrument(uint8_t x) {
   return song + INS + (uint8_t)(v.instr[x] << 3);
 }
 
+/* 6502: repeated inline at getfreq and arpeggio. */
 static void putfreq(uint8_t so, uint8_t n) {
   uint8_t y = n << 1;
   SIDREG(FQH) = F(y + 1);
@@ -201,7 +203,7 @@ void tune_play(void) {
   }
   if ((int8_t)--tempoc < 0)
     tempoc = tempo;
-  for (int8_t x = 2; x >= 0; --x) {
+  for (int8_t x = 2; x >= 0; --x) { /* 6502 loop: mainloop ... dex / bmi */
     uint8_t so = sid[x];
     if (tempoc == tempo) {
       if ((int8_t)--v.notec[x] < 0) {

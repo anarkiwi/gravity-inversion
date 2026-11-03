@@ -38,6 +38,13 @@ without hard restart) are read from the code.
   skipped on the tick the next pattern row is read and on tick 0 while the pattern
   position is 0.
 
+## Voice structure in the original
+
+The channel routine `$0996` is X-indexed: play calls it with `JSR` for X = 0 and 7, then sets
+X = `$0E` and falls into it, its `RTS` returning from play; init does the same into `$0922`. The
+C calls `voice_play` per voice. `tests/test_structure.py` xfails while the generated C
+specialises the fall-through copy.
+
 ## Verification
 
 `make check` traces the PSID and the C64 PRG under jennings and compares every SID write

@@ -152,6 +152,7 @@ static void set_ptn(void) {
 static void set_ins(uint8_t y) {
   zp = music[ins_lo + y] | music[ins_hi + y] << 8;
 }
+/* 6502 $17C8: CPX #7 picks one of three per-voice LDA base,Y / RTS paths. */
 static uint8_t seq_read(uint8_t y) {
   return music[seq_ptr[x == 7 ? 1 : x > 7 ? 2 : 0] + y];
 }
@@ -178,6 +179,8 @@ static void set_fmod(uint8_t a) {
   V(FMOD_HI) = 0;
 }
 
+/* 6502: three entries LDY #$81/#$82/#$83 share the tail at $1AB4 by BNE and
+ * fall-through. */
 static void set_slide(uint8_t type, uint8_t speed) {
   V(SLIDE) = type;
   set_fmod(speed);
@@ -847,15 +850,15 @@ void tune_init(uint8_t song) {
   tempo = word(H_TEMPO);
   tempo_prg = word(H_TEMPO_PRG);
   music[tempo] = music[subtune_tempo];
-  for (r = 0; r < CLEARED; r++)
+  for (r = 0; r < CLEARED; r++) /* 6502 loop $1127 */
     ch[r] = 0;
   r = 0x18;
-  do
+  do /* 6502 loop $112F */
     SIDREG(--r) = 0;
   while (r);
   band = keytrack = 0;
   main_vol = flt_ctrl = 0x0f;
-  for (x = 14;; x -= 7) {
+  for (x = 14;; x -= 7) { /* 6502 loop $1143-$1160 (TXA / SBC #7 / TAX) */
     do {
       a = seq_read(V(SEQ_POS));
       if (!NEG(a))
@@ -876,6 +879,7 @@ void tune_play(void) {
     slow_cnt = DITHER_FULL;
   if (!play)
     return;
+  /* 6502: no loop; JSR $124D with X = $0E, $07, $00 at $11F4-$11FE. */
   for (x = 14;; x -= 7) {
     do_track();
     if (!x)

@@ -98,6 +98,8 @@ static uint8_t cut_add(uint8_t a, uint8_t b, uint8_t *c) {
 
 static void band(void) {
   uint8_t so = 0;
+  /* 6502: no loop; copies at $1022/$1053/$1084 ($31 apart, JMP-chained),
+   * each voice's state in its own copy's immediate operands. */
   for (struct voice *v = voice; v < voice + 3; ++v, so += VOICE_REGS) {
     SIDREG(so + PW_LO) = v->pw_lo;
     SIDREG(so + PW_HI) = v->pw_hi;
@@ -124,6 +126,8 @@ static void arranger(void) {
     y = at(ARRANGER + ARR_STRIDE + y);
     x = at(ARRANGER + y);
   }
+  /* 6502: unrolled at $10F8-$1120, each voice's pattern pointer stored into
+   * the operands of its row copy ($1165/$11ED/$1275). */
   for (uint8_t k = 0; k < 3; ++k) {
     if (k)
       x = at(ARRANGER + k * ARR_STRIDE + y);
@@ -158,10 +162,12 @@ static void row(struct voice *v) {
 static void rows(void) {
   if (seq & STOPPED) {
     seq &= HD_DELAY;
+    /* 6502: three stores, $10E1-$10E7, into the row copies' operands. */
     for (uint8_t k = 0; k < 3; ++k)
       voice[k].delay = seq;
     arranger();
   }
+  /* 6502: no loop; copies at $112A/$11B2/$123A ($88 apart, fall-through). */
   for (struct voice *v = voice; v < voice + 3; ++v) {
     if (v->delay & 0x80)
       row(v);
@@ -222,6 +228,8 @@ static void apply(struct voice *v, uint16_t p) {
 }
 
 static void programs(void) {
+  /* 6502: no loop; six copies from $12BE, $31 apart (layer A voices 0-2,
+   * then layer B), each calling apply() at $168C. */
   for (uint8_t l = 0; l < 2; ++l)
     for (struct voice *v = voice; v < voice + 3; ++v) {
       uint8_t w = v->wait[l];
@@ -295,7 +303,7 @@ static void pitch_pulse(struct voice *v) {
 void tune_init(uint8_t song) {
   calls = 0;
   pos = song;
-  for (int8_t r = 0x17; r >= 0; --r)
+  for (int8_t r = 0x17; r >= 0; --r) /* 6502 loop $1505 */
     SIDREG(r) = 0;
   cut_lo = cut_hi = step_lo = step_hi = cp = route = mode = 0;
   /* SID model: osc 3 sawtooth read straight after a test bit release; the
@@ -310,7 +318,7 @@ void tune_init(uint8_t song) {
   uint8_t is8580 = SIDREG(OSC3) & 1;
   cut_min = is8580 ? 0 : 2;
   cut_shift = is8580;
-  for (struct voice *v = voice; v < voice + 3; ++v) {
+  for (struct voice *v = voice; v < voice + 3; ++v) { /* 6502 loop $1525 */
     v->prow[0] = v->prow[1] = v->ad = v->sr = v->wave = v->eor = 0;
     v->pitch = v->sweep = v->note = 0;
     v->wait[0] = v->wait[1] = 0xff;
@@ -325,6 +333,8 @@ void tune_play(void) {
   if (!(calls++ & (FULL_CALLS - 1)))
     rows();
   programs();
+  /* 6502 loop $13E4-$14C7: X = $62, $31, 0 (SBX #$31) over code-resident state.
+   */
   for (struct voice *v = voice + 2; v >= voice; --v)
     pitch_pulse(v);
 }
