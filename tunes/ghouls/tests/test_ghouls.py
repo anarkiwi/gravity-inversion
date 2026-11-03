@@ -2,9 +2,9 @@
 
 import pytest
 
+import disasm
 import sidtrace
-import survey
-from ghouls_support import BUILD, SONGLENGTHS, build_prg, with_pattern
+from ghouls_support import HVSC, BUILD, build_prg, with_pattern
 
 SONGS = range(32)
 PRG = str(BUILD / "ghouls.prg")
@@ -50,7 +50,7 @@ UNREACHABLE = {
 @pytest.mark.parametrize("song", SONGS)
 def test_subtune_identical(song, psid):
     """Every SID write of each subtune matches the original to its HVSC length."""
-    frames = sidtrace.songlength(SONGLENGTHS, psid, song)
+    frames = sidtrace.song_calls(psid, song, HVSC)
     _, writes, bad = sidtrace.compare(psid, PRG, frames, song)
     assert bad is None and writes
 
@@ -71,19 +71,18 @@ def test_variant_identical(variant):
 
 def test_variant_closes_branch_gaps(psid, variant):
     """Subtunes plus the variant take every reachable branch outcome."""
-    seen = survey.transitions(variant[0], VARIANT_FRAMES, VARIANT_SONG)
-    for song in SONGS:
-        seen |= survey.transitions(
-            psid, sidtrace.songlength(SONGLENGTHS, psid, song), song
-        )
-    assert survey.branch_gaps(variant[0], seen) == UNREACHABLE
+    cov = disasm.coverage(variant[0], VARIANT_FRAMES, VARIANT_SONG)
+    cov |= disasm.coverage(
+        psid, [sidtrace.song_calls(psid, s, HVSC) for s in SONGS], list(SONGS), 8
+    )
+    assert disasm.one_way(variant[0], cov) == UNREACHABLE
 
 
 def test_mismatch_reported(psid, variant, tmp_path, capsys):
     """A build of other data is reported as a mismatch."""
     src = tmp_path / "ref.sid"
     src.write_bytes(psid)
-    args = [str(src), str(variant[1]), "--songs", str(VARIANT_SONG)]
+    args = [str(src), str(variant[1]), "--songs", str(VARIANT_SONG + 1)]
     assert sidtrace.main(args + ["--frames", "50"]) == 1
     assert "MISMATCH" in capsys.readouterr().out
 

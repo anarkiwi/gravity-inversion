@@ -2,51 +2,16 @@
 
 import hashlib
 
-import pytest
 
 from vagrant_moses.memmap import PAL
 
 import sidtrace
 
 
-def _psid(version=2, extra=b""):
-    head = bytearray(0x7C)
-    head[:4] = b"PSID"
-    head[5] = version
-    head[0x7A : 0x7A + len(extra)] = extra
-    return bytes(head)
-
-
-def test_sid_ranges():
-    """Second and third SID addresses come from a v3/v4 header."""
-    assert sidtrace.sid_ranges(_psid()) == [range(0xD400, 0xD41D)]
-    assert sidtrace.sid_ranges(_psid(4, b"\x42\x50"))[1:] == [
-        range(0xD420, 0xD43D),
-        range(0xD500, 0xD51D),
-    ]
-
-
 def test_parse_labels():
     """ACME label dumps parse to addresses."""
     text = "\tfoo\t= $1000\t; ?\n\tbar\t= $14a2\t; unused\n"
     assert sidtrace.parse_labels(text) == {"foo": 0x1000, "bar": 0x14A2}
-
-
-def test_parse_songs():
-    """Subtune lists and ranges."""
-    assert sidtrace.parse_songs("0,3-5") == [0, 3, 4, 5]
-
-
-def test_songlength(tmp_path):
-    """HVSC lengths, with optional milliseconds and attributes, become frames."""
-    data = _code_psid([0x60])
-    md5 = hashlib.md5(data).hexdigest()
-    path = tmp_path / "Songlengths.md5"
-    path.write_text(f"; x\n{md5}=1:02 0:00.5(G)\n", encoding="latin-1")
-    assert sidtrace.songlength(path, data, 0) == 3100
-    assert sidtrace.songlength(path, data, 1) == 25
-    with pytest.raises(KeyError):
-        sidtrace.songlength(path, _code_psid([0xEA, 0x60]), 0)
 
 
 def test_diff():
@@ -68,27 +33,34 @@ def _code_psid(code, speed=0):
     return bytes(head) + bytes(code)
 
 
-CIA_INIT = [0xA2, 0x98, 0x8E, 0x04, 0xDC, 0xA0, 0x09, 0x8C, 0x05, 0xDC, 0x60]
-
-
-def test_play_rate():
-    """VBI tunes play at 50 Hz, CIA tunes at the timer A period init sets."""
-    assert sidtrace.play_rate(_code_psid(CIA_INIT)) == 50
-    assert sidtrace.play_rate(_code_psid(CIA_INIT, 1)) == PAL.clock_hz / 0x999
-    assert sidtrace.play_rate(_code_psid([0x60], 1)) == PAL.clock_hz / 0x4026
-
-
-def test_songlength_cia(tmp_path):
-    """HVSC lengths of CIA tunes become play calls at the tune's rate."""
-    data = _code_psid(CIA_INIT, 1)
-    path = tmp_path / "Songlengths.md5"
-    path.write_text(f"{hashlib.md5(data).hexdigest()}=0:10\n", encoding="latin-1")
-    assert sidtrace.songlength(path, data, 0) == round(10 * PAL.clock_hz / 0x999)
-
-
 def test_raster_and_poke():
     """Init may wait for a raster line; poked RAM is read back."""
     wait = [0xA9, 0xFC, 0xCD, 0x12, 0xD0, 0xD0, 0xFB]  # lda #$fc: cmp $d012: bne
     copy = [0xAD, 0x00, 0xC0, 0x8D, 0x00, 0xD4, 0x60]  # lda $c000: sta $d400: rts
     data = _code_psid(wait + copy)
-    assert sidtrace.trace_psid(data, 0, poke={0xC000: 7}) == [[(0xD400, 7)]]
+    assert sidtrace.trace_psid(data, 0, poke={0xC000: 7}) == [[(0, 7)]]
+
+
+def _hvsc(tmp_path, data, lengths):
+    docs = tmp_path / "DOCUMENTS"
+    docs.mkdir(exist_ok=True)
+    md5 = hashlib.md5(data).hexdigest()
+    (docs / "Songlengths.md5").write_text(f"; x\n{md5}={lengths}\n", encoding="latin-1")
+    return tmp_path
+
+
+def test_song_calls(tmp_path):
+    """HVSC lengths become play calls at the tune's measured cadence (PAL frames here;
+    tunes/automatas checks a CIA tune)."""
+    vbi = _code_psid([0x60])
+    assert sidtrace.song_calls(vbi, 0, _hvsc(tmp_path, vbi, "0:10")) == int(
+        10 * PAL.clock_hz / PAL.cycles_per_frame
+    )
+
+
+def test_songs():
+    """1-based HVSC subtune specs become 0-based subtunes."""
+    data = bytearray(_code_psid([0x60]))
+    data[0x0F] = 4
+    assert sidtrace.songs("all", bytes(data)) == [0, 1, 2, 3]
+    assert sidtrace.songs("1,3-4", bytes(data)) == [0, 2, 3]

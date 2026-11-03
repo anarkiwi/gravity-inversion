@@ -57,7 +57,7 @@ def test_variant_identical(name, ref_psid, labels, tmp_path):
     ref = sidtrace.trace_psid(psid, STOP_FRAMES)
     assert sidtrace.diff(ref, sidtrace.trace_prg(prg, STOP_FRAMES)) is None
     if name == "stop":
-        assert not ref[-1] and (0xD418, 0x0F) in sum(ref[2:], [])
+        assert not ref[-1] and (0x18, 0x0F) in sum(ref[2:], [])
 
 
 def test_mismatch_reported(ref_psid, labels, tmp_path, capsys):

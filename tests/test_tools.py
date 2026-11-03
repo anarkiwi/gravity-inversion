@@ -55,28 +55,27 @@ def test_survey(sample_psid, tmp_path, capsys, monkeypatch):
     assert len(rows) == 2
 
 
-def test_survey_songlengths(sample_psid, tmp_path):
-    """HVSC song lengths select each tune's frame count."""
-    path = tmp_path / "Songlengths.md5"
-    path.write_text(
+def test_survey_hvsc(sample_psid, tmp_path):
+    """With an HVSC root, each tune plays its song length in play calls."""
+    (tmp_path / "DOCUMENTS").mkdir()
+    (tmp_path / "DOCUMENTS" / "Songlengths.md5").write_text(
         f"{hashlib.md5(sample_psid).hexdigest()}=0:01\n", encoding="latin-1"
     )
-    lengths = survey.songlengths(path)
-    assert list(lengths.values()) == [[50]]
     sid = tmp_path / "a.sid"
     sid.write_bytes(sample_psid)
-    assert survey._job(str(sid), lengths)[1][2] == 50  # pylint: disable=W0212
+    calls = survey._job(str(sid), str(tmp_path))[1][2]  # pylint: disable=W0212
+    assert calls == sidtrace.song_calls(sample_psid, 0, tmp_path) == 50
 
 
 def test_disasm_songs(sample_psid, tmp_path):
     """Coverage of several subtunes merges; lengths may come from Songlengths."""
     sid, out = tmp_path / "t.sid", tmp_path / "t.s"
     sid.write_bytes(sample_psid)
-    lengths = tmp_path / "Songlengths.md5"
-    lengths.write_text(
+    (tmp_path / "DOCUMENTS").mkdir()
+    (tmp_path / "DOCUMENTS" / "Songlengths.md5").write_text(
         f"{hashlib.md5(sample_psid).hexdigest()}=0:02\n", encoding="latin-1"
     )
-    disasm.main([str(sid), str(out), "--song", "0", "--songlengths", str(lengths)])
+    disasm.main([str(sid), str(out), "--song", "1", "--hvsc", str(tmp_path)])
 
     def code(text):
         return set(re.findall(r"^([0-9A-F]{4})  (?!.*\.byte)", text, re.M))
@@ -86,13 +85,14 @@ def test_disasm_songs(sample_psid, tmp_path):
     assert merged == code(disasm.listing(sample_psid, [50, 100], [0, 0]).source)
 
 
-def test_branch_gaps(sample_psid):
-    """Gaps are untaken outcomes of executed branches, and shrink with longer runs."""
-    short, long_ = (survey.transitions(sample_psid, n) for n in (5, 400))
-    gaps = survey.branch_gaps(sample_psid, short)
-    pcs = {e >> 16 for e in short}
-    assert gaps and all(pc in pcs and pc << 16 | t not in short for pc, t in gaps)
-    assert survey.branch_gaps(sample_psid, short | long_) < gaps
+def test_one_way(sample_psid):
+    """One-way branches name their untaken target, and shrink with longer runs."""
+    short = disasm.coverage(sample_psid, 5)
+    gaps = disasm.one_way(sample_psid, short)
+    assert gaps and all(short.flags[pc] for pc, _ in gaps)
+    longer = disasm.coverage(sample_psid, 400)
+    longer |= short
+    assert disasm.one_way(sample_psid, longer) < gaps
 
 
 def test_mutate(tmp_path, capsys):

@@ -6,21 +6,16 @@ import multiprocessing
 import os
 import tempfile
 
-from jennings.coverage import CoverageMPU, call
+import numpy as np
+from jennings.coverage import FALLTHRU, TAKEN, CoverageMPU, call
 from jennings.coverage._core import CoverageMap
+from jennings.coverage.cfg import successors
 from jennings.coverage.listing import Listing
 from tqdm import tqdm
 
 from pysidtracker.emu import run_to_rts
 
-from sidtrace import (
-    MAX_CYCLES,
-    default_song,
-    machine,
-    parse_songs,
-    psid_parts,
-    songlength,
-)
+from sidtrace import MAX_CYCLES, default_song, machine, psid_parts, song_calls, songs
 
 
 def _image(data):
@@ -45,15 +40,15 @@ def _cover(data, song, frames, path):
     return path
 
 
-def listing(data, frames, song=None, jobs=1):
-    """jennings Listing of the payload after init and `frames` play calls.
+def coverage(data, frames, song=None, jobs=1):
+    """jennings CoverageMap of init and `frames` play calls.
 
     `song` may be a list of subtunes, each run from a fresh image in one of
     `jobs` processes, with coverage merged; `frames` may then be a list of
     play calls per subtune."""
-    songs = [default_song(data)] if song is None else song
-    songs = songs if isinstance(songs, list) else [songs]
-    frames = frames if isinstance(frames, list) else [frames] * len(songs)
+    picked = [default_song(data)] if song is None else song
+    picked = picked if isinstance(picked, list) else [picked]
+    frames = frames if isinstance(frames, list) else [frames] * len(picked)
     cov = CoverageMap()
     with tempfile.TemporaryDirectory() as tmp, tqdm(
         total=sum(frames), desc="cover", unit="frame"
@@ -62,13 +57,31 @@ def listing(data, frames, song=None, jobs=1):
     ) as ex:
         futs = {
             ex.submit(_cover, data, s, n, os.path.join(tmp, f"{s}.npz")): n
-            for s, n in zip(songs, frames)
+            for s, n in zip(picked, frames)
         }
         for fut in concurrent.futures.as_completed(futs):
             cov |= CoverageMap.load(fut.result())
             progress.update(futs[fut])
+    return cov
+
+
+def listing(data, frames, song=None, jobs=1, cov=None):
+    """jennings Listing of the payload, from `cov` or coverage(data, frames, song, jobs)."""
+    cov = coverage(data, frames, song, jobs) if cov is None else cov
     mem, span, entries = _image(data)
     return Listing.disassemble(mem, entries, cov=cov, ranges=[span])
+
+
+def one_way(data, cov):
+    """{(branch PC, target never taken)} of the branches `cov` saw go one way only."""
+    mem = np.array(_image(data)[0], np.uint8)
+    bt = cov.flags & (TAKEN | FALLTHRU)
+    return {
+        (int(pc), t)
+        for pc in np.flatnonzero((bt == TAKEN) | (bt == FALLTHRU))
+        for flag, t in successors(mem, int(pc))[0]
+        if not bt[pc] & flag
+    }
 
 
 def main(argv=None):
@@ -77,17 +90,21 @@ def main(argv=None):
     ap.add_argument("psid")
     ap.add_argument("out")
     ap.add_argument("--frames", type=int, default=3000)
-    ap.add_argument("--song", help="0-based subtunes, e.g. 0,3-5 (default: start song)")
-    ap.add_argument("--songlengths", help="HVSC Songlengths.md5: frames per subtune")
+    ap.add_argument(
+        "--song", help="1-based subtunes: all, or e.g. 1,3-5 (default: start)"
+    )
+    ap.add_argument(
+        "--hvsc", help="HVSC root (DOCUMENTS/Songlengths.md5): song lengths"
+    )
     ap.add_argument("--jobs", type=int, default=os.cpu_count())
     args = ap.parse_args(argv)
     with open(args.psid, "rb") as f:
         data = f.read()
-    songs = parse_songs(args.song) if args.song else [default_song(data)]
+    picked = songs(args.song, data) if args.song else [default_song(data)]
     frames = args.frames
-    if args.songlengths:
-        frames = [songlength(args.songlengths, data, s) for s in songs]
-    listing(data, frames, songs, args.jobs).write(args.out)
+    if args.hvsc:
+        frames = [song_calls(data, s, args.hvsc) for s in picked]
+    listing(data, frames, picked, args.jobs).write(args.out)
 
 
 if __name__ == "__main__":
