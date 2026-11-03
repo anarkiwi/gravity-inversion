@@ -9,16 +9,17 @@ from gen_data import generate
 ROOT = pathlib.Path(__file__).resolve().parent
 BUILD = ROOT / "build"
 ASM = ROOT.parent.parent / "fixtures" / "Hubbard_Rob_Commando.asm"
+DRIVER = ROOT.parent.parent / "c64"
 
 
 def build_prg(psid, labels, out_dir):
-    """Compile the C player against data generated from `psid`; return the PRG."""
+    """Compile the C player against data generated from `psid`; return its path."""
     out_dir = pathlib.Path(out_dir)
     (out_dir / "commando_data.h").write_text(generate(psid, labels), encoding="ascii")
     prg = out_dir / "commando.prg"
     subprocess.run(
         [os.environ.get("CC", "mos-c64-clang"), "-Os", f"-I{out_dir}", "-o", prg]
-        + [str(ROOT / "src" / f) for f in ("main.c", "commando.c")],
+        + [f"-I{DRIVER}", str(ROOT / "src" / "commando.c"), str(DRIVER / "driver.c")],
         check=True,
     )
-    return prg.read_bytes()
+    return prg

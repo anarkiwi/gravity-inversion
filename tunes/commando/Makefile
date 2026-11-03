@@ -12,8 +12,8 @@ $(B)/ref.sid $(B)/ref.labels &: $(FIX)/$(FIXTURE)
 $(B)/commando_data.h: $(B)/ref.sid $(B)/ref.labels gen_data.py
 	$(PY) gen_data.py $(B)/ref.sid $(B)/ref.labels $@
 
-$(B)/commando.prg: src/main.c src/commando.c src/commando.h $(B)/commando_data.h
-	$(CC) $(CFLAGS) -I$(B) -o $@ src/main.c src/commando.c
+$(B)/commando.prg: src/commando.c $(B)/commando_data.h $(DRIVER)
+	$(call mosbuild,$@,$(B),src/commando.c)
 
 check: $(B)/commando.prg
 	$(PY) $(ROOT)/tools/sidtrace.py $(B)/ref.sid $< --wrap $(B)/ref.labels posoff

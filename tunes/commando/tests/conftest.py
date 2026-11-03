@@ -21,9 +21,3 @@ def fixture_ref_psid():
 def fixture_labels():
     """Labels of the assembled original."""
     return parse_labels((BUILD / "ref.labels").read_text(encoding="ascii"))
-
-
-@pytest.fixture(scope="session")
-def ref_prg():
-    """C translation built by `make`."""
-    return (BUILD / "commando.prg").read_bytes()

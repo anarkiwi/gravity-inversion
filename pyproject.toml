@@ -1,3 +1,9 @@
+[tool.pylint.main]
+source-roots = ["tools", "tunes/commando"]
+
+[tool.pylint.design]
+max-locals = 20
+
 [tool.pylint.typecheck]
 generated-members = ["run_to_rts", "run_until"]
 

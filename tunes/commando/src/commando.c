@@ -9,8 +9,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "commando.h"
 #include "commando_data.h"
+#include "driver.h"
 
 /* SID registers of the voice at byte offset `so` */
 #define SIDREG(o) (((volatile uint8_t *)&SID)[o])
@@ -181,7 +181,7 @@ static void effects(uint8_t x, uint8_t so) {
     putfreq(so, v.note[x] + (frc & 1 ? 12 : 0));
 }
 
-void commando_play(void) {
+void tune_play(void) {
   ++frc;
   if (status & ST_OFF) {
     if (status & ST_INIT) {
@@ -219,7 +219,7 @@ void commando_play(void) {
   }
 }
 
-void commando_init(uint8_t s) {
+void tune_init(uint8_t s) {
   uint8_t i = s * 6;
   tempo = song[SONGTEMPOS + s];
   for (uint8_t j = 0; j < 6; ++j)

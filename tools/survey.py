@@ -3,6 +3,7 @@
 import argparse
 import concurrent.futures
 import csv
+import hashlib
 import sys
 
 import numpy as np
@@ -10,11 +11,21 @@ from jennings.devices.mpu6502 import MPU
 from jennings.memory import NativeMemory
 from tqdm import tqdm
 
-from sidtrace import MAX_CYCLES, psid_parts
+from sidtrace import MAX_CYCLES, psid_parts, songlengths
+
+
+def executed(data, frames, song=None):
+    """Set of PCs executed by init + `frames` play calls."""
+    return set(_run(data, frames, song)[0].tolist())
 
 
 def coverage(data, frames, song=None):
     """Return (unique PCs, total cycles, play calls) of init + `frames` play calls."""
+    pcs, cycles = _run(data, frames, song)
+    return len(pcs), cycles, frames
+
+
+def _run(data, frames, song):
     load, init, play, image = psid_parts(data)
     song = data[0x11] - 1 if song is None else song
     mem = NativeMemory(bytes(0x10000))
@@ -24,7 +35,7 @@ def coverage(data, frames, song=None):
     start = mpu.processorCycles
     for _ in range(frames):
         pcs.append(np.asarray(mpu.run_to_rts_traced(play, 0, MAX_CYCLES).pc))
-    return len(np.unique(np.concatenate(pcs))), mpu.processorCycles - start, frames
+    return np.unique(np.concatenate(pcs)), mpu.processorCycles - start
 
 
 def _job(path, frames):
@@ -33,6 +44,8 @@ def _job(path, frames):
             data = f.read()
         if data[:4] != b"PSID" or psid_parts(data)[2] == 0:
             return path, None
+        if isinstance(frames, dict):
+            frames = frames.get(hashlib.md5(data).hexdigest(), [3000])[data[0x11] - 1]
         return path, coverage(data, frames)
     except (AssertionError, RuntimeError, ValueError, IndexError):
         return path, None
@@ -43,11 +56,15 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--frames", type=int, default=3000)
     ap.add_argument("--jobs", type=int, default=32)
+    ap.add_argument(
+        "--songlengths", help="HVSC Songlengths.md5: play each tune's length"
+    )
     args = ap.parse_args(argv)
     paths = [line.strip() for line in sys.stdin if line.strip()]
+    frames = songlengths(args.songlengths) if args.songlengths else args.frames
     rows = []
     with concurrent.futures.ThreadPoolExecutor(args.jobs) as ex:
-        futs = [ex.submit(_job, p, args.frames) for p in paths]
+        futs = [ex.submit(_job, p, frames) for p in paths]
         for fut in tqdm(concurrent.futures.as_completed(futs), total=len(futs)):
             path, res = fut.result()
             if res:

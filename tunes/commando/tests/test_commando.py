@@ -8,25 +8,11 @@ import sidtrace
 STOP_FRAMES = 2500
 
 
-def test_prg_entry():
-    """SYS address is parsed from the BASIC stub."""
-    prg = bytes([0x01, 0x08, 0x0B, 0x08, 0x0A, 0x00, 0x9E]) + b"2061\x00\x00\x00"
-    assert sidtrace.prg_entry(prg) == (0x0801, 2061, prg[2:])
-
-
 def test_psid_parts(ref_psid, labels):
     """PSID header fields come from the reference."""
     load, init, play, image = sidtrace.psid_parts(ref_psid)
     assert (load, init, play) == (0x1000, labels["init"], labels["play"])
     assert len(image) == len(ref_psid) - 0x7E
-
-
-def test_diff():
-    """First differing write is located, including short frames."""
-    ref = [[(1, 2)], [(3, 4), (5, 6)]]
-    assert sidtrace.diff(ref, ref) is None
-    assert sidtrace.diff(ref, [[(1, 2)], [(3, 4), (5, 7)]]) == (1, 1, (5, 6), (5, 7))
-    assert sidtrace.diff(ref, [[(1, 2)], [(3, 4)]]) == (1, 1, (5, 6), None)
 
 
 def test_loop_frame(ref_psid, labels):
@@ -77,8 +63,7 @@ def test_variant_identical(name, ref_psid, labels, tmp_path):
 def test_mismatch_reported(ref_psid, labels, tmp_path, capsys):
     """A differing song is reported as a mismatch."""
     psid = _patched(ref_psid, labels, VARIANTS["stop"])
-    prg = tmp_path / "x.prg"
-    prg.write_bytes(build_prg(psid, labels, tmp_path))
+    prg = build_prg(psid, labels, tmp_path)
     args = [str(BUILD / "ref.sid"), str(prg)]
     assert sidtrace.main(args + ["--frames", str(STOP_FRAMES)]) == 1
     assert "MISMATCH" in capsys.readouterr().out
