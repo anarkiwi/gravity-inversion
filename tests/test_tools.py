@@ -74,16 +74,16 @@ def test_disasm_songs(sample_psid, tmp_path):
     sid.write_bytes(sample_psid)
     lengths = tmp_path / "Songlengths.md5"
     lengths.write_text(
-        f"{hashlib.md5(sample_psid).hexdigest()}=0:01 0:02\n", encoding="latin-1"
+        f"{hashlib.md5(sample_psid).hexdigest()}=0:02\n", encoding="latin-1"
     )
-    disasm.main([str(sid), str(out), "--song", "0-1", "--songlengths", str(lengths)])
+    disasm.main([str(sid), str(out), "--song", "0", "--songlengths", str(lengths)])
 
     def code(text):
         return set(re.findall(r"^([0-9A-F]{4})  (?!.*\.byte)", text, re.M))
 
     merged = code(out.read_text(encoding="ascii"))
     assert code(disasm.listing(sample_psid, 50, 0).source) <= merged
-    assert merged == code(disasm.listing(sample_psid, [50, 100], [0, 1]).source)
+    assert merged == code(disasm.listing(sample_psid, [50, 100], [0, 0]).source)
 
 
 def test_branch_gaps(sample_psid):

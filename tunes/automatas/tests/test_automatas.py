@@ -3,10 +3,11 @@
 import pytest
 
 from automatas_support import BUILD, FIX, SID, build_prg
+from vagrant_moses.memmap import PAL
+
 import sidtrace
 
 ARRANGER_POS = range(0x10EB, 0x10EC)
-OSC3 = 0xD41B
 VARIANT_CALLS = 30000
 
 
@@ -19,7 +20,7 @@ def _wraps(psid, calls):
 
 def test_cia_rate(psid):
     """Play calls run at the CIA 1 timer A period init sets."""
-    assert sidtrace.play_rate(psid) == sidtrace.PAL_CLOCK / 0x999
+    assert sidtrace.play_rate(psid) == PAL.clock_hz / 0x999
 
 
 def test_song_identical(capsys):
@@ -49,19 +50,19 @@ VARIANTS = {
     "semitone_route": ({0x2CC9: 0x05, 0x2CCC: 0x70}, {}),
     "semitone_high": ({0x2CC9: 0x7F, 0x2D84: 0x6A}, {}),
     "detune_carry": ({0x1081: 0xF0}, {}),
-    "sid8580": ({}, {OSC3: 1}),
+    "sid8580": ({}, {"sid_model": "8580"}),
 }
 
 
 @pytest.mark.parametrize("name", sorted(VARIANTS))
 def test_variant_identical(name, psid, tmp_path):
     """Patched songs and an 8580 exercise paths the tune does not use."""
-    patches, poke = VARIANTS[name]
+    patches, machine = VARIANTS[name]
     variant = _patched(psid, patches)
     prg = build_prg(variant, tmp_path)
-    ref = sidtrace.trace_psid(variant, VARIANT_CALLS, poke=poke)
+    ref = sidtrace.trace_psid(variant, VARIANT_CALLS, **machine)
     assert sidtrace.diff(ref, sidtrace.trace_psid(psid, VARIANT_CALLS)) is not None
-    got = sidtrace.trace_prg(prg, VARIANT_CALLS, poke=poke)
+    got = sidtrace.trace_prg(prg, VARIANT_CALLS, **machine)
     assert sidtrace.diff(ref, got) is None
 
 

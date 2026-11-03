@@ -38,11 +38,11 @@ contents depend on the host.
 
 ## Verification
 
-`make check` traces the PSID and the C64 PRG under jennings (raster model on, so init's
-raster wait runs) and compares every SID write per play call over the HVSC length, converted
+`make check` traces the PSID and the C64 PRG on `tools/sidtrace.py`'s emulated C64 (so
+init's raster wait runs) and compares every SID write per play call over the HVSC length, converted
 to play calls at the CIA rate. The tests also compare through the arranger loop twice, and
 patched songs: semitone pitch mode, a plain routing byte, high semitone offsets reading
-far past the table, a large detune whose carry is dropped, and an 8580 (`$d41b` bit 0 set).
+far past the table, a large detune whose carry is dropped, and an 8580 SID model.
 
 `tests/test_size.py` checks `src/automatas.c` is under twice the size of the jennings
 listing's instruction lines for the image.

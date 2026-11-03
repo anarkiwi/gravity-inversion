@@ -28,8 +28,8 @@ writable.
 ## Verification
 
 `tools/sidtrace.py` runs the reference PSID (init, then one play per frame) and the
-C64 PRG (frames assigned by PAL cycle count from raster line `$ff`) under jennings,
-recording every write to `$d400-$d41c`. The tune never stops, so comparison runs to
+C64 PRG (one play per return from `frame_wait`) on the same emulated C64, recording
+every write to `$d400-$d41c`. The tune never stops, so comparison runs to
 the frame at which the last voice wraps its track list.
 
 The tests also patch the assembled PSID to exercise paths the tune does not use:

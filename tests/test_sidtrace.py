@@ -4,6 +4,8 @@ import hashlib
 
 import pytest
 
+from vagrant_moses.memmap import PAL
+
 import sidtrace
 
 
@@ -37,14 +39,14 @@ def test_parse_songs():
 
 def test_songlength(tmp_path):
     """HVSC lengths, with optional milliseconds and attributes, become frames."""
-    data = b"tune"
+    data = _code_psid([0x60])
     md5 = hashlib.md5(data).hexdigest()
     path = tmp_path / "Songlengths.md5"
     path.write_text(f"; x\n{md5}=1:02 0:00.5(G)\n", encoding="latin-1")
     assert sidtrace.songlength(path, data, 0) == 3100
     assert sidtrace.songlength(path, data, 1) == 25
     with pytest.raises(KeyError):
-        sidtrace.songlength(path, b"other", 0)
+        sidtrace.songlength(path, _code_psid([0xEA, 0x60]), 0)
 
 
 def test_diff():
@@ -72,8 +74,8 @@ CIA_INIT = [0xA2, 0x98, 0x8E, 0x04, 0xDC, 0xA0, 0x09, 0x8C, 0x05, 0xDC, 0x60]
 def test_play_rate():
     """VBI tunes play at 50 Hz, CIA tunes at the timer A period init sets."""
     assert sidtrace.play_rate(_code_psid(CIA_INIT)) == 50
-    assert sidtrace.play_rate(_code_psid(CIA_INIT, 1)) == sidtrace.PAL_CLOCK / 0x999
-    assert sidtrace.play_rate(_code_psid([0x60], 1)) == sidtrace.PAL_CLOCK / 0x4026
+    assert sidtrace.play_rate(_code_psid(CIA_INIT, 1)) == PAL.clock_hz / 0x999
+    assert sidtrace.play_rate(_code_psid([0x60], 1)) == PAL.clock_hz / 0x4026
 
 
 def test_songlength_cia(tmp_path):
@@ -81,12 +83,12 @@ def test_songlength_cia(tmp_path):
     data = _code_psid(CIA_INIT, 1)
     path = tmp_path / "Songlengths.md5"
     path.write_text(f"{hashlib.md5(data).hexdigest()}=0:10\n", encoding="latin-1")
-    assert sidtrace.songlength(path, data, 0) == round(10 * sidtrace.PAL_CLOCK / 0x999)
+    assert sidtrace.songlength(path, data, 0) == round(10 * PAL.clock_hz / 0x999)
 
 
 def test_raster_and_poke():
     """Init may wait for a raster line; poked RAM is read back."""
     wait = [0xA9, 0xFC, 0xCD, 0x12, 0xD0, 0xD0, 0xFB]  # lda #$fc: cmp $d012: bne
-    copy = [0xAD, 0x1B, 0xD4, 0x8D, 0x00, 0xD4, 0x60]  # lda $d41b: sta $d400: rts
+    copy = [0xAD, 0x00, 0xC0, 0x8D, 0x00, 0xD4, 0x60]  # lda $c000: sta $d400: rts
     data = _code_psid(wait + copy)
-    assert sidtrace.trace_psid(data, 0, poke={0xD41B: 7}) == [[(0xD400, 7)]]
+    assert sidtrace.trace_psid(data, 0, poke={0xC000: 7}) == [[(0xD400, 7)]]

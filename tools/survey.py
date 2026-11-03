@@ -8,12 +8,10 @@ import sys
 
 import numpy as np
 from jennings.coverage.cfg import successors
-from jennings.devices.mpu6502 import MPU
 from jennings.isa import is_branch
-from jennings.memory import NativeMemory
 from tqdm import tqdm
 
-from sidtrace import MAX_CYCLES, psid_parts, songlengths
+from sidtrace import MAX_CYCLES, default_song, machine, psid_parts, songlengths
 
 
 def executed(data, frames, song=None):
@@ -30,10 +28,8 @@ def coverage(data, frames, song=None):
 def _traces(data, frames, song):
     """(PC trace per call of init + `frames` play calls, play cycles)."""
     load, init, play, image = psid_parts(data)
-    song = data[0x11] - 1 if song is None else song
-    mem = NativeMemory(bytes(0x10000))
-    mem.write(load, bytes(image[: 0x10000 - load]))
-    mpu = MPU(memory=mem)
+    song = default_song(data) if song is None else song
+    _, mpu = machine(load, image[: 0x10000 - load])
     pcs = [np.asarray(mpu.run_to_rts_traced(init, song, MAX_CYCLES).pc)]
     start = mpu.processorCycles
     for _ in range(frames):
@@ -80,7 +76,9 @@ def _job(path, frames):
         if data[:4] != b"PSID" or psid_parts(data)[2] == 0:
             return path, None
         if isinstance(frames, dict):
-            frames = frames.get(hashlib.md5(data).hexdigest(), [3000])[data[0x11] - 1]
+            frames = frames.get(hashlib.md5(data).hexdigest(), [3000])[
+                default_song(data)
+            ]
         return path, coverage(data, frames)
     except (AssertionError, RuntimeError, ValueError, IndexError):
         return path, None
