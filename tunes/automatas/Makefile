@@ -1,5 +1,5 @@
 FIXTURE := Automatas.sid
-URL := $(HVSC)/MUSICIANS/G/Goto80/Automatas.sid
+URL = $(HVSC)/MUSICIANS/G/Goto80/Automatas.sid
 MD5 := ececef3d224ba2af839cf1b8d4cd6760
 CFLAGS_TUNE := -DFRAME_CIA
 include ../../common.mk
