@@ -54,9 +54,10 @@ loop's single exit (`break`) or back edge (`continue`), not the procedure exit (
 - a branch past a block other paths join: the filter step's `out` (past `$095D`), the pulse step's
   `next` (past `$0B49`), `regs` (past the wave/effect/row/pulse joins), and the row epilogue `next`
   (`$0BED`) left from four depths (the hand C's fifth, `$0BC8` into `$0BEA`, has a structured
-  form);
-- a second entry into a straight-line sequence entered at its top by fall-through: `effect`
-  (`JMP $0816` below `$080F`).
+  form).
+
+`effect` (`JMP $0816` below `$080F`) is a goto in the hand C too, but it has a structured form: the
+handlers are the arms of the computed `JSR` dispatch, and `$0816` is the join after them.
 
 Structured alternatives copy the code at the target into each source or set a flag tested later;
 the goto is the original branch, adding neither code nor a test.

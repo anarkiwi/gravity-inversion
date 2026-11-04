@@ -301,10 +301,7 @@ def test_variant_identical(  # pylint: disable=too-many-arguments,too-many-posit
     assert sidtrace.diff(ref, sidtrace.trace_prg(prg, frames)) is None
 
 
-GEN_MISSED = {
-    "gate_off_pointers": "from play call 136 the generated C steps the filter cutoff low "
-    "byte ($D415) that the original holds once the filter table reaches position 42",
-}
+GEN_MISSED = {}
 
 
 @pytest.mark.slow

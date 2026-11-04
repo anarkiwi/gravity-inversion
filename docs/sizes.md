@@ -16,3 +16,17 @@ values, register traffic through zero page. The data bound holds every byte the 
 once and nothing else.
 
 The generated C's constructs that cost code size are detected in [costs.md](costs.md).
+
+## Translations against the bounds
+
+Bytes, from `tools/sizes.py`; the hand and generated PRGs all load below `$D000`.
+
+| Tune | Code bound | Hand code | Generated code | Data bound | Hand data | Generated data |
+|---|---|---|---|---|---|---|
+| Commando | 2315 | 1416 | 2728 | 1981 | 1963 | 2143 |
+| Incoherent | 2675 | 2603 | 3676 | 5863 | 5839 | 5852 |
+| Automatas | 4000 | 2655 | 8529 | 6583 | 6832 | 7892 |
+| Ghouls | 6662 | 3552 | 12483 | 23291 | 30523 | 30221 |
+| Emomyst | 5432 | 4490 | 12524 | 3170 | 2862 | 5713 |
+
+Where a translation exceeds a bound, `tests/test_sizes.py` records the cause as a strict xfail.

@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import subprocess
 from collections import Counter
 
@@ -16,7 +17,17 @@ RUNTIME = frozenset(
 )
 READS = frozenset(("rd", "io_read"))
 KINDS = ("K1", "K2", "K3", "K4", "K5", "K6")
-REGION = "R"
+REGION = re.compile(r"(?:[RC]\d+|CODE)$")
+CONDITIONAL = frozenset(
+    (
+        "IfStmt",
+        "WhileStmt",
+        "DoStmt",
+        "ConditionalOperator",
+        "BinaryConditionalOperator",
+    )
+)
+WRAP = frozenset(("ParenExpr", "ImplicitCastExpr", "CStyleCastExpr"))
 
 
 def ast(source, includes, cc=None):
@@ -68,6 +79,26 @@ def functions(tree):
         and d["name"] not in RUNTIME
         and any(c.get("kind") == "CompoundStmt" for c in d["inner"])
     ]
+
+
+def condition_tests(node):
+    """Ids of the `==` comparisons used only as conditions (a branch, `&&`, `||`, `!`, through
+    parentheses and casts), not as values."""
+    out = set()
+    for n, _ in _walk(node):
+        kind, op = n.get("kind"), n.get("opcode")
+        if kind in CONDITIONAL:
+            subs = n["inner"][:1]
+        elif op in ("&&", "||", "!"):
+            subs = n["inner"]
+        else:
+            continue
+        for sub in subs:
+            while sub.get("kind") in WRAP:
+                sub = sub["inner"][0]
+            if sub.get("opcode") == "==":
+                out.add(sub["id"])
+    return out
 
 
 def index_params(tree):
@@ -127,6 +158,7 @@ def costs(tree):
     for name, decl in functions(tree):
         k, c = index.get(name), Counter()
         dep = tainted(decl, k) if k else set()
+        conds = condition_tests(decl) if k else set()
         if decl["type"]["qualType"].startswith("struct"):
             c["K4"] += 1
         for n, parent in _walk(decl):
@@ -139,8 +171,10 @@ def costs(tree):
                     c["K6"] += 1
             elif kind == "BinaryOperator" and k and _refs(n) & dep:
                 c["K2"] += n.get("opcode") == "*"
-                if n.get("opcode") == "==" and any(
-                    _literal(s) is not None for s in n["inner"]
+                if (
+                    n.get("opcode") == "=="
+                    and n["id"] not in conds
+                    and any(_literal(s) is not None for s in n["inner"])
                 ):
                     c["K3"] += 1
             elif kind == "ArraySubscriptExpr":
@@ -152,9 +186,7 @@ def costs(tree):
                     ),
                     "",
                 )
-                if (base.startswith(REGION) or base == "CODE") and _refs(
-                    n["inner"][1]
-                ) & wide:
+                if REGION.match(base) and _refs(n["inner"][1]) & wide:
                     c["K5"] += 1
         out[name] = c
     return out

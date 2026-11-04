@@ -33,7 +33,7 @@ coverage of init and play) and against the generated C by `tests/test_constructs
 | `goto` | `edges` with no structured form | a goto per edge |
 | `join` | edges rejoining at the post-dominator of their branch | if/else, no goto |
 | `short_circuit` | `branches` sharing `target` | one `&&`/`\|\|` condition |
-| `switch` | a computed `dispatch` (written operand, branch offset or table) | a switch |
+| `switch` | a computed `dispatch` (written operand, branch offset or table); `edges`: arms leaving for the join after it | a switch; those arms `break` |
 | `multi_entry` | entries setting a register before a shared tail | one function taking that value |
 | `region`, `inline_repeat`, `unrolled_stores`, `per_voice_paths` | code the hand C names or folds for readability | not required of the generated C |
 
@@ -59,11 +59,11 @@ acyclic structure exists, and tail calls must be cut before either. The steps, i
 | T3 | copy classes: consecutive, chained copies equal up to operand deltas affine in the copy index | one function `f(k)`; per-copy cells and constants become state and tables indexed by `k` | 6 |
 | T4 | dominator tree per procedure (back edges, including fall-through back edges of rotated loops entered at their test) | natural loops: back edge `continue`, the exit to the loop's follow `break`, exits to the procedure's exit `return` | 24 |
 | T5 | chains of conditional branches sharing a target, each falling into the next | one `&&`/`\|\|` condition, to a fixpoint | 4 |
-| T6 | post-dominator tree of the reduced graph | a branch whose arms rejoin at its immediate post-dominator becomes if/else; a multiway branch on one selector a switch | 4 |
-| T7 | none | every remaining edge is a goto: a branch past a joined block, an entry part-way into a shared sequence, a loop's second exit | 22 |
+| T6 | post-dominator tree of the reduced graph | a branch whose arms rejoin at its immediate post-dominator becomes if/else; a multiway branch on one selector a switch | 6 |
+| T7 | none | every remaining edge is a goto: a branch past a joined block, an entry part-way into a shared sequence, a loop's second exit | 21 |
 
 Four entries are readability choices the hand C makes (naming a single-entry region, extracting
-repeated inline code) and are not lifted. Fourteen entries record where the hand C departs from
+repeated inline code) and are not lifted. Seventeen entries record where the hand C departs from
 the procedure (`hand_differs`): a loop back edge written as a goto, nested copy loops written as
 one, a shared suffix outlined as a helper, gotos into a subroutine, gotos at joins with a
 structured form, and flags or outlined helpers where an edge has none. There the rule wins: the
@@ -96,7 +96,6 @@ opcodes fill, `tools/fuzzplayer.py` adds players (`tests/test_fuzz.py`): RTI dis
 table, BRK through a written vector, a TXS non-local exit, a JSR with an inline argument the
 callee skips by adjusting its return address, a BIT skip into an instruction's operand, decimal
 arithmetic, ISC/DCP on cells and counters, BIT with BVC/BMI chains, per-voice (zp,X) pointers, and
-a JAM guarded by data. Three of these name rules the lift lacks (strict xfails): BRK paired with
-its vector and RTI, a call whose callee adjusts its return address, and TXS to a saved stack
-pointer. The unstable opcodes (`ANE`, `LXA`, `SH*`, `TAS`) are lifted as the machine model defines
+a JAM guarded by data. Each player must also translate to the same C when assembled at another
+origin. The unstable opcodes (`ANE`, `LXA`, `SH*`, `TAS`) are lifted as the machine model defines
 them; their hardware results vary, so they are not fuzzed.

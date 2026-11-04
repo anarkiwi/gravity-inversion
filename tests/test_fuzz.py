@@ -22,11 +22,6 @@ FRAMES = 200
 IDEAL_FUNCTIONS = 3
 EXTRA_FUNCTIONS = {"brk": 1, "inlineargs": 1}
 VOICE_REGS = range(0xD407, 0xD415)
-GAPS = {
-    "brk": "BRK through a written vector and RTI to PC+2 are not paired as a call",
-    "inlineargs": "a callee adjusting its return address is not a call with inline arguments",
-    "stackswitch": "TXS to a saved stack pointer (a non-local exit) is not lifted",
-}
 MISSED = {
     (
         "functions",
@@ -40,66 +35,6 @@ MISSED = {
         2,
     ): "the voice routine's increments at $1050/$106A/$107C, "
     "alike up to operands, fold into an indexed function",
-    (
-        "exact",
-        "brk",
-        0,
-    ): GAPS["brk"],
-    (
-        "exact",
-        "brk",
-        1,
-    ): GAPS["brk"],
-    (
-        "exact",
-        "brk",
-        2,
-    ): GAPS["brk"],
-    (
-        "exact",
-        "inlineargs",
-        0,
-    ): GAPS["inlineargs"],
-    (
-        "exact",
-        "inlineargs",
-        1,
-    ): GAPS["inlineargs"],
-    (
-        "exact",
-        "inlineargs",
-        2,
-    ): GAPS["inlineargs"],
-    (
-        "exact",
-        "stackswitch",
-        0,
-    ): GAPS["stackswitch"],
-    (
-        "exact",
-        "stackswitch",
-        1,
-    ): GAPS["stackswitch"],
-    (
-        "exact",
-        "stackswitch",
-        2,
-    ): GAPS["stackswitch"],
-    (
-        "voice",
-        "stackswitch",
-        0,
-    ): GAPS["stackswitch"],
-    (
-        "voice",
-        "stackswitch",
-        1,
-    ): GAPS["stackswitch"],
-    (
-        "voice",
-        "stackswitch",
-        2,
-    ): GAPS["stackswitch"],
 }
 
 
@@ -125,6 +60,27 @@ def _psid(style, seed, out):
     sid = out / f"{style}{seed}.sid"
     subprocess.run(["acme", "-o", sid, src], check=True, capture_output=True)
     return sid.read_bytes()
+
+
+RELOC = 0x2000
+
+
+@pytest.fixture(scope="module", name="relocated")
+def fixture_relocated(tmp_path_factory):
+    """{(style, seed): c} of each player assembled at RELOC, translated once."""
+    out = tmp_path_factory.mktemp("reloc")
+    done = {}
+    for s in fuzzplayer.STYLES:
+        for seed in SEEDS:
+            src = out / f"{s}{seed}.asm"
+            text = fuzzplayer.player(s, seed)
+            src.write_text(
+                text.replace("ADDR = $1000", f"ADDR = ${RELOC:04x}"), "ascii"
+            )
+            sid = out / f"{s}{seed}.sid"
+            subprocess.run(["acme", "-o", sid, src], check=True, capture_output=True)
+            done[s, seed] = transliterate(sid.read_bytes(), "fuzz.h")[0]
+    return done
 
 
 @pytest.fixture(scope="module", name="translated")
@@ -176,6 +132,12 @@ def test_structured(style, seed, translated):
     """A structured body needs no gotos and no structuring flags."""
     c, info = translated[style, seed][1], translated[style, seed][3]
     assert c.count("goto ") + info["structure"].get("flags", 0) == 0
+
+
+@pytest.mark.parametrize("style,seed", _cases("reloc"))
+def test_relocated(style, seed, translated, relocated):
+    """The player assembled at another origin generates byte-identical C."""
+    assert relocated[style, seed] == translated[style, seed][1]
 
 
 def test_cli(tmp_path):

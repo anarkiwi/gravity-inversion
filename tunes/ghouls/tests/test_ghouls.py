@@ -10,8 +10,6 @@ from ghouls_support import HVSC, BUILD, build_prg, gen_prg, with_pattern
 SONGS = range(32)
 PRG = str(BUILD / "ghouls.prg")
 PRGS = {"hand": PRG, "generated": str(BUILD / "gen.prg")}
-MUSIC = range(11)
-INIT_TRAP = "music init traps at the block copy's code store checks ($29CA, $29DF)"
 VARIANT_SONG, VARIANT_FRAMES = 4, 150
 
 # One pattern on all three voices, for the paths no subtune runs: a register
@@ -53,14 +51,7 @@ UNREACHABLE = {
 
 @pytest.mark.parametrize(
     "kind,song",
-    [("hand", s) for s in SONGS]
-    + [
-        pytest.param(
-            "generated", s, marks=pytest.mark.xfail(strict=True, reason=INIT_TRAP)
-        )
-        for s in MUSIC
-    ]
-    + [("generated", s) for s in SONGS if s not in MUSIC],
+    [(kind, s) for kind in PRGS for s in SONGS],
 )
 def test_subtune_identical(kind, song, psid):
     """Every SID write of each subtune matches the original to its HVSC length."""
@@ -83,7 +74,6 @@ def test_variant_identical(variant):
     assert bad is None and writes
 
 
-@pytest.mark.xfail(strict=True, reason=INIT_TRAP)
 def test_variant_generated(variant, tmp_path):
     """The C generated from the patched song matches it."""
     prg = gen_prg(variant[0], tmp_path)
