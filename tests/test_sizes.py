@@ -17,10 +17,8 @@ CFLAGS = {"automatas": ["-DFRAME_CIA"]}
 RD = "rd() dispatch for pointer reads"
 DUMMY = "the 6502's dummy reads (page crossings, indexed I/O stores)"
 WR = "rd()/wr() dispatch and code store checks where indices are unbounded"
-STRUCTS = "register files the split-off functions return as structs"
-CODE = "CODE keeps the instruction bytes the player never reads as data"
-STACK = "the stack page is a data region"
-BITMAP = "the CODE_DATA bitmap"
+CODE = "C0 keeps the instruction bytes the player never reads as data"
+BITMAP = "the C0_DATA bitmap"
 MISSED = {
     (
         "hand",
@@ -32,16 +30,17 @@ MISSED = {
         "automatas",
         "data",
     ): "voice state is copied out of the code image as well as kept in DATA",
-    ("generated", "commando", "code"): f"{RD} and {DUMMY}",
-    ("generated", "incoherent", "code"): f"{RD}, {DUMMY} and {STRUCTS}",
-    ("generated", "automatas", "code"): f"{WR} and {DUMMY}",
+    ("generated", "commando", "code"): RD,
+    ("generated", "incoherent", "code"): RD,
+    ("generated", "automatas", "code"): WR,
     ("generated", "ghouls", "code"): f"{WR} and {DUMMY}",
-    ("generated", "emomyst", "code"): f"{WR}, {DUMMY} and {STRUCTS}",
+    ("generated", "emomyst", "code"): WR,
     ("generated", "commando", "data"): f"{CODE}, and R1 spans bytes past the image "
     "nothing writes",
-    ("generated", "incoherent", "data"): f"{CODE} and {STACK}",
-    ("generated", "automatas", "data"): f"{CODE}, with {BITMAP}, and {STACK}",
-    ("generated", "emomyst", "data"): f"{CODE}, with {BITMAP}, and {STACK}",
+    ("generated", "ghouls", "data"): f"{CODE}, and the music init's block copy ($29C6) "
+    "writes each song's data to $730E and $914F-$9614: RAM regions spanning every song's copy",
+    ("generated", "automatas", "data"): f"{CODE}, with {BITMAP}",
+    ("generated", "emomyst", "data"): f"{CODE}, with {BITMAP}",
 }
 
 

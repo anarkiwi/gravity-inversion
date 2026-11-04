@@ -15,23 +15,22 @@ DRIVER = ROOT / "c64"
 INSTANCE = "folded copies' state addressed as base + stride * k"
 DUMMY = "dummy reads of indices and pointers the analysis cannot bound"
 MISSED = {
-    ("commando", "K6"): DUMMY,
-    ("incoherent", "K4"): "register values returned as structs across calls",
-    ("incoherent", "K6"): DUMMY,
     ("automatas", "K1"): INSTANCE,
     ("automatas", "K2"): INSTANCE,
     ("automatas", "K3"): "per-copy constants as select-sums",
-    ("automatas", "K6"): DUMMY,
+    ("automatas", "K5"): "the copies' offsets ($31, $88 per voice) computed in 16 bits",
     ("ghouls", "K1"): INSTANCE,
     ("ghouls", "K2"): INSTANCE,
     ("ghouls", "K3"): "per-copy constants as select-sums",
-    ("ghouls", "K4"): "register values returned as structs across calls",
     ("ghouls", "K5"): "region indices computed in 16 bits",
     ("ghouls", "K6"): DUMMY,
-    ("emomyst", "K1"): INSTANCE,
-    ("emomyst", "K4"): "register values returned as structs across calls",
-    ("emomyst", "K5"): "region indices computed in 16 bits",
-    ("emomyst", "K6"): DUMMY,
+    ("emomyst", "K1"): "the relocator's LDA $1111,Y at $1163 reads through its written "
+    "operand, called with Y = 0 and 1",
+    (
+        "emomyst",
+        "K5",
+    ): "the relocator's ($02),Y stores into the image, indexed by the 16-bit "
+    "pointer",
 }
 
 SEEDS = range(3)
@@ -40,27 +39,25 @@ FALSE_FOLD = "statements on fields $20 apart fold as a coincidental instance cla
 DUMMY_FUZZ = "dummy reads of a voice index the analysis does not bound"
 FUZZ_MISSED = (
     {("K2", s, 2): FALSE_FOLD for s in SIMPLE}
-    | {("K4", s, 2): FALSE_FOLD for s in SIMPLE}
     | {
         ("K6", s, n): DUMMY_FUZZ
         for s, seeds in {
-            "loop": (0, 1, 2),
-            "jsr3": (0, 2),
-            "fallthrough": (0, 2),
+            "loop": (1, 2),
             "rti": (0, 1, 2),
-            "brk": (0, 2),
-            "inlineargs": (0, 2),
-            "skip": (0, 1, 2),
-            "decimal": (0, 2),
-            "rmw": (0, 1, 2),
-            "vflag": (0, 1, 2),
+            "brk": (0, 1, 2),
+            "stackswitch": (1, 2),
+            "inlineargs": (2,),
+            "skip": (1, 2),
+            "decimal": (2,),
+            "rmw": (1, 2),
+            "vflag": (1, 2),
             "indx": (0, 1, 2),
             "jam": (0, 1, 2),
         }.items()
         for n in seeds
     }
     | {(k, "unrolled", n): INSTANCE for k in ("K2", "K5") for n in SEEDS}
-    | {(k, "smc", n): INSTANCE for k in ("K1", "K2") for n in SEEDS}
+    | {(k, "smc", n): INSTANCE for k in ("K1", "K2", "K5") for n in SEEDS}
     | {("K3", "smc", n): "per-copy constants as select-sums" for n in SEEDS}
 )
 

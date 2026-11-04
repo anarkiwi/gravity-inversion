@@ -129,7 +129,8 @@ class Checker:
             seen = {b for a, b in self.cov.edges if a == c["dispatch"]}
             seen |= {v for p, v in self.cov.variants if p == c["dispatch"]}
             self.covered &= len(seen) > 1
-            return self.at(c["dispatch"])
+            edges = [e for a, b in c.get("edges", []) for e in self.edge(a, b)]
+            return self.at(c["dispatch"]) + edges
         return [e for a in c.get("pcs", []) for e in self.at(a)]
 
 

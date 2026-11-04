@@ -78,7 +78,8 @@
   },
   {
    "id": "command.effect",
-   "kind": "goto",
+   "kind": "switch",
+   "dispatch": "$0A65",
    "edges": [
     [
      "$080C",
@@ -89,9 +90,10 @@
     "fn": "command",
     "label": "effect"
    },
-   "why": "A second entry into the sequence $080F-$081F whose top the switch reaches by fall-through.",
-   "lift": "goto",
-   "transform": "T7"
+   "why": "The JSR whose operand $09BB writes is a computed dispatch into the handlers; the $0809 arm's JMP $0816 leaves the arm for the store sequence the $080F arm falls into, the join after the switch.",
+   "lift": "switch, the arm breaking to the join",
+   "hand_differs": "the hand C writes goto effect into the case below",
+   "transform": "T6"
   },
   {
    "id": "read_row.next",

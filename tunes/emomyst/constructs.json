@@ -149,10 +149,6 @@
    "kind": "goto",
    "edges": [
     [
-     "$175D",
-     "$1760"
-    ],
-    [
      "$171D",
      "$1760"
     ]
@@ -161,7 +157,7 @@
     "fn": "wf_arp",
     "label": "relative"
    },
-   "why": "Entries into the shared sequence $1760 from the chord tail and the arpeggio.",
+   "why": "Entry into the shared sequence $1760 from the chord tail; the arpeggio's $175D reaches it by fall-through.",
    "lift": "goto",
    "transform": "T7"
   },
@@ -278,7 +274,7 @@
   },
   {
    "id": "filter_prg.advance",
-   "kind": "goto",
+   "kind": "join",
    "edges": [
     [
      "$15DE",
@@ -289,9 +285,10 @@
     "fn": "filter_prg",
     "label": "advance"
    },
-   "why": "Entry below the set-values top $1630.",
-   "lift": "goto",
-   "transform": "T7"
+   "why": "The BEQ's arm rejoins at $1649, its post-dominator once the exits to $1665 are gotos, as pw_prg.advance.",
+   "lift": "if/else arms rejoining, no goto",
+   "hand_differs": "the hand C writes a goto",
+   "transform": "T6"
   },
   {
    "id": "filter_prg.set_pos",
@@ -310,6 +307,34 @@
    "lift": "goto",
    "covered": false,
    "uncovered": "the song's filter tables jump only to set rows; the patched variants reach it",
+   "transform": "T7"
+  },
+  {
+   "id": "filter_prg.end",
+   "kind": "goto",
+   "edges": [
+    [
+     "$1618",
+     "$1665"
+    ],
+    [
+     "$1621",
+     "$1665"
+    ],
+    [
+     "$1629",
+     "$1665"
+    ]
+   ],
+   "hand": {
+    "fn": "filter_prg",
+    "form": "return"
+   },
+   "why": "Exits past the shared block $1649-$1662 to $1665, a join that is not their branch's post-dominator.",
+   "lift": "goto",
+   "hand_differs": "the hand C ends filter_prg at $1665 and returns; $1665 is no procedure entry",
+   "covered": false,
+   "uncovered": "the song's filter tables never jump to their own row ($1629); the patched variants reach it",
    "transform": "T7"
   },
   {

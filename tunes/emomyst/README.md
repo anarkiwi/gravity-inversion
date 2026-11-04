@@ -57,7 +57,7 @@ loop's single exit (`break`) or back edge (`continue`), not the procedure exit (
   `$1705`), `end` (past the pitch joins), `note` (past `$12B5`);
 - a second entry into a straight-line sequence entered at its top by fall-through: the arpeggio's
   `relative`/`absolute` (`$1760`/`$1764`), the filter and pulse table steps' `advance`, `set_pos`
-  and `write` (the pulse step's `advance`, and `write` from `$1688`, have structured forms), and the frequency slide's shared add/subtract `up`/`down`/`store` (`$15BF`, `$15A4`,
+  and `write` (both steps' `advance`, and `write` from `$1688`, have structured forms), and the frequency slide's shared add/subtract `up`/`down`/`store` (`$15BF`, `$15A4`,
   `$15CE`), each reached from the slide, portamento and vibrato decisions;
 - a loop's back edge from inside a branch when the loop has other exit targets: `row` (`$1749 JMP
   $16E3`);
@@ -66,6 +66,9 @@ loop's single exit (`break`) or back edge (`continue`), not the procedure exit (
 Structured alternatives copy the code at the target into each source or set a flag tested later;
 the goto is the original branch, adding neither code nor a test. `done` is also the 6502 tail call
 idiom: `$19AB` is a subroutine the code also enters by `JMP` and fall-through.
+
+The hand C ends `filter_prg` at `$1665` and returns; `$1665` is no procedure entry, so the
+filter step's exits past `$1649-$1662` (`$1618`, `$1621`, `$1629`) are gotos in the generated C.
 
 ## Verification
 
