@@ -27,6 +27,7 @@ coverage of init and play) and against the generated C by `tests/test_constructs
 | `call` | `JSR` `sites` → `target` | a function called per site |
 | `fall_call` | `JSR` sites and a fall-through (`falls`) into `target` | one function; the fall-through is a call then return |
 | `tail_call` | `JMP`s, branches or fall-throughs into a `JSR` target | a call then return |
+| `multi_entry_loop` | a cycle entered by `edges` at two points, `back` -> `head` (`copies`: the same loop in other instances) | one loop with an entry selector |
 | `unrolled` | `copies` of one body, operands at strides (`inserted`: instructions only some copies have) | one function with an instance index |
 | `smc` | `writer` stores into `cell`, a byte of `reader` | a variable |
 | `goto` | `edges` with no structured form | a goto per edge |
@@ -65,6 +66,8 @@ Four entries are readability choices the hand C makes (naming a single-entry reg
 repeated inline code) and are not lifted. Eight entries record where the hand C departs from the
 procedure (`hand_differs`): a loop back edge written as a goto, nested copy loops written as one,
 a shared suffix outlined as a helper, gotos into a subroutine.
+
+The number of passes the facts need is proved in [passes.md](passes.md).
 
 ## Opcodes
 
