@@ -15,7 +15,7 @@ coverage of init and play) and against the generated C by `tests/test_constructs
 | `hand` | the hand C's function and form or label |
 | `why` | the 6502 control or data flow that makes the form the right one |
 | `lift` | the form the generated C must take (the rule below) |
-| `hand_differs` | where the hand C departs from the rule, and how |
+| `hand_differs` | where the hand C departs from the rule, and how; the rule wins |
 | `transform` | the lift step below that decides the form (`null`: readability, not lifted) |
 | `covered` | `false` when the song's run never takes the construct; `uncovered` says what does |
 
@@ -57,15 +57,18 @@ acyclic structure exists, and tail calls must be cut before either. The steps, i
 | T1 | stores into instruction bytes (def-use); target sets of computed transfers (constant tables, written operands, branch offsets) | code cells become variables; a computed transfer with a known target set becomes a switch | 15 |
 | T2 | procedure entries: `init`, `play`, every `JSR` target; immediate loads before a jump into a shared tail | an edge into an entry from another procedure (`JMP`, branch, fall-through) becomes a call then return; register-preset entries into one tail become one function taking the register | 6 |
 | T3 | copy classes: consecutive, chained copies equal up to operand deltas affine in the copy index | one function `f(k)`; per-copy cells and constants become state and tables indexed by `k` | 6 |
-| T4 | dominator tree per procedure (back edges, including fall-through back edges of rotated loops entered at their test) | natural loops: back edge `continue`, the exit to the loop's follow `break`, exits to the procedure's exit `return` | 22 |
+| T4 | dominator tree per procedure (back edges, including fall-through back edges of rotated loops entered at their test) | natural loops: back edge `continue`, the exit to the loop's follow `break`, exits to the procedure's exit `return` | 24 |
 | T5 | chains of conditional branches sharing a target, each falling into the next | one `&&`/`\|\|` condition, to a fixpoint | 4 |
-| T6 | post-dominator tree of the reduced graph | a branch whose arms rejoin at its immediate post-dominator becomes if/else; a multiway branch on one selector a switch | 1 |
-| T7 | none | every remaining edge is a goto: a branch past a joined block, an entry part-way into a shared sequence, a loop's second exit | 20 |
+| T6 | post-dominator tree of the reduced graph | a branch whose arms rejoin at its immediate post-dominator becomes if/else; a multiway branch on one selector a switch | 4 |
+| T7 | none | every remaining edge is a goto: a branch past a joined block, an entry part-way into a shared sequence, a loop's second exit | 22 |
 
 Four entries are readability choices the hand C makes (naming a single-entry region, extracting
-repeated inline code) and are not lifted. Eight entries record where the hand C departs from the
-procedure (`hand_differs`): a loop back edge written as a goto, nested copy loops written as one,
-a shared suffix outlined as a helper, gotos into a subroutine.
+repeated inline code) and are not lifted. Fourteen entries record where the hand C departs from
+the procedure (`hand_differs`): a loop back edge written as a goto, nested copy loops written as
+one, a shared suffix outlined as a helper, gotos into a subroutine, gotos at joins with a
+structured form, and flags or outlined helpers where an edge has none. There the rule wins: the
+generated C must take the rule's form (`tests/test_structure.py` compares its gotos with the map's
+`goto` entries), and the hand C's form is a readability choice that costs size.
 
 The number of passes the facts need is proved in [passes.md](passes.md).
 

@@ -28,11 +28,18 @@ GAPS = {
     "stackswitch": "TXS to a saved stack pointer (a non-local exit) is not lifted",
 }
 MISSED = {
-    ("functions", "jsr3", 2): "a join of the voice routine is outlined",
-    ("functions", "fallthrough", 2): "a join of the voice routine is outlined",
-    ("functions", "smc", 0): "per-copy immediates that are not affine split the class",
-    ("functions", "smc", 1): "per-copy immediates that are not affine split the class",
-    ("voice", "smc", 1): "per-copy immediates that are not affine split the class",
+    (
+        "functions",
+        "jsr3",
+        2,
+    ): "the voice routine's increments at $1054/$106E/$1080, alike "
+    "up to operands, fold into an indexed function",
+    (
+        "functions",
+        "fallthrough",
+        2,
+    ): "the voice routine's increments at $1050/$106A/$107C, "
+    "alike up to operands, fold into an indexed function",
     (
         "exact",
         "brk",

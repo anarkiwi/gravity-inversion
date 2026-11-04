@@ -6,6 +6,7 @@ import subprocess
 
 from gen_ghouls import generate
 from sidtrace import psid_parts
+from transliterate import build
 
 ROOT = pathlib.Path(__file__).resolve().parent
 BUILD = ROOT / "build"
@@ -30,6 +31,11 @@ def build_prg(psid, out_dir):
         check=True,
     )
     return prg
+
+
+def gen_prg(psid, out_dir):
+    """Compile the C transliterated from `psid`; return its path."""
+    return build(psid, out_dir)[0]
 
 
 def with_pattern(psid, song, pattern):

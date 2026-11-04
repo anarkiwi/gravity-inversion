@@ -53,4 +53,12 @@ to play calls at the CIA rate. The tests also compare through the arranger loop 
 patched songs: semitone pitch mode, a plain routing byte, high semitone offsets reading
 far past the table, a large detune whose carry is dropped, and an 8580 SID model.
 
-`tests/test_sizes.py` bounds the compiled PRG by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).
+## Generated translation
+
+`make` also builds `build/gen.prg` from `build/gen/automatas.c` and `.h`, generated from the PSID by
+`tools/transliterate.py`; `make check` compares it over the HVSC length (built with `FRAME_CIA`), and
+the tests through the arranger loop twice, on the patched songs and on an 8580.
+
+## Size
+
+`tests/test_sizes.py` bounds the hand and generated PRGs by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).

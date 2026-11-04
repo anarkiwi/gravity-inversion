@@ -1,11 +1,12 @@
 FIXTURE := Emomyst.sid
 URL = $(HVSC)/MUSICIANS/H/Hermit/Emomyst.sid
 MD5 := 09ea86c3abf40489ddb72e0a2c8362b1
+PSID = $(FIX)/$(FIXTURE)
+CHECK_ARGS = --hvsc $(FIX) --times 2
+GEN := 1
 include ../../common.mk
 
-PSID := $(FIX)/$(FIXTURE)
-
-fixture: $(SONGLENGTHS)
+fixture check-gen: $(SONGLENGTHS)
 
 all: $(B)/emomyst.prg
 
@@ -18,5 +19,4 @@ $(B)/emomyst.prg: src/emomyst.c $(B)/emomyst_data.h $(DRIVER)
 
 check: $(B)/emomyst.prg $(SONGLENGTHS)
 	$(PY) $(ROOT)/tools/sidtrace.py $(PSID) $< --hvsc $(FIX)
-	$(PY) $(ROOT)/tools/sidtrace.py $(PSID) $< --frames $$($(PY) -c \
-	  "import sidtrace; print(2 * sidtrace.song_calls(open('$(PSID)', 'rb').read(), 0, '$(FIX)'))")
+	$(PY) $(ROOT)/tools/sidtrace.py $(PSID) $< $(CHECK_ARGS)

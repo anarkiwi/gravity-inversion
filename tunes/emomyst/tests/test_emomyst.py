@@ -5,6 +5,7 @@ import pytest
 import disasm
 import sidtrace
 import survey
+import transliterate
 
 # Branch arms the original can never take from init/play, by branch address.
 DEAD = {
@@ -34,9 +35,9 @@ DEAD = {
 
 def test_whole_tune_identical(psid_path, prg, frames, capsys):
     """Every SID write matches the original over the HVSC length and twice it."""
-    args = [str(psid_path), str(prg)]
-    assert sidtrace.main(args + ["--hvsc", str(psid_path.parent)]) == 0
-    assert sidtrace.main(args + ["--frames", str(2 * frames)]) == 0
+    args = [str(psid_path), str(prg), "--hvsc", str(psid_path.parent)]
+    assert sidtrace.main(args) == 0
+    assert sidtrace.main(args + ["--times", "2"]) == 0
     out = capsys.readouterr().out
     assert f"OK: {frames} frames" in out and f"OK: {2 * frames} frames" in out
 
@@ -296,6 +297,36 @@ def test_variant_identical(  # pylint: disable=too-many-arguments,too-many-posit
     untaken = {gap for gap in tune_cover[1] if gap[0] in branches}
     assert not untaken & disasm.one_way(data, disasm.coverage(data, frames))
     prg = swp.build_prg(data, gen, tmp_path)
+    ref = sidtrace.trace_psid(data, frames)
+    assert sidtrace.diff(ref, sidtrace.trace_prg(prg, frames)) is None
+
+
+GEN_MISSED = {
+    "gate_off_pointers": "from play call 136 the generated C steps the filter cutoff low "
+    "byte ($D415) that the original holds once the filter table reaches position 42",
+}
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "name",
+    [
+        (
+            pytest.param(n, marks=pytest.mark.xfail(strict=True, reason=GEN_MISSED[n]))
+            if n in GEN_MISSED
+            else n
+        )
+        for n in sorted(VARIANTS)
+    ],
+)
+def test_variant_generated(  # pylint: disable=too-many-positional-arguments
+    name, psid, gen, swp, frames, tmp_path
+):
+    """The C generated from each patched variant matches it."""
+    m = swp.Music(psid, gen)
+    VARIANTS[name][0](m)
+    data = m.bytes()
+    prg = transliterate.build(data, tmp_path)[0]
     ref = sidtrace.trace_psid(data, frames)
     assert sidtrace.diff(ref, sidtrace.trace_prg(prg, frames)) is None
 

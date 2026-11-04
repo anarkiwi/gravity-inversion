@@ -59,4 +59,4 @@ the PSID by `tools/transliterate.py`; `make check` compares it to the tune loop.
 
 ## Size
 
-`tests/test_sizes.py` bounds the compiled PRG by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).
+`tests/test_sizes.py` bounds the hand and generated PRGs by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).

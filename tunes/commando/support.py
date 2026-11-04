@@ -6,7 +6,7 @@ import subprocess
 
 from gen_data import generate
 from sidtrace import parse_labels, psid_parts
-from transliterate import transliterate
+from transliterate import build
 
 ROOT = pathlib.Path(__file__).resolve().parent
 BUILD = ROOT / "build"
@@ -64,8 +64,4 @@ def build_prg(psid, labels, out_dir):
 
 def gen_prg(psid, out_dir):
     """(PRG path, .c, .h) of the C generated from `psid`."""
-    out_dir = pathlib.Path(out_dir)
-    c, h, _ = transliterate(psid, "commando.h")
-    (out_dir / "commando.c").write_text(c, encoding="utf-8")
-    (out_dir / "commando.h").write_text(h, encoding="utf-8")
-    return _cc(out_dir / "gen.prg", out_dir, out_dir / "commando.c"), c, h
+    return build(psid, out_dir, "commando")

@@ -1,14 +1,16 @@
-"""The C translation against the original, per SID write and play call."""
+"""The hand and generated C translations against the original, per SID write and play call."""
 
 import pytest
 
-from automatas_support import BUILD, FIX, SID, build_prg
+from automatas_support import BUILD, FIX, SID, build_prg, gen_prg
 from vagrant_moses.memmap import PAL
 
 import sidtrace
 
 ARRANGER_POS = range(0x10EB, 0x10EC)
 VARIANT_CALLS = 30000
+PRGS = {"hand": BUILD / "automatas.prg", "generated": BUILD / "gen.prg"}
+BUILDERS = {"hand": build_prg, "generated": gen_prg}
 
 
 def _wraps(psid, calls):
@@ -30,13 +32,12 @@ def test_song_identical(capsys):
     assert "OK: 129521 frames" in capsys.readouterr().out
 
 
-def test_loop_identical(psid):
+@pytest.mark.parametrize("kind", PRGS)
+def test_loop_identical(kind, psid):
     """Every SID write matches through the arranger loop, played twice."""
     calls = _wraps(psid, 300_000)[1] + 1000
     ref = sidtrace.trace_psid(psid, calls)
-    assert (
-        sidtrace.diff(ref, sidtrace.trace_prg(BUILD / "automatas.prg", calls)) is None
-    )
+    assert sidtrace.diff(ref, sidtrace.trace_prg(PRGS[kind], calls)) is None
 
 
 def _patched(psid, patches):
@@ -54,12 +55,13 @@ VARIANTS = {
 }
 
 
+@pytest.mark.parametrize("kind", BUILDERS)
 @pytest.mark.parametrize("name", sorted(VARIANTS))
-def test_variant_identical(name, psid, tmp_path):
+def test_variant_identical(name, kind, psid, tmp_path):
     """Patched songs and an 8580 exercise paths the tune does not use."""
     patches, machine = VARIANTS[name]
     variant = _patched(psid, patches)
-    prg = build_prg(variant, tmp_path)
+    prg = BUILDERS[kind](variant, tmp_path)
     ref = sidtrace.trace_psid(variant, VARIANT_CALLS, **machine)
     assert sidtrace.diff(ref, sidtrace.trace_psid(psid, VARIANT_CALLS)) is not None
     got = sidtrace.trace_prg(prg, VARIANT_CALLS, **machine)

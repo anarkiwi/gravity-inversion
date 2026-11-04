@@ -1,11 +1,13 @@
-"""The C translation against the original, per SID write and play call."""
+"""The hand and generated C translations against the original, per SID write and play call."""
 
 import pytest
 
-from incoherent_support import BUILD, FIX, SID, VARIANTS, build_prg, patched
+from incoherent_support import BUILD, FIX, SID, VARIANTS, build_prg, gen_prg, patched
 import sidtrace
 
 PRG = BUILD / "incoherent.prg"
+PRGS = {"hand": PRG, "generated": BUILD / "gen.prg"}
+BUILDERS = {"hand": build_prg, "generated": gen_prg}
 SONG_POS = range(0x0C66, 0x0C7B, 7)
 VARIANT_FRAMES = 6000
 
@@ -30,32 +32,35 @@ def _jumps(psid, frames):
     return out
 
 
-def test_loop_identical(psid):
+@pytest.mark.parametrize("kind", PRGS)
+def test_loop_identical(kind, psid):
     """Every SID write matches over twice the song length, through order list jumps."""
     frames = 2 * sidtrace.song_calls(psid, 0, FIX)
     jumps = _jumps(psid, frames)
     assert jumps and jumps[0] > frames // 2
     ref = sidtrace.trace_psid(psid, frames)
-    assert sidtrace.diff(ref, sidtrace.trace_prg(PRG, frames)) is None
+    assert sidtrace.diff(ref, sidtrace.trace_prg(PRGS[kind], frames)) is None
 
 
-def test_without_init_identical(psid):
+@pytest.mark.parametrize("kind", PRGS)
+def test_without_init_identical(kind, psid):
     """A song number with bit 7 set skips init: play runs on the image's state."""
     ref = sidtrace.trace_psid(psid, VARIANT_FRAMES, song=0x80)
     assert sidtrace.diff(ref, sidtrace.trace_psid(psid, VARIANT_FRAMES)) is not None
-    got = sidtrace.trace_prg(PRG, VARIANT_FRAMES, song=0x80)
+    got = sidtrace.trace_prg(PRGS[kind], VARIANT_FRAMES, song=0x80)
     assert sidtrace.diff(ref, got) is None
 
 
+@pytest.mark.parametrize("kind", BUILDERS)
 @pytest.mark.parametrize("name", sorted(VARIANTS))
-def test_variant_identical(name, psid, tmp_path):
+def test_variant_identical(name, kind, psid, tmp_path):
     """Patched songs exercise paths the tune does not use."""
     patches, unchanged = VARIANTS[name]
     variant = patched(psid, patches)
     ref = sidtrace.trace_psid(variant, VARIANT_FRAMES)
     same = sidtrace.diff(ref, sidtrace.trace_psid(psid, VARIANT_FRAMES)) is None
     assert same == unchanged
-    got = sidtrace.trace_prg(build_prg(variant, tmp_path), VARIANT_FRAMES)
+    got = sidtrace.trace_prg(BUILDERS[kind](variant, tmp_path), VARIANT_FRAMES)
     assert sidtrace.diff(ref, got) is None
 
 
