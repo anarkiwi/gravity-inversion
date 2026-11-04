@@ -1,0 +1,234 @@
+{
+ "tune": "incoherent",
+ "psid": "fixtures/Incoherent_Nightmare_tune_2.sid",
+ "frames": 3000,
+ "constructs": [
+  {
+   "id": "voice-dispatch",
+   "kind": "fall_call",
+   "target": "$0996",
+   "sites": [
+    "$098C",
+    "$0991"
+   ],
+   "falls": [
+    "$0994"
+   ],
+   "hand": {
+    "fn": "tune_play",
+    "form": "for (k) voice_play(&voices[k], k * 7)"
+   },
+   "why": "One X-indexed channel routine: JSR for X=0 and 7, then X=$0E falls into it and its RTS returns from play, the 6502 tail call. The hand C calls it per voice.",
+   "lift": "one function with the voice index; the fall-through is a call followed by return",
+   "transform": "T2"
+  },
+  {
+   "id": "init-voice-dispatch",
+   "kind": "fall_call",
+   "target": "$0922",
+   "sites": [
+    "$0918",
+    "$091D"
+   ],
+   "falls": [
+    "$0920"
+   ],
+   "hand": {
+    "fn": "tune_play",
+    "form": "for (k) per-voice init in the init branch"
+   },
+   "why": "The same tail-call idiom for the per-voice init.",
+   "lift": "one function with the voice index",
+   "transform": "T2"
+  },
+  {
+   "id": "init-clear",
+   "kind": "loop",
+   "head": "$0905",
+   "back": "$0909",
+   "hand": {
+    "fn": "tune_play",
+    "form": "field clears inside the per-voice init loop"
+   },
+   "why": "A real DEX/BPL loop clearing the first fields of all voices.",
+   "lift": "loop",
+   "transform": "T4"
+  },
+  {
+   "id": "filter_step.suffix",
+   "kind": "goto",
+   "edges": [
+    [
+     "$094E",
+     "$096F"
+    ],
+    [
+     "$0957",
+     "$096C"
+    ]
+   ],
+   "hand": {
+    "fn": "filter_step",
+    "form": "filter_next(y); goto out (helper, then label out)"
+   },
+   "why": "The shared suffix $096C-$0978 is entered at its top and, with A already loaded, at $096F, bypassing the step block $095D that $0938 and $095A join; it falls into the register writes at $097B.",
+   "lift": "goto to each entry of the suffix; the suffix falls through to the register writes",
+   "hand_differs": "the hand C outlines the suffix as filter_next and needs goto out after each call; Emomyst's table steps write the same pattern (entries part-way into a shared sequence) as labels, which the rule follows",
+   "transform": "T7"
+  },
+  {
+   "id": "command.effect",
+   "kind": "goto",
+   "edges": [
+    [
+     "$080C",
+     "$0816"
+    ]
+   ],
+   "hand": {
+    "fn": "command",
+    "label": "effect"
+   },
+   "why": "A second entry into the sequence $080F-$081F whose top the switch reaches by fall-through.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "read_row.next",
+   "kind": "goto",
+   "edges": [
+    [
+     "$0B9E",
+     "$0BED"
+    ],
+    [
+     "$0BBB",
+     "$0BED"
+    ],
+    [
+     "$0BC4",
+     "$0BED"
+    ],
+    [
+     "$0BC8",
+     "$0BEA"
+    ],
+    [
+     "$0BD5",
+     "$0BED"
+    ]
+   ],
+   "hand": {
+    "fn": "read_row",
+    "label": "next"
+   },
+   "why": "Exits from five nesting depths to the shared row epilogue $0BE8-$0BF5, which is not the procedure exit.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "pulse_step.next",
+   "kind": "goto",
+   "edges": [
+    [
+     "$0B43",
+     "$0B62"
+    ]
+   ],
+   "hand": {
+    "fn": "pulse_step",
+    "label": "next"
+   },
+   "why": "Branches past the sweep block $0B49, which $0B33 and $0B46 join.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "voice_play.regs",
+   "kind": "goto",
+   "edges": [
+    [
+     "$0A68",
+     "$0BF6"
+    ]
+   ],
+   "hand": {
+    "fn": "voice_play",
+    "label": "regs"
+   },
+   "why": "A new note skips the wave, effect, row and pulse blocks, all joins, to the register writes.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "pulse-condition",
+   "kind": "short_circuit",
+   "branches": [
+    "$0B29",
+    "$0B2E"
+   ],
+   "target": "$0B71",
+   "hand": {
+    "fn": "voice_play",
+    "form": "else if (v->pulse_ptr && (v->tick | v->patt_pos))"
+   },
+   "why": "Two branches to the same target compose with &&.",
+   "lift": "short-circuit condition",
+   "transform": "T5"
+  },
+  {
+   "id": "command-dispatch",
+   "kind": "switch",
+   "dispatch": "$0AFF",
+   "hand": {
+    "fn": "command",
+    "form": "switch (cmd)"
+   },
+   "why": "JMP whose operand init and the row reader rewrite: a computed dispatch.",
+   "lift": "switch",
+   "transform": "T1"
+  },
+  {
+   "id": "command-dispatch-cell",
+   "kind": "smc",
+   "writer": "$0AC1",
+   "cell": "$0B00",
+   "reader": "$0AFF",
+   "hand": {
+    "fn": "command",
+    "form": "the switch selector"
+   },
+   "why": "The dispatch target lives in the JMP's own operand.",
+   "lift": "variable",
+   "transform": "T1"
+  },
+  {
+   "id": "filter-ptr-cell",
+   "kind": "smc",
+   "writer": "$0978",
+   "cell": "$0933",
+   "reader": "$0932",
+   "hand": {
+    "fn": "filter_step",
+    "form": "filter.ptr"
+   },
+   "why": "The filter table position lives in LDY #'s operand.",
+   "lift": "variable",
+   "transform": "T1"
+  },
+  {
+   "id": "filter-time-cell",
+   "kind": "smc",
+   "writer": "$0967",
+   "cell": "$0937",
+   "reader": "$0936",
+   "hand": {
+    "fn": "filter_step",
+    "form": "filter.time"
+   },
+   "why": "The filter step time lives in LDA #'s operand.",
+   "lift": "variable",
+   "transform": "T1"
+  }
+ ]
+}

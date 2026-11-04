@@ -1,0 +1,157 @@
+{
+ "tune": "automatas",
+ "psid": "fixtures/Automatas.sid",
+ "frames": 3000,
+ "constructs": [
+  {
+   "id": "band-copies",
+   "kind": "unrolled",
+   "copies": [
+    "$1022",
+    "$1053",
+    "$1084"
+   ],
+   "insns": 15,
+   "hand": {
+    "fn": "band",
+    "form": "for (v in voice[3]), so += 7"
+   },
+   "why": "No loop in the original: three copies $31 apart chained by JMP, each voice's state in its own immediate operands, SID operands +7.",
+   "lift": "one function with the voice index",
+   "transform": "T3"
+  },
+  {
+   "id": "row-copies",
+   "kind": "unrolled",
+   "copies": [
+    "$112A",
+    "$11B2",
+    "$123A"
+   ],
+   "insns": 40,
+   "hand": {
+    "fn": "rows",
+    "form": "for (v in voice[3])"
+   },
+   "why": "Pattern row copies $88 apart, fall-through chained, pattern pointer in operands.",
+   "lift": "one function with the voice index",
+   "transform": "T3"
+  },
+  {
+   "id": "program-copies",
+   "kind": "unrolled",
+   "copies": [
+    "$12BE",
+    "$12EF",
+    "$1320",
+    "$1351",
+    "$1382",
+    "$13B3"
+   ],
+   "insns": 17,
+   "hand": {
+    "fn": "programs",
+    "form": "for (l < 2) for (v in voice[3])"
+   },
+   "why": "Six sidTAB copies $31 apart (two layers by three voices), each calling apply().",
+   "lift": "one function indexed by layer and voice",
+   "transform": "T3"
+  },
+  {
+   "id": "pitch-loop",
+   "kind": "loop",
+   "head": "$13E6",
+   "back": "$14C7",
+   "hand": {
+    "fn": "tune_play",
+    "form": "for (v = voice + 2; v >= voice; --v) pitch_pulse(v)"
+   },
+   "why": "A real loop: X = $62, $31, 0 by SBX #$31 over code-resident voice state.",
+   "lift": "loop",
+   "transform": "T4"
+  },
+  {
+   "id": "sid-clear",
+   "kind": "loop",
+   "head": "$1505",
+   "back": "$1509",
+   "hand": {
+    "fn": "tune_init",
+    "form": "for (r = 0x17; r >= 0; --r)"
+   },
+   "why": "DEY/BPL clear of the SID.",
+   "lift": "loop",
+   "transform": "T4"
+  },
+  {
+   "id": "voice-reset",
+   "kind": "loop",
+   "head": "$1525",
+   "back": "$154C",
+   "hand": {
+    "fn": "tune_init",
+    "form": "for (v in voice[3])"
+   },
+   "why": "A real X loop resetting voice state.",
+   "lift": "loop",
+   "transform": "T4"
+  },
+  {
+   "id": "raster-wait",
+   "kind": "loop",
+   "head": "$14CE",
+   "back": "$14D1",
+   "hand": {
+    "fn": "tune_init",
+    "form": "while (VIC.rasterline != DETECT_LINE)"
+   },
+   "why": "Polls raster line $FC before the SID model probe.",
+   "lift": "loop over a sensitive read",
+   "transform": "T4"
+  },
+  {
+   "id": "full-call-cell",
+   "kind": "smc",
+   "writer": "$100C",
+   "cell": "$10D8",
+   "reader": "$10D8",
+   "hand": {
+    "fn": "tune_play",
+    "form": "if (!(calls++ & (FULL_CALLS - 1))) rows()"
+   },
+   "why": "Play patches RTS over $10D8 to stop before the row step on most calls, restoring it after.",
+   "lift": "opcode cell with a closed value set",
+   "transform": "T1"
+  },
+  {
+   "id": "cutoff-shift-cell",
+   "kind": "smc",
+   "writer": "$14F9",
+   "cell": "$10D4",
+   "reader": "$10D4",
+   "hand": {
+    "fn": "band",
+    "form": "a << cut_shift"
+   },
+   "why": "Init writes ASL or NOP at $10D4 by SID model.",
+   "lift": "opcode cell with a closed value set",
+   "covered": false,
+   "uncovered": "written by init, read by play: def-use is not linked across the init and play coverage runs",
+   "transform": "T1"
+  },
+  {
+   "id": "pw-lo-cell",
+   "kind": "smc",
+   "writer": "$16E7",
+   "cell": "$1023",
+   "reader": "$1022",
+   "hand": {
+    "fn": "band",
+    "form": "v->pw_lo"
+   },
+   "why": "Voice 0's pulse low byte lives in the band copy's LDX # operand.",
+   "lift": "per-copy state",
+   "transform": "T1"
+  }
+ ]
+}

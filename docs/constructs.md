@@ -1,0 +1,67 @@
+# Construct maps
+
+`tunes/<tune>/constructs.json` maps each machine-code construct the hand translation deals with
+deliberately to the C form it takes, so translation decisions can be read rather than asked. Each
+map is checked against the original by `tools/constructs.py` (jennings' static listing and its run
+coverage of init and play) and against the generated C by `tests/test_constructs.py`.
+
+## Entry
+
+| Field | Meaning |
+|---|---|
+| `id` | `function.label` for gotos, otherwise a name |
+| `kind` | see below |
+| addresses | `$xxxx`: the 6502 instructions, edges `[from, to]`, cells |
+| `hand` | the hand C's function and form or label |
+| `why` | the 6502 control or data flow that makes the form the right one |
+| `lift` | the form the generated C must take (the rule below) |
+| `hand_differs` | where the hand C departs from the rule, and how |
+| `transform` | the lift step below that decides the form (`null`: readability, not lifted) |
+| `covered` | `false` when the song's run never takes the construct; `uncovered` says what does |
+
+## Kinds
+
+| Kind | 6502 | C |
+|---|---|---|
+| `loop` | back edge `back` → `head` | a loop |
+| `call` | `JSR` `sites` → `target` | a function called per site |
+| `fall_call` | `JSR` sites and a fall-through (`falls`) into `target` | one function; the fall-through is a call then return |
+| `tail_call` | `JMP`s, branches or fall-throughs into a `JSR` target | a call then return |
+| `unrolled` | `copies` of one body, operands at strides (`inserted`: instructions only some copies have) | one function with an instance index |
+| `smc` | `writer` stores into `cell`, a byte of `reader` | a variable |
+| `goto` | `edges` with no structured form | a goto per edge |
+| `join` | edges rejoining at the post-dominator of their branch | if/else, no goto |
+| `short_circuit` | `branches` sharing `target` | one `&&`/`\|\|` condition |
+| `switch` | a computed `dispatch` (written operand, branch offset or table) | a switch |
+| `multi_entry` | entries setting a register before a shared tail | one function taking that value |
+| `region`, `inline_repeat`, `unrolled_stores`, `per_voice_paths` | code the hand C names or folds for readability | not required of the generated C |
+
+## Rule
+
+An edge is a goto exactly when it has no structured form: not a fall-through, an if/else arm
+rejoining at its post-dominator, a short-circuit chain, a loop's single exit or back edge, or the
+procedure exit. An edge into a real procedure (a `JSR` target) is a tail call, not a goto. A
+function is formed only for a procedure, an unrolled class or a register-parameterised shared tail;
+naming other single-entry regions is a readability choice.
+
+## Lift procedure
+
+The map's entries group by the fact that decides their form, and each fact only decides correctly
+on the graph the earlier steps leave: a short-circuit chain must be one condition before
+post-dominators can tell a structured join, loop back edges and exits must be gone before the
+acyclic structure exists, and tail calls must be cut before either. The steps, in order:
+
+| Step | Facts (inputs) | Transform | Entries |
+|---|---|---|---|
+| T1 | stores into instruction bytes (def-use); target sets of computed transfers (constant tables, written operands, branch offsets) | code cells become variables; a computed transfer with a known target set becomes a switch | 15 |
+| T2 | procedure entries: `init`, `play`, every `JSR` target; immediate loads before a jump into a shared tail | an edge into an entry from another procedure (`JMP`, branch, fall-through) becomes a call then return; register-preset entries into one tail become one function taking the register | 6 |
+| T3 | copy classes: consecutive, chained copies equal up to operand deltas affine in the copy index | one function `f(k)`; per-copy cells and constants become state and tables indexed by `k` | 6 |
+| T4 | dominator tree per procedure (back edges, including fall-through back edges of rotated loops entered at their test) | natural loops: back edge `continue`, the exit to the loop's follow `break`, exits to the procedure's exit `return` | 22 |
+| T5 | chains of conditional branches sharing a target, each falling into the next | one `&&`/`\|\|` condition, to a fixpoint | 4 |
+| T6 | post-dominator tree of the reduced graph | a branch whose arms rejoin at its immediate post-dominator becomes if/else; a multiway branch on one selector a switch | 1 |
+| T7 | none | every remaining edge is a goto: a branch past a joined block, an entry part-way into a shared sequence, a loop's second exit | 20 |
+
+Four entries are readability choices the hand C makes (naming a single-entry region, extracting
+repeated inline code) and are not lifted. Eight entries record where the hand C departs from the
+procedure (`hand_differs`): a loop back edge written as a goto, nested copy loops written as one,
+a shared suffix outlined as a helper, gotos into a subroutine.
