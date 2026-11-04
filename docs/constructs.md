@@ -65,3 +65,32 @@ Four entries are readability choices the hand C makes (naming a single-entry reg
 repeated inline code) and are not lifted. Eight entries record where the hand C departs from the
 procedure (`hand_differs`): a loop back edge written as a goto, nested copy loops written as one,
 a shared suffix outlined as a helper, gotos into a subroutine.
+
+## Opcodes
+
+`tools/opclass.py` lifts each of the 256 opcodes alone and reads its P-code for the facts the
+steps consume; `tests/test_opclass.py` checks the result against jennings' mnemonic tables. The
+rules cover every opcode by role, not by name:
+
+| Role | Opcodes | Step |
+|---|---|---|
+| store or read-modify-write in a memory mode | 88, legal and illegal (`SAX`, `SH*`, `TAS`, `SLO`/`RLA`/`SRE`/`RRA`/`DCP`/`ISC`) | T1 cell writer |
+| `JMP (ind)`, `RTS`, `RTI`, `BRK` | 4 | T1 computed transfer |
+| `PHA`, `PHP` / `PLA`, `PLP` | 2 / 2 | T1 pushed data / T2 pulled data |
+| `JSR`, `BRK` / `RTS`, `RTI` | 2 / 2 | T2 call / return |
+| `TXS`, `TAS`, `LAS` write SP; `TSX`, `TAS`, `LAS` read it | 3 / 3 | T2 stack switch / read |
+| conditional branches, `JMP abs` | 9 | T4 back edge, T5 condition (flag per branch) |
+| every flag writer | 177 | T5 condition producer |
+| `ADC`, `SBC`, `RRA`, `ISC`, `ARR` | 32 | arithmetic decided by D |
+| operand-bearing instructions writing no register or memory (`NOP`, `BIT`, `CMP`, `CPX`, `CPY`) | 37 | skip: entered part-way, its bytes decode as other instructions |
+| `JAM` | 12 | trap |
+
+The five tunes and the Commando permutations execute 104 opcodes. For the roles only unobserved
+opcodes fill, `tools/fuzzplayer.py` adds players (`tests/test_fuzz.py`): RTI dispatch through a
+table, BRK through a written vector, a TXS non-local exit, a JSR with an inline argument the
+callee skips by adjusting its return address, a BIT skip into an instruction's operand, decimal
+arithmetic, ISC/DCP on cells and counters, BIT with BVC/BMI chains, per-voice (zp,X) pointers, and
+a JAM guarded by data. Three of these name rules the lift lacks (strict xfails): BRK paired with
+its vector and RTI, a call whose callee adjusts its return address, and TXS to a saved stack
+pointer. The unstable opcodes (`ANE`, `LXA`, `SH*`, `TAS`) are lifted as the machine model defines
+them; their hardware results vary, so they are not fuzzed.

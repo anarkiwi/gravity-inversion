@@ -34,6 +34,7 @@ A tune Makefile setting `GEN := 1` (with `PSID` and `CHECK_ARGS`) before includi
 | `tools/disasm.py` | jennings coverage-driven disassembly listing of a PSID |
 | `tools/survey.py` | rank tunes by the playroutine code they execute; branch outcome gaps |
 | `tools/constructs.py` | validate `tunes/*/constructs.json`, each 6502 construct's hand-C form ([docs/constructs.md](docs/constructs.md)), against jennings coverage |
+| `tools/opclass.py` | every opcode's roles in the lift procedure, from deity-informant's P-code |
 | `tools/copies.py` | repeated playroutine code: unrolled copies with operand strides, JSR targets, fall-through entries |
 | `tools/mutate.py` | mutation check: run a test command against source edits |
 | `tools/transliterate.py` | PSID → `.c` + `.h` with vagrant-moses' `cgen` (needs `mlir-opt` 22, `clang-format`) |
