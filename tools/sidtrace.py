@@ -92,7 +92,9 @@ def trace_prg(prg, frames, song=0, *, poke=None, sid_model="6581"):
 
     def to_wait():
         reason = mpu.run_until(max_cycles=MAX_CYCLES, stop_pcs=[syms["frame_wait"]])
-        assert reason == "pc", f"call {len(log.calls)}: {reason} at ${mpu.pc:04x}"
+        trap = syms.get("cgen_trap")
+        k = "" if trap is None else f" (trap {mem[trap] | mem[trap + 1] << 8})"
+        assert reason == "pc", f"call {len(log.calls)}: {reason} at ${mpu.pc:04x}{k}"
 
     log.start()
     to_wait()
@@ -171,6 +173,9 @@ def main(argv=None):
         help="compare until every byte of LABEL[0..2] in an ACME label dump is reset",
     )
     ap.add_argument("--limit", type=int, default=50_000)
+    ap.add_argument(
+        "--times", type=int, default=1, help="compare this multiple of the length"
+    )
     args = ap.parse_args(argv)
     with open(args.psid, "rb") as f:
         psid = f.read()
@@ -184,7 +189,7 @@ def main(argv=None):
             with open(args.wrap[0], encoding="ascii") as f:
                 addr = parse_labels(f.read())[args.wrap[1]]
             frames = loop_frame(psid, addr, args.limit)
-        frames, writes, bad = compare(psid, args.prg, frames, song)
+        frames, writes, bad = compare(psid, args.prg, args.times * frames, song)
         if bad:
             failed += 1
             print(

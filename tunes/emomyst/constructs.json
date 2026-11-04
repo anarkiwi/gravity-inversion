@@ -314,7 +314,7 @@
   },
   {
    "id": "pw_prg.advance",
-   "kind": "goto",
+   "kind": "join",
    "edges": [
     [
      "$1670",
@@ -325,9 +325,10 @@
     "fn": "pw_prg",
     "label": "advance"
    },
-   "why": "Entry below the set-value top $169F.",
-   "lift": "goto",
-   "transform": "T7"
+   "why": "A second entry below the set-value top $169F, joined with the fall-through from $16A7.",
+   "lift": "if/else arms rejoining, no goto",
+   "hand_differs": "the hand C writes a goto",
+   "transform": "T6"
   },
   {
    "id": "pw_prg.write",
@@ -335,10 +336,6 @@
    "edges": [
     [
      "$1683",
-     "$16BA"
-    ],
-    [
-     "$1688",
      "$16BA"
     ],
     [
@@ -359,6 +356,24 @@
    "covered": false,
    "uncovered": "the song's pulse tables never jump to their own row; the patched variants reach it",
    "transform": "T7"
+  },
+  {
+   "id": "pw_prg.carry",
+   "kind": "join",
+   "edges": [
+    [
+     "$1688",
+     "$16BA"
+    ]
+   ],
+   "hand": {
+    "fn": "pw_prg",
+    "label": "write"
+   },
+   "why": "The BCS after the carry increment, always taken, rejoins the BCC at $1683 at $16BA.",
+   "lift": "if/else arms rejoining, no goto",
+   "hand_differs": "the hand C writes a goto",
+   "transform": "T6"
   },
   {
    "id": "pw_prg.set_pos",

@@ -1,13 +1,17 @@
-"""The C translation against the original, per subtune and on patched songs."""
+"""The hand and generated C translations against the original, per subtune and on patched
+songs."""
 
 import pytest
 
 import disasm
 import sidtrace
-from ghouls_support import HVSC, BUILD, build_prg, with_pattern
+from ghouls_support import HVSC, BUILD, build_prg, gen_prg, with_pattern
 
 SONGS = range(32)
 PRG = str(BUILD / "ghouls.prg")
+PRGS = {"hand": PRG, "generated": str(BUILD / "gen.prg")}
+MUSIC = range(11)
+INIT_TRAP = "music init traps at the block copy's code store checks ($29CA, $29DF)"
 VARIANT_SONG, VARIANT_FRAMES = 4, 150
 
 # One pattern on all three voices, for the paths no subtune runs: a register
@@ -47,11 +51,21 @@ UNREACHABLE = {
 }
 
 
-@pytest.mark.parametrize("song", SONGS)
-def test_subtune_identical(song, psid):
+@pytest.mark.parametrize(
+    "kind,song",
+    [("hand", s) for s in SONGS]
+    + [
+        pytest.param(
+            "generated", s, marks=pytest.mark.xfail(strict=True, reason=INIT_TRAP)
+        )
+        for s in MUSIC
+    ]
+    + [("generated", s) for s in SONGS if s not in MUSIC],
+)
+def test_subtune_identical(kind, song, psid):
     """Every SID write of each subtune matches the original to its HVSC length."""
     frames = sidtrace.song_calls(psid, song, HVSC)
-    _, writes, bad = sidtrace.compare(psid, PRG, frames, song)
+    _, writes, bad = sidtrace.compare(psid, PRGS[kind], frames, song)
     assert bad is None and writes
 
 
@@ -66,6 +80,16 @@ def test_variant_identical(variant):
     """The patched song matches the original."""
     data, prg = variant
     _, writes, bad = sidtrace.compare(data, str(prg), VARIANT_FRAMES, VARIANT_SONG)
+    assert bad is None and writes
+
+
+@pytest.mark.xfail(strict=True, reason=INIT_TRAP)
+def test_variant_generated(variant, tmp_path):
+    """The C generated from the patched song matches it."""
+    prg = gen_prg(variant[0], tmp_path)
+    _, writes, bad = sidtrace.compare(
+        variant[0], str(prg), VARIANT_FRAMES, VARIANT_SONG
+    )
     assert bad is None and writes
 
 

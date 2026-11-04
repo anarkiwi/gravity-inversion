@@ -68,6 +68,21 @@ branch of each `BCS`/`BCC` pair and the hard-gate test after a hard restart.
 are mutations of state no input observes (the music init filter limits, which
 every filter command overwrites before the sweep moves).
 
+## Gotos
+
+The hand C has none. The rule ([docs/constructs.md](../../docs/constructs.md)) has three in each
+voice copy, where the hand C uses a readability form: the vibrato's ADC arm past the SBC arm
+(`$626F`/`$6272` → `$627A`; a `down` flag), portamento past and into the pitch store
+(`$62C0`/`$62C8` → `$62ED`, `$62CE`/`$62D6` → `$62DA`; `set_note()`), and the pulse sweep's
+second exit (`$630B` → `$6338`; `return` from `pulse_sweep()`).
+
+## Generated translation
+
+`make` also builds `build/gen.prg` from `build/gen/ghouls.c` and `.h`, generated from the PSID by
+`tools/transliterate.py`; `make check` compares the sound effects, subtunes 12-32. Music init
+(subtunes 1-11, and the patched song) traps at the block copy's code store checks; the tests
+record those as strict xfails.
+
 ## Size
 
-`tests/test_sizes.py` bounds the compiled PRG by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).
+`tests/test_sizes.py` bounds the hand and generated PRGs by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).

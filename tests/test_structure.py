@@ -2,8 +2,8 @@
 
 Voice: registers written only by voice code go through the voice index, not per-voice constants.
 Procedures: no more functions than the hand C (outlined tails fragment procedures).
-Gotos: the hand C has a goto at each original edge with no structured C form (tune READMEs);
-gotos plus structuring flags stay within those edges."""
+Gotos: exactly the edges of the construct map's `goto` entries, the original's edges with no
+structured form (docs/constructs.md, Rule)."""
 
 import functools
 import pathlib
@@ -11,16 +11,11 @@ import re
 
 import pytest
 
+import constructs
 from transliterate import transliterate
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-TUNE = {
-    "commando": "tunes/commando/build/ref.sid",
-    "incoherent": "fixtures/Incoherent_Nightmare_tune_2.sid",
-    "automatas": "fixtures/Automatas.sid",
-    "ghouls": "fixtures/Ghouls_n_Ghosts.sid",
-    "emomyst": "fixtures/Emomyst.sid",
-}
+TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
 VOICE_REGS = {
     "commando": (0xD407, 0xD40E),
     "incoherent": (0xD40E, 0xD413, 0xD414),
@@ -30,16 +25,27 @@ VOICE_REGS = {
 }
 MISSED_VOICES = {}
 FRAGMENTED = {}
-OVER_GOTOS = {
-    "incoherent": "structuring flags beyond the original's unstructured edges",
+OTHER_GOTOS = {
+    "incoherent": "gotos beyond the map: $089F/$08AA/$08DC → $08DE, $08A2/$08C5/$08DC → $08EE, "
+    "$095A → $095D, $096A → $097D, $0A83 → $0A93, $0A88 → $0AB3, $0C3E → $0AC7, "
+    "$0B02 → $0B09, $08D4/$08EB → $0B1B, $0871/$0C4C → $0B1E, $0AB6 → $0B21, "
+    "$0B90/$0BAA → $0BC0, $0B71/$0BA0 → $0BF6; map gotos not printed: $080C → $0816",
+    "emomyst": "gotos beyond the map: $11DB → $11F4, $125A → $1268, $1332 → $1337, "
+    "$130B → $1378, $13CB → $13E0, $13E2 → $13E3, $14C1 → $14D1, $14CF → $14D7, "
+    "$1319/$13C6/$13ED → $1520, $157E → $15D1, $1727 → $1760, $1773 → $1776, "
+    "$1817 → $181A, $1829 → $182C, $1B25 → $1AFD; map gotos not printed: "
+    "$1579/$158B/$158D → $1590, $15DE → $1649, $162E → $165D, $16D9 → $16EE, "
+    "$175D → $1760, $1721 → $1776",
 }
 
 
 @functools.cache
 def generated(name):
-    """(c text, structure counts) of the tune's generated translation."""
-    c, _, info = transliterate((ROOT / TUNE[name]).read_bytes(), "t.h")
-    return c, info["structure"]
+    """(c text, info) of the tune's generated translation."""
+    c, _, info = transliterate(
+        (ROOT / constructs.load(name)["psid"]).read_bytes(), "t.h"
+    )
+    return c, info
 
 
 def hand(name):
@@ -54,7 +60,7 @@ def _cases(missed):
             if n in missed
             else n
         )
-        for n in TUNE
+        for n in TUNES
     ]
 
 
@@ -76,12 +82,18 @@ def test_voice_routine_recovered(name):
 def test_procedures_not_fragmented(name):
     """The generated player has no more functions than the hand translation."""
     functions = len(re.findall(r"^(?:static )?[a-z].*\) \{", hand(name), re.M))
-    assert generated(name)[1]["functions"] <= functions
+    assert generated(name)[1]["structure"]["functions"] <= functions
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("name", _cases(OVER_GOTOS))
+@pytest.mark.parametrize("name", _cases(OTHER_GOTOS))
 def test_unstructured_edges(name):
-    """Gotos plus structuring flags stay within the hand C's gotos, one per unstructured edge."""
-    c, counts = generated(name)
-    assert c.count("goto ") + counts.get("flags", 0) <= hand(name).count("goto ")
+    """The generated C has a goto exactly at each edge of the map's goto entries."""
+    gotos = {tuple(e) for e in generated(name)[1]["provenance"]["gotos"]}
+    mapped = {
+        tuple(e)
+        for c in constructs.load(name)["constructs"]
+        if c["kind"] == "goto"
+        for e in c["edges"]
+    }
+    assert gotos == mapped, (sorted(gotos - mapped), sorted(mapped - gotos))

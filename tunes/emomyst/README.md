@@ -57,7 +57,7 @@ loop's single exit (`break`) or back edge (`continue`), not the procedure exit (
   `$1705`), `end` (past the pitch joins), `note` (past `$12B5`);
 - a second entry into a straight-line sequence entered at its top by fall-through: the arpeggio's
   `relative`/`absolute` (`$1760`/`$1764`), the filter and pulse table steps' `advance`, `set_pos`
-  and `write`, and the frequency slide's shared add/subtract `up`/`down`/`store` (`$15BF`, `$15A4`,
+  and `write` (the pulse step's `advance`, and `write` from `$1688`, have structured forms), and the frequency slide's shared add/subtract `up`/`down`/`store` (`$15BF`, `$15A4`,
   `$15CE`), each reached from the slide, portamento and vibrato decisions;
 - a loop's back edge from inside a branch when the loop has other exit targets: `row` (`$1749 JMP
   $16E3`);
@@ -79,6 +79,13 @@ fx, gate-off table pointers, every small and big fx including tempo effects.
 A mutation check of `src/emomyst.c` (every single-operator and constant mutant,
 against `make check` and the variant tests) leaves only equivalent mutants.
 
+## Generated translation
+
+`make` also builds `build/gen.prg` from `build/gen/emomyst.c` and `.h`, generated from the PSID by
+`tools/transliterate.py`; `make check` compares it over twice the HVSC length, and the tests on each
+patched variant; `gate_off_pointers` is a strict xfail (the generated C steps a filter cutoff the
+original holds).
+
 ## Size
 
-`tests/test_sizes.py` bounds the compiled PRG by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).
+`tests/test_sizes.py` bounds the hand and generated PRGs by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).

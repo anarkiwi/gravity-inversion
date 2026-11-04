@@ -53,7 +53,8 @@ loop's single exit (`break`) or back edge (`continue`), not the procedure exit (
 
 - a branch past a block other paths join: the filter step's `out` (past `$095D`), the pulse step's
   `next` (past `$0B49`), `regs` (past the wave/effect/row/pulse joins), and the row epilogue `next`
-  (`$0BED`) left from five depths;
+  (`$0BED`) left from four depths (the hand C's fifth, `$0BC8` into `$0BEA`, has a structured
+  form);
 - a second entry into a straight-line sequence entered at its top by fall-through: `effect`
   (`JMP $0816` below `$080F`).
 
@@ -70,4 +71,13 @@ frequency table (toneportamento carries, speed index 0), a nonzero byte before t
 right column, a wave delay below the counter, vibrato rows between porta rows, and a
 command byte below `$40`.
 
-`tests/test_sizes.py` bounds the compiled PRG by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).
+## Generated translation
+
+`make` also builds `build/gen.prg` from `build/gen/incoherent.c` and `.h`, generated from the PSID by
+`tools/transliterate.py`; `make check` compares it over the HVSC length, and the tests over twice that,
+without init and on the patched songs above. `tests/test_structure.py` compares its gotos with
+`constructs.json`'s.
+
+## Size
+
+`tests/test_sizes.py` bounds the hand and generated PRGs by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).

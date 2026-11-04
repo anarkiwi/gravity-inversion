@@ -257,6 +257,136 @@
    "uncovered": "the songs never cross both sweep bounds in one call; tests/test_ghouls.py's PATTERN variant does"
   },
   {
+   "id": "vibrato.store",
+   "kind": "goto",
+   "edges": [
+    [
+     "$626F",
+     "$627A"
+    ],
+    [
+     "$6272",
+     "$627A"
+    ],
+    [
+     "$645C",
+     "$6467"
+    ],
+    [
+     "$645F",
+     "$6467"
+    ],
+    [
+     "$664B",
+     "$6656"
+    ],
+    [
+     "$664E",
+     "$6656"
+    ]
+   ],
+   "hand": {
+    "fn": "vibrato",
+    "form": "down = 1 flag"
+   },
+   "why": "The ADC arm branches past the SBC arm to the frequency store $627A unless the carry wraps the high byte, when it falls into the SBC arm; the copies at +$1ED and +$3DC take the same edges.",
+   "lift": "goto",
+   "covered": false,
+   "uncovered": "the songs the map runs never carry out of the vibrato's low byte and run vibrato only on voice 0's copy; tests/test_ghouls.py's PATTERN variant reaches them on every voice",
+   "hand_differs": "the hand C sets a down flag where the carry falls into the SBC arm and tests it, instead of the goto past that arm",
+   "transform": "T7"
+  },
+  {
+   "id": "play_voice.pitch",
+   "kind": "goto",
+   "edges": [
+    [
+     "$62C0",
+     "$62ED"
+    ],
+    [
+     "$62C8",
+     "$62ED"
+    ],
+    [
+     "$62CE",
+     "$62DA"
+    ],
+    [
+     "$62D6",
+     "$62DA"
+    ],
+    [
+     "$64AD",
+     "$64DA"
+    ],
+    [
+     "$64B5",
+     "$64DA"
+    ],
+    [
+     "$64BB",
+     "$64C7"
+    ],
+    [
+     "$64C3",
+     "$64C7"
+    ],
+    [
+     "$669C",
+     "$66C9"
+    ],
+    [
+     "$66A4",
+     "$66C9"
+    ],
+    [
+     "$66AA",
+     "$66B6"
+    ],
+    [
+     "$66B2",
+     "$66B6"
+    ]
+   ],
+   "hand": {
+    "fn": "play_voice",
+    "form": "set_note() in each section"
+   },
+   "why": "The pitch store $62DA is joined by the trill and portamento sections; portamento skips it when off or at its target ($62C0/$62C8 to $62ED) and enters it from its step and clamp; the copies at +$1ED and +$3DC take the same edges.",
+   "lift": "goto",
+   "covered": false,
+   "uncovered": "the songs the map runs take some portamento steps and clamps on only some copies; tests/test_ghouls.py's PATTERN variant, overshooting both ways on every voice, reaches them",
+   "hand_differs": "the hand C outlines the store as set_note() and calls it from each section, instead of gotos into one store",
+   "transform": "T7"
+  },
+  {
+   "id": "pulse_sweep.done",
+   "kind": "goto",
+   "edges": [
+    [
+     "$630B",
+     "$6338"
+    ],
+    [
+     "$64F8",
+     "$6525"
+    ],
+    [
+     "$66E7",
+     "$6714"
+    ]
+   ],
+   "hand": {
+    "fn": "pulse_sweep",
+    "form": "return"
+   },
+   "why": "The sweep loop's second exit target: the direction test skips the pulse register writes $632E, the loop's other exit; the copies at +$1ED and +$3DC take the same edges.",
+   "lift": "goto",
+   "hand_differs": "the hand C outlines the sweep as pulse_sweep() and returns, instead of the goto past the writes",
+   "transform": "T7"
+  },
+  {
    "id": "filter-sweep",
    "kind": "multi_entry_loop",
    "edges": [

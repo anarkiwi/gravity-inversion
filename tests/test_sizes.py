@@ -8,16 +8,19 @@ import subprocess
 import pytest
 
 from constructs import ROOT, load
-from transliterate import transliterate
+from transliterate import build
 import sizes
 
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
 DRIVER = ROOT / "c64"
 CFLAGS = {"automatas": ["-DFRAME_CIA"]}
-CODE = (
-    "generic rd/wr dispatch, store checks and dummy reads where indices are unbounded"
-)
-DATA = "the whole image is kept as CODE for out-of-bounds reads"
+RD = "rd() dispatch for pointer reads"
+DUMMY = "the 6502's dummy reads (page crossings, indexed I/O stores)"
+WR = "rd()/wr() dispatch and code store checks where indices are unbounded"
+STRUCTS = "register files the split-off functions return as structs"
+CODE = "CODE keeps the instruction bytes the player never reads as data"
+STACK = "the stack page is a data region"
+BITMAP = "the CODE_DATA bitmap"
 MISSED = {
     (
         "hand",
@@ -29,15 +32,16 @@ MISSED = {
         "automatas",
         "data",
     ): "voice state is copied out of the code image as well as kept in DATA",
-    ("generated", "commando", "code"): CODE,
-    ("generated", "incoherent", "code"): CODE,
-    ("generated", "automatas", "code"): CODE,
-    ("generated", "ghouls", "code"): CODE,
-    ("generated", "emomyst", "code"): CODE,
-    ("generated", "commando", "data"): DATA,
-    ("generated", "incoherent", "data"): DATA,
-    ("generated", "automatas", "data"): DATA,
-    ("generated", "emomyst", "data"): DATA,
+    ("generated", "commando", "code"): f"{RD} and {DUMMY}",
+    ("generated", "incoherent", "code"): f"{RD}, {DUMMY} and {STRUCTS}",
+    ("generated", "automatas", "code"): f"{WR} and {DUMMY}",
+    ("generated", "ghouls", "code"): f"{WR} and {DUMMY}",
+    ("generated", "emomyst", "code"): f"{WR}, {DUMMY} and {STRUCTS}",
+    ("generated", "commando", "data"): f"{CODE}, and R1 spans bytes past the image "
+    "nothing writes",
+    ("generated", "incoherent", "data"): f"{CODE} and {STACK}",
+    ("generated", "automatas", "data"): f"{CODE}, with {BITMAP}, and {STACK}",
+    ("generated", "emomyst", "data"): f"{CODE}, with {BITMAP}, and {STACK}",
 }
 
 
@@ -72,10 +76,8 @@ def _bounds(tune):
 def _elf(kind, tune, tmp):
     if kind == "hand":
         return ROOT / "tunes" / tune / "build" / f"{tune}.prg.elf"
-    c, h, _ = transliterate((ROOT / load(tune)["psid"]).read_bytes(), "gen.h")
-    (tmp / "gen.c").write_text(c, encoding="utf-8")
-    (tmp / "gen.h").write_text(h, encoding="utf-8")
-    return _cc(tmp / "gen.prg", tmp / "gen.c", tmp, CFLAGS.get(tune, ()))
+    psid = (ROOT / load(tune)["psid"]).read_bytes()
+    return pathlib.Path(f"{build(psid, tmp, flags=CFLAGS.get(tune, ()))[0]}.elf")
 
 
 def _cases():

@@ -13,9 +13,18 @@ import constructs
 
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
 UNCHECKED = {"region", "inline_repeat", "unrolled_stores", "per_voice_paths"}
-NO_PROVENANCE = pytest.mark.xfail(
-    raises=KeyError, strict=True, reason="cgen reports no info['provenance'] yet"
-)
+TAIL = "{} is a shared-tail function, so {} is a tail call, not a goto"
+MISSED = {
+    "incoherent:command.effect": "the computed JSR's handlers are separate functions, not one "
+    "switch, so $080C → $0816 is a tail call of the $0816 handler",
+    "automatas:row-copies": "the copies fold as two classes, entered at $112C and $115E",
+    "emomyst:wf_arp.end": "$16D9 → $16EE is threaded into the JMP's goto $16EE → $1776, and "
+    "$1721 → $1776 prints structured with the fall-through $1773 → $1776 as a goto",
+    "emomyst:wf_arp.relative": "the fall-through $175D → $1760 prints structured",
+    "emomyst:vib_slide.vibrato": "$1579/$158B/$158D → $1590 print structured",
+    "emomyst:filter_prg.advance": TAIL.format("$1649", "$15DE → $1649"),
+    "emomyst:filter_prg.set_pos": TAIL.format("$165D", "$162E → $165D"),
+}
 
 
 @functools.cache
@@ -27,11 +36,23 @@ def provenance(tune):
 
 
 def _entries():
-    return [
-        pytest.param(t, c["id"], marks=NO_PROVENANCE, id=f"{t}:{c['id']}")
+    keys = [
+        f"{t}:{c['id']}"
         for t in TUNES
         for c in constructs.load(t)["constructs"]
         if c["kind"] not in UNCHECKED
+    ]
+    return [
+        pytest.param(
+            *k.split(":"),
+            marks=(
+                [pytest.mark.xfail(strict=True, reason=MISSED[k])]
+                if k in MISSED
+                else []
+            ),
+            id=k,
+        )
+        for k in keys
     ]
 
 

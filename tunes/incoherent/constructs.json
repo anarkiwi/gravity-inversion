@@ -110,10 +110,6 @@
      "$0BED"
     ],
     [
-     "$0BC8",
-     "$0BEA"
-    ],
-    [
      "$0BD5",
      "$0BED"
     ]
@@ -125,6 +121,24 @@
    "why": "Exits from five nesting depths to the shared row epilogue $0BE8-$0BF5, which is not the procedure exit.",
    "lift": "goto",
    "transform": "T7"
+  },
+  {
+   "id": "read_row.epilogue",
+   "kind": "join",
+   "edges": [
+    [
+     "$0BC8",
+     "$0BEA"
+    ]
+   ],
+   "hand": {
+    "fn": "read_row",
+    "label": "next"
+   },
+   "why": "The arms of the BCC at $0BC2 rejoin at the store $0BEA: the BNE at $0BC8, always taken after ORA #$F0, and the fall-through from $0BE8.",
+   "lift": "if/else arms rejoining, no goto",
+   "hand_differs": "the hand C writes a goto",
+   "transform": "T6"
   },
   {
    "id": "pulse_step.next",

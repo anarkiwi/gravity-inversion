@@ -1,11 +1,14 @@
 FIXTURE := Ghouls_n_Ghosts.sid
 URL = $(HVSC)/MUSICIANS/F/Follin_Tim/Ghouls_n_Ghosts.sid
 MD5 := 87e0a687004730aaf3d2e6f0d450dec7
+PSID = $(FIX)/$(FIXTURE)
+CHECK_ARGS = --songs 12-32 --hvsc $(FIX)
+GEN := 1
 include ../../common.mk
 
 all: $(B)/ghouls.prg
 
-fixture: $(SONGLENGTHS)
+fixture check-gen: $(SONGLENGTHS)
 
 $(B)/ghouls_data.h: $(FIX)/$(FIXTURE) gen_ghouls.py
 	mkdir -p $(B)
