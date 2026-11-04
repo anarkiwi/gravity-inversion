@@ -119,12 +119,12 @@ static void filter_step(void) {
         if (!at(FILT_L + 1 + y))
           filter.cutoff = at(FILT_R + ++y);
         filter_next(y);
-        goto out;
+        goto out; /* 6502 $094E BNE $096F, $0957 JMP $096C */
       }
       if (!a) {
         filter.cutoff = at(FILT_R + y);
         filter_next(y);
-        goto out;
+        goto out; /* 6502 $0957 JMP $096C */
       }
       filter.time = a;
     }
@@ -132,7 +132,7 @@ static void filter_step(void) {
     if (!--filter.time)
       filter_next(y);
   }
-out:
+out: /* $097B, past the step $095D that $0938 and $095A join */
   SIDREG(CUTOFF_HI) = filter.cutoff;
   SIDREG(RES_ROUTE) = filter.ctrl;
   SIDREG(MODE_VOL) = filter.type | VOLUME;
@@ -148,14 +148,14 @@ static void command(struct voice *v, uint8_t cmd, uint8_t d, uint8_t y) {
   switch (cmd) {
   case INS_VIBRATO:
     d = at(INS_VIB + y);
-    goto effect;
+    goto effect; /* 6502 $080C JMP $0816 */
   case PORTA_UP:
   case PORTA_DOWN:
     v->vib_phase = 0;
     /* fall through */
   case TONE_PORTA:
   case VIBRATO:
-  effect:
+  effect: /* $0816, a second entry below the fall-through top $080F */
     v->param = d;
     v->effect = v->cmd;
     break;
@@ -331,7 +331,7 @@ static void read_row(struct voice *v) {
     v->repeat = (v->repeat ? v->repeat : a) + 1;
     if (v->repeat)
       return;
-    goto next;
+    goto next; /* 6502 $0B9E BEQ */
   }
   if (a < CMD) {
     v->instr = a;
@@ -342,24 +342,24 @@ static void read_row(struct voice *v) {
     if ((v->cmd = a & 0x0f))
       v->cmd_data = at(p + ++y);
     if (only)
-      goto next;
+      goto next; /* 6502 $0BBB BCS */
     a = at(p + ++y);
   }
   if (a == REST)
-    goto next;
+    goto next; /* 6502 $0BC4 BEQ */
   if (a > REST) {
     v->gate = a | 0xf0;
-    goto next;
+    goto next; /* 6502 $0BC8 BNE $0BEA */
   }
   v->new_note = a + v->transpose;
   if (v->cmd == TONE_PORTA)
-    goto next;
+    goto next; /* 6502 $0BD5 BEQ */
   if (v->instr < HR_LIMIT) {
     v->sr = HR_SR;
     v->ad = HR_AD;
   }
   v->gate = GATE_OFF;
-next: /* 6502 $0BED, reached from $0B9E/$0BBB/$0BC4/$0BD5 */
+next: /* $0BED, the row epilogue, entered from five depths */
   ++y;
   v->patt_pos = at(p + y) ? y : 0;
 }
@@ -370,14 +370,14 @@ static void pulse_step(struct voice *v) {
     a = at(PULSE_L + y);
     if (a & 0x80) {
       v->pulse = word(at(PULSE_R + y), a);
-      goto next;
+      goto next; /* 6502 $0B43 JMP $0B62 */
     }
     v->pulse_time = a;
   }
   v->pulse += (int8_t)at(PULSE_R + y);
   if (--v->pulse_time)
     return;
-next:
+next: /* $0B62, past the sweep $0B49 that $0B33 and $0B46 join */
   a = at(PULSE_L + 1 + y);
   ++y;
   v->pulse_ptr = a == JUMP ? at(PULSE_R + y) : y;
@@ -435,7 +435,7 @@ static uint8_t start_row(struct voice *v) {
 static void voice_play(struct voice *v, uint8_t r) {
   if (!--v->tick) {
     if (start_row(v))
-      goto regs;
+      goto regs; /* 6502 $0A68 JMP $0BF6 */
   } else if (v->tick & 0x80) {
     uint8_t t = v->tempo;
     if (t >= 2) {
@@ -451,7 +451,7 @@ static void voice_play(struct voice *v, uint8_t r) {
     read_row(v);
   else if (v->pulse_ptr && (v->tick | v->patt_pos))
     pulse_step(v);
-regs: /* 6502 $0BF6, reached from $0A68/$0B71/$0BA0 and $0BED */
+regs: /* $0BF6, past the wave/effect/row/pulse joins */
   write_regs(v, r);
 }
 

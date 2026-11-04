@@ -2,7 +2,8 @@
 
 Voice: registers written only by voice code go through the voice index, not per-voice constants.
 Procedures: no more functions than the hand C (outlined tails fragment procedures).
-Gotos: gotos plus structuring flags stay within the hand C's gotos."""
+Gotos: the hand C has a goto at each original edge with no structured C form (tune READMEs);
+gotos plus structuring flags stay within those edges."""
 
 import functools
 import pathlib
@@ -43,7 +44,7 @@ FRAGMENTED = {
     "(wf_arp, vib_slide, filter_prg, pw_prg)",
 }
 OVER_GOTOS = {
-    "incoherent": "structuring flags where the hand C needs fewer gotos",
+    "incoherent": "structuring flags beyond the original's unstructured edges",
 }
 
 
@@ -93,7 +94,7 @@ def test_procedures_not_fragmented(name):
 
 @pytest.mark.slow
 @pytest.mark.parametrize("name", _cases(OVER_GOTOS))
-def test_goto_budget(name):
-    """Gotos plus structuring flags stay within the hand translation's gotos."""
+def test_unstructured_edges(name):
+    """Gotos plus structuring flags stay within the hand C's gotos, one per unstructured edge."""
     c, counts = generated(name)
     assert c.count("goto ") + counts.get("flags", 0) <= hand(name).count("goto ")
