@@ -47,6 +47,27 @@ over the voices (`$1143-$1160`). `seq_read` (`$17C8`) picks one of three per-voi
 and the slide effects enter a shared tail at `$1AB4` with Y preset. `tests/test_structure.py`
 xfails while the generated C specialises the calls per voice.
 
+## Gotos
+
+The hand C has a goto exactly where the original branches along an edge C has no structured form
+for: not a fall-through, not the arm of an if/else rejoining at its immediate post-dominator, not a
+loop's single exit (`break`) or back edge (`continue`), not the procedure exit (`return`). Each is one
+6502 branch, annotated with its address at the goto. The kinds here:
+
+- a branch past a block other paths join: `done` (past the wave store `$196C`), `pitch` (past
+  `$1705`), `end` (past the pitch joins), `note` (past `$12B5`);
+- a second entry into a straight-line sequence entered at its top by fall-through: the arpeggio's
+  `relative`/`absolute` (`$1760`/`$1764`), the filter and pulse table steps' `advance`, `set_pos`
+  and `write`, and the frequency slide's shared add/subtract `up`/`down`/`store` (`$15BF`, `$15A4`,
+  `$15CE`), each reached from the slide, portamento and vibrato decisions;
+- a loop's back edge from inside a branch when the loop has other exit targets: `row` (`$1749 JMP
+  $16E3`);
+- a loop's second exit target: init's `next` (`$1151 BCS $115B`; the first exit is `$1158`).
+
+Structured alternatives copy the code at the target into each source or set a flag tested later;
+the goto is the original branch, adding neither code nor a test. `done` is also the 6502 tail call
+idiom: `$19AB` is a subroutine the code also enters by `JMP` and fall-through.
+
 ## Verification
 
 `make check` compares every SID write of the C build against the PSID under jennings

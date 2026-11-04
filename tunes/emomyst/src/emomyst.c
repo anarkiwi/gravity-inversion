@@ -387,14 +387,14 @@ static void note_fx(uint8_t a) {
       break;
     case 0x7e:
       gate_off();
-      goto done;
-    default: /* $78 and $7f: portamento */
+      goto done; /* 6502 $19A1 BNE, $19A6 BEQ, $19A8 fall */
+    default:     /* $78 and $7f: portamento */
       set_slide(0xff, 0x6e);
-      goto done;
+      goto done; /* 6502 $195A JMP $19AB */
     }
     V(WAVE) = w;
   }
-done:
+done: /* $19AB, past the wave store $196C the other cases join; also JSR'd */
   ins_ptn_fx();
 }
 
@@ -414,25 +414,25 @@ static void write_pitch(void) {
 static void wf_arp(void) {
   uint8_t a, y, arp;
   if (!NEG(--V(ARP_CNT)))
-    goto end;
+    goto end; /* 6502 $16D9 BPL $16EE / JMP $1776 */
   V(ARP_CNT) = V(ARP_SPEED) & 0x3f;
-row:
+row: /* $16E3, loop head; the loop exits to end and relative */
   y = V(WF_POS);
   a = rd(y);
   if (a == 0xfe) {
     a = rd(++y);
     if (NEG(a))
-      goto end;
+      goto end; /* 6502 $16FD BMI $1776 */
     V(WF_POS) = y = a;
     a = rd(y);
   } else if (a == 0xff) {
-    goto end;
+    goto end; /* 6502 $16EE JMP $1776 */
   } else if (a < 0x10) {
     V(ARP_CNT) = a;
-    goto pitch;
+    goto pitch; /* 6502 $16F8 BCC $170B */
   }
   V(WAVE) = a & V(GATE);
-pitch:
+pitch: /* $170B, past the wave store $1705 that $16F3 and $1703 join */
   a = rd(++y);
   y++;
   if (a == 0x7f) { /* chord; the detune column is not used by this build */
@@ -440,32 +440,32 @@ pitch:
     if (a == 0x7e) {
       V(CHORD_POS) = music[chord_ptr + V(CHORD)];
       V(WF_POS) += 3;
-      goto row;
+      goto row; /* 6502 $1749 JMP $16E3 */
     }
     if (a == 0x7f) {
       y = V(CHORD_POS) = music[chord_ptr + V(CHORD)];
       a = music[chords + y];
     }
     V(CHORD_POS)++;
-    goto relative;
+    goto relative; /* 6502 $175D falls into $1760 */
   }
   arp = a;
   V(WF_POS) = y + 1;
   a = arp;
   if (!NEG(a))
-    goto relative;
+    goto relative; /* 6502 $171D BPL $1760 */
   if (a == 0x80)
-    goto end;
+    goto end; /* 6502 $1721 BEQ $1776 */
   if (a < 0xe0)
-    goto absolute;
-relative:
+    goto absolute; /* 6502 $1725 BCC $1764 */
+relative:          /* $1760, entered by the chord tail and the arpeggio */
   a += V(PITCH);
-absolute:
+absolute: /* $1764, a second entry below $1760 */
   a &= 0x7f;
   V(ARP_PITCH) = a;
   V(FREQLO) = T(FREQ_LO + a);
   V(FREQHI) = T(FREQ_HI + a);
-end:
+end: /* $1776, past the pitch joins */
   write_pitch();
   write_wave();
 }
@@ -477,20 +477,20 @@ static void vib_slide(void) {
     V(FMOD_LO) = adc(V(FMOD_LO), V(VIB_DELAY));
     if (c)
       V(FMOD_HI)++;
-    goto vibrato;
+    goto vibrato; /* 6502 $158B BCC / $158D fall */
   }
   if (!NEG(y)) {
     if (!NEG(V(VIB_DELAY))) {
       V(VIB_DELAY)--;
       return;
     }
-    goto vibrato;
+    goto vibrato; /* 6502 $1579 BMI $1590 */
   }
   c = y >= 0x82;
   if (y == 0x82)
-    goto down;
+    goto down; /* 6502 $1540 BEQ $15A4 */
   if (NEG(y - 0x82))
-    goto up;
+    goto up;    /* 6502 $1544 JMP $15BF */
   y = V(PITCH); /* portamento */
   lo = sbc(T(FREQ_LO + y), V(FREQLO));
   hi = sbc(T(FREQ_HI + y), V(FREQHI));
@@ -498,33 +498,33 @@ static void vib_slide(void) {
     sbc(lo, V(FMOD_LO));
     sbc(hi, V(FMOD_HI));
     if (c)
-      goto up;
+      goto up; /* 6502 $15BD fall into $15BF */
   } else {
     adc(lo, V(FMOD_LO));
     adc(hi, V(FMOD_HI));
     if (!c)
-      goto down;
+      goto down; /* 6502 $1565 BCC $15A4 */
   }
   y = V(PITCH); /* target reached */
   V(FREQLO) = T(FREQ_LO + y);
   a = T(FREQ_HI + y);
-  goto store;
-vibrato:
+  goto store; /* 6502 $1573 JMP $15CE */
+vibrato:      /* $1590 */
   a = V(VIB_CNT);
   if (!a)
     a = V(VIB_FREQ);
   V(VIB_CNT) = --a;
   c = (uint8_t)(a << 1) >= V(VIB_FREQ);
   if (!c)
-    goto up;
-down:
+    goto up; /* 6502 $15A2 BCC $15BF */
+down:        /* $15A4: subtract shared by slide, portamento, vibrato */
   V(FREQLO) = sbc(V(FREQLO), V(FMOD_LO));
   a = sbc(V(FREQHI), V(FMOD_HI));
-  goto store;
-up:
+  goto store; /* 6502 $15B3 JMP $15CE */
+up:           /* $15BF: add shared by slide, portamento, vibrato */
   V(FREQLO) = adc(V(FREQLO), V(FMOD_LO));
   a = adc(V(FREQHI), V(FMOD_HI));
-store:
+store: /* $15CE */
   V(FREQHI) = a;
 }
 
@@ -536,7 +536,7 @@ static void filter_prg(void) {
   if (!NEG(a)) { /* sweep */
     y++;
     if (a == flt_sweep)
-      goto advance;
+      goto advance; /* 6502 $15DE BEQ $1649 */
     flt_sweep++;
     c = 0;
     a = rd(y);
@@ -563,13 +563,13 @@ static void filter_prg(void) {
       return;
     y = a;
     if (!NEG(a = rd(y)))
-      goto set_pos;
+      goto set_pos; /* 6502 $162E BPL $165D */
   }
   band = a & 0x70;
   reso = a << 4;
   cutoff_hi = rd(++y);
   cutoff_lo = 0;
-advance:
+advance: /* $1649, entered below the set-values top $1630 */
   a = rd(++y);
   if (NEG(a) && a < 0x90) {
     filter_sw = a & 0x0f;
@@ -577,7 +577,7 @@ advance:
   }
   keytrack = a;
   y++;
-set_pos:
+set_pos: /* $165D, entered below $1649 */
   flt_pos = y;
   flt_sweep = 0;
 }
@@ -588,7 +588,7 @@ static void pw_prg(void) {
   if (!NEG(a)) { /* sweep */
     y++;
     if (a == V(PW_SWEEP))
-      goto advance;
+      goto advance; /* 6502 $1670 BEQ $16AA */
     V(PW_SWEEP)++;
     a = rd(y);
     if (NEG(a))
@@ -597,27 +597,27 @@ static void pw_prg(void) {
     V(PWLO) = adc(a, V(PWLO));
     if (c)
       V(PWHI)++;
-    goto write;
+    goto write; /* 6502 $1683 BCC, $1688 BCS $16BA */
   }
   if (a == 0xff)
-    goto write;
+    goto write; /* 6502 $1690 BCS $16BA */
   if (a == 0xfe) {
     a = rd(++y);
     if (a == V(PW_POS))
-      goto write;
+      goto write; /* 6502 $1698 BEQ $16BA */
     y = a;
     if (!NEG(a = rd(y)))
-      goto set_pos;
+      goto set_pos; /* 6502 $169D BPL $16B1 */
   }
   V(PWHI) = a & 0x7f;
   V(PWLO) = rd(++y);
-advance:
+advance: /* $16AA, entered below the set-value top $169F */
   V(PW_KEYTRACK) = rd(++y);
   y++;
-set_pos:
+set_pos: /* $16B1, entered below $16AA */
   V(PW_POS) = y;
   V(PW_SWEEP) = 0;
-write:
+write: /* $16BA, entered below $16B1 */
   c = 0;
   a = V(PW_KEYTRACK);
   if (a) {
@@ -765,12 +765,12 @@ static void tick0(void) {
   if (!V(PACK_CNT)) {
     a = rd(y);
     if (a < 0x70 || a >= 0x78)
-      goto note;
+      goto note; /* 6502 $12AA BCC, $12AE BCS $12BA */
     V(PACK_CNT) = a - 0x6e;
   }
   V(PACK_CNT)--;
   a = 0;
-note:
+note: /* $12BA, past $12B5 that $12A4 and $12B2 join */
   if (NEG(a)) {
     V(CUR_NOTE) = a & 0x7f;
     a = rd(++y);
@@ -864,10 +864,10 @@ void tune_init(uint8_t song) {
       if (!NEG(a))
         break;
       if (a >= 0xfe)
-        goto next;
+        goto next; /* 6502 $1151 BCS $115B: second exit of the loop */
     } while (++V(SEQ_POS));
     V(CUR_PTN) = a;
-  next:
+  next: /* $115B; the loop's first exit, $114D BPL and the wrap, is $1158 */
     if (!x)
       break;
   }

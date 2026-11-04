@@ -45,6 +45,22 @@ X = `$0E` and falls into it, its `RTS` returning from play; init does the same i
 C calls `voice_play` per voice. `tests/test_structure.py` xfails while the generated C
 specialises the fall-through copy.
 
+## Gotos
+
+The hand C has a goto exactly where the original branches along an edge C has no structured form
+for: not a fall-through, not the arm of an if/else rejoining at its immediate post-dominator, not a
+loop's single exit (`break`) or back edge (`continue`), not the procedure exit (`return`). Each is one
+6502 branch, annotated with its address at the goto. The kinds here:
+
+- a branch past a block other paths join: the filter step's `out` (past `$095D`), the pulse step's
+  `next` (past `$0B49`), `regs` (past the wave/effect/row/pulse joins), and the row epilogue `next`
+  (`$0BED`) left from five depths;
+- a second entry into a straight-line sequence entered at its top by fall-through: `effect`
+  (`JMP $0816` below `$080F`).
+
+Structured alternatives copy the code at the target into each source or set a flag tested later;
+the goto is the original branch, adding neither code nor a test.
+
 ## Verification
 
 `make check` traces the PSID and the C64 PRG under jennings and compares every SID write
