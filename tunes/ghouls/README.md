@@ -52,8 +52,7 @@ The voice routine is unrolled three times, at `$6234`/`$6421`/`$6610` chained by
 copies are identical up to operand strides (+1 zero-page bytes, +2 words, +7 SID, +`$1ED`/`$1EF`
 own operands) and a `CMP #v` voice 0 omits. Command handlers `$6858-$6C75` are per-voice copies
 too, and effect init patches the copies' operands through the table at `$622E`/`$6231`. The C
-runs `play_voice(v)` per voice. `tools/copies.py` lists the copies; `tests/test_structure.py`
-xfails while the generated C keeps them.
+runs `play_voice(v)` per voice. `tools/copies.py` lists the copies; `tests/test_structure.py` checks the generated C recovers it.
 
 ## Verification
 

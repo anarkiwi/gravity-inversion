@@ -43,7 +43,7 @@ SID writes at `$1022`/`$1053`/`$1084` (`$31` apart, chained by `JMP`), the patte
 `$112A`/`$11B2`/`$123A` (`$88` apart, fall-through), and six sidTAB copies from `$12BE`
 (`$31` apart, each calling `$168C`). Pitch and pulse is a real loop over X = `$62`, `$31`, 0
 (`SBX #$31`). The C loops over `struct voice`. `tools/copies.py` lists the copies;
-`tests/test_structure.py` xfails while the generated C keeps them.
+`tests/test_structure.py` checks the generated C recovers it.
 
 ## Verification
 

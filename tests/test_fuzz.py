@@ -22,28 +22,23 @@ FRAMES = 200
 IDEAL_FUNCTIONS = 3
 VOICE_REGS = range(0xD407, 0xD415)
 MISSED = {
-    "voice": {
-        "fallthrough": "the fall-through voice is a copy specialised to X=14",
-        "unrolled": "the unrolled copies are not recovered as one routine",
-        "smc": "the self-modifying copies are not recovered as one routine",
-    },
-    "functions": {
-        "jsr3": "joins of the voice routine are outlined as functions",
-        "fallthrough": "joins outlined, per copy",
-        "unrolled": "joins outlined, per copy",
-        "smc": "joins outlined, per copy",
-    },
+    ("functions", "jsr3", 2): "a join of the voice routine is outlined",
+    ("functions", "fallthrough", 2): "a join of the voice routine is outlined",
+    ("functions", "smc", 0): "per-copy immediates that are not affine split the class",
+    ("functions", "smc", 1): "per-copy immediates that are not affine split the class",
+    ("voice", "smc", 1): "per-copy immediates that are not affine split the class",
 }
-FOLDED = {("functions", "smc", 2)}
 
 
 def _cases(check):
     return [
         (
             pytest.param(
-                s, seed, marks=pytest.mark.xfail(strict=True, reason=MISSED[check][s])
+                s,
+                seed,
+                marks=pytest.mark.xfail(strict=True, reason=MISSED[check, s, seed]),
             )
-            if s in MISSED.get(check, {}) and (check, s, seed) not in FOLDED
+            if (check, s, seed) in MISSED
             else (s, seed)
         )
         for s in fuzzplayer.STYLES
