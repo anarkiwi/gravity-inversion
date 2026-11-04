@@ -220,6 +220,66 @@
    "why": "Per-voice stores unrolled (STY $7b/$7c/$7d).",
    "lift": "unrolled stores or a loop",
    "transform": "T3"
+  },
+  {
+   "id": "pulse-sweep",
+   "kind": "multi_entry_loop",
+   "edges": [
+    [
+     "$62EF",
+     "$62F1"
+    ],
+    [
+     "$62EF",
+     "$630B"
+    ]
+   ],
+   "head": "$62F1",
+   "back": "$632B",
+   "copies": [
+    [
+     "$6518",
+     "$64DE"
+    ],
+    [
+     "$6707",
+     "$66CD"
+    ]
+   ],
+   "hand": {
+    "fn": "pulse_sweep",
+    "form": "for (;;) { if (down) {...} pw += s; ... down = 1; }"
+   },
+   "why": "A loop entered at two points chosen by a self-modified direction ($62EE as LDA #'s operand, then BNE): the downward step by fall-through at $62F1, the upward step by the branch at $630B; neither entry dominates the cycle.",
+   "lift": "one loop with an entry selector set by the two entering edges",
+   "transform": "T4",
+   "covered": false,
+   "uncovered": "the songs never cross both sweep bounds in one call; tests/test_ghouls.py's PATTERN variant does"
+  },
+  {
+   "id": "filter-sweep",
+   "kind": "multi_entry_loop",
+   "edges": [
+    [
+     "$6801",
+     "$6803"
+    ],
+    [
+     "$6801",
+     "$681F"
+    ]
+   ],
+   "head": "$6803",
+   "back": "$6839",
+   "hand": {
+    "fn": "filter_sweep",
+    "form": "for (;;) { if (down) {...} c += s; ... down = 1; }"
+   },
+   "why": "A loop entered at two points chosen by a self-modified direction ($6800 as LDA #'s operand, then BNE): the downward step by fall-through at $6803, the upward step by the branch at $681F; neither entry dominates the cycle.",
+   "lift": "one loop with an entry selector set by the two entering edges",
+   "transform": "T4",
+   "covered": false,
+   "uncovered": "the songs never cross both sweep bounds in one call; tests/test_ghouls.py's PATTERN variant does"
   }
  ]
 }

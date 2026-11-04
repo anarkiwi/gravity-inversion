@@ -112,6 +112,9 @@ class Checker:
         k = c["kind"]
         if k == "loop":
             return self.edge(c["back"], c["head"])
+        if k == "multi_entry_loop":
+            edges = c["edges"] + [[c["back"], c["head"]]] + c.get("copies", [])
+            return [e for a, b in edges for e in self.edge(a, b)]
         if k in ("call", "fall_call", "tail_call"):
             return self.calls(c)
         if k == "unrolled":
@@ -130,14 +133,19 @@ class Checker:
         return [e for a in c.get("pcs", []) for e in self.at(a)]
 
 
-def check(tune, jobs=1):
-    """{construct id: (errors, covered)} of a tune's map: static errors, and whether the
-    original's run (init and play) executed it."""
+def run(tune, jobs=1):
+    """(map, PSID, coverage of init and play, instruction starts) of a tune's original."""
     m = load(tune)
     data = (ROOT / m["psid"]).read_bytes()
     songs = m.get("songs", [0])
     cov = coverage(data, [m["frames"]] * len(songs), songs, jobs, init=True)
-    starts = {i[0] for i in instructions(listing(data, 0, cov=cov).source)}
+    return m, data, cov, {i[0] for i in instructions(listing(data, 0, cov=cov).source)}
+
+
+def check(tune, jobs=1):
+    """{construct id: (errors, covered)} of a tune's map: static errors, and whether the
+    original's run (init and play) executed it."""
+    m, data, cov, starts = run(tune, jobs)
     mem = memory(data)
     out = {}
     for c in m["constructs"]:
@@ -157,8 +165,8 @@ def main(argv=None):
     for t in args.tunes:
         for cid, (errors, covered) in check(t, args.jobs).items():
             bad += bool(errors)
-            run = "covered" if covered else "not covered"
-            print(f"{t}:{cid}: {'; '.join(errors) or 'ok'} ({run})")
+            seen = "covered" if covered else "not covered"
+            print(f"{t}:{cid}: {'; '.join(errors) or 'ok'} ({seen})")
     return 1 if bad else 0
 
 
