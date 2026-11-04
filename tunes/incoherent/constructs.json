@@ -19,7 +19,8 @@
     "form": "for (k) voice_play(&voices[k], k * 7)"
    },
    "why": "One X-indexed channel routine: JSR for X=0 and 7, then X=$0E falls into it and its RTS returns from play, the 6502 tail call. The hand C calls it per voice.",
-   "lift": "one function with the voice index; the fall-through is a call followed by return"
+   "lift": "one function with the voice index; the fall-through is a call followed by return",
+   "transform": "T2"
   },
   {
    "id": "init-voice-dispatch",
@@ -37,7 +38,8 @@
     "form": "for (k) per-voice init in the init branch"
    },
    "why": "The same tail-call idiom for the per-voice init.",
-   "lift": "one function with the voice index"
+   "lift": "one function with the voice index",
+   "transform": "T2"
   },
   {
    "id": "init-clear",
@@ -49,7 +51,8 @@
     "form": "field clears inside the per-voice init loop"
    },
    "why": "A real DEX/BPL loop clearing the first fields of all voices.",
-   "lift": "loop"
+   "lift": "loop",
+   "transform": "T4"
   },
   {
    "id": "filter_step.suffix",
@@ -70,7 +73,8 @@
    },
    "why": "The shared suffix $096C-$0978 is entered at its top and, with A already loaded, at $096F, bypassing the step block $095D that $0938 and $095A join; it falls into the register writes at $097B.",
    "lift": "goto to each entry of the suffix; the suffix falls through to the register writes",
-   "hand_differs": "the hand C outlines the suffix as filter_next and needs goto out after each call; Emomyst's table steps write the same pattern (entries part-way into a shared sequence) as labels, which the rule follows"
+   "hand_differs": "the hand C outlines the suffix as filter_next and needs goto out after each call; Emomyst's table steps write the same pattern (entries part-way into a shared sequence) as labels, which the rule follows",
+   "transform": "T7"
   },
   {
    "id": "command.effect",
@@ -86,7 +90,8 @@
     "label": "effect"
    },
    "why": "A second entry into the sequence $080F-$081F whose top the switch reaches by fall-through.",
-   "lift": "goto"
+   "lift": "goto",
+   "transform": "T7"
   },
   {
    "id": "read_row.next",
@@ -118,7 +123,8 @@
     "label": "next"
    },
    "why": "Exits from five nesting depths to the shared row epilogue $0BE8-$0BF5, which is not the procedure exit.",
-   "lift": "goto"
+   "lift": "goto",
+   "transform": "T7"
   },
   {
    "id": "pulse_step.next",
@@ -134,7 +140,8 @@
     "label": "next"
    },
    "why": "Branches past the sweep block $0B49, which $0B33 and $0B46 join.",
-   "lift": "goto"
+   "lift": "goto",
+   "transform": "T7"
   },
   {
    "id": "voice_play.regs",
@@ -150,7 +157,8 @@
     "label": "regs"
    },
    "why": "A new note skips the wave, effect, row and pulse blocks, all joins, to the register writes.",
-   "lift": "goto"
+   "lift": "goto",
+   "transform": "T7"
   },
   {
    "id": "pulse-condition",
@@ -165,7 +173,8 @@
     "form": "else if (v->pulse_ptr && (v->tick | v->patt_pos))"
    },
    "why": "Two branches to the same target compose with &&.",
-   "lift": "short-circuit condition"
+   "lift": "short-circuit condition",
+   "transform": "T5"
   },
   {
    "id": "command-dispatch",
@@ -176,7 +185,8 @@
     "form": "switch (cmd)"
    },
    "why": "JMP whose operand init and the row reader rewrite: a computed dispatch.",
-   "lift": "switch"
+   "lift": "switch",
+   "transform": "T1"
   },
   {
    "id": "command-dispatch-cell",
@@ -189,7 +199,8 @@
     "form": "the switch selector"
    },
    "why": "The dispatch target lives in the JMP's own operand.",
-   "lift": "variable"
+   "lift": "variable",
+   "transform": "T1"
   },
   {
    "id": "filter-ptr-cell",
@@ -202,7 +213,8 @@
     "form": "filter.ptr"
    },
    "why": "The filter table position lives in LDY #'s operand.",
-   "lift": "variable"
+   "lift": "variable",
+   "transform": "T1"
   },
   {
    "id": "filter-time-cell",
@@ -215,7 +227,8 @@
     "form": "filter.time"
    },
    "why": "The filter step time lives in LDA #'s operand.",
-   "lift": "variable"
+   "lift": "variable",
+   "transform": "T1"
   }
  ]
 }

@@ -17,7 +17,8 @@
     "form": "for (v in voice[3]), so += 7"
    },
    "why": "No loop in the original: three copies $31 apart chained by JMP, each voice's state in its own immediate operands, SID operands +7.",
-   "lift": "one function with the voice index"
+   "lift": "one function with the voice index",
+   "transform": "T3"
   },
   {
    "id": "row-copies",
@@ -33,7 +34,8 @@
     "form": "for (v in voice[3])"
    },
    "why": "Pattern row copies $88 apart, fall-through chained, pattern pointer in operands.",
-   "lift": "one function with the voice index"
+   "lift": "one function with the voice index",
+   "transform": "T3"
   },
   {
    "id": "program-copies",
@@ -52,7 +54,8 @@
     "form": "for (l < 2) for (v in voice[3])"
    },
    "why": "Six sidTAB copies $31 apart (two layers by three voices), each calling apply().",
-   "lift": "one function indexed by layer and voice"
+   "lift": "one function indexed by layer and voice",
+   "transform": "T3"
   },
   {
    "id": "pitch-loop",
@@ -64,7 +67,8 @@
     "form": "for (v = voice + 2; v >= voice; --v) pitch_pulse(v)"
    },
    "why": "A real loop: X = $62, $31, 0 by SBX #$31 over code-resident voice state.",
-   "lift": "loop"
+   "lift": "loop",
+   "transform": "T4"
   },
   {
    "id": "sid-clear",
@@ -76,7 +80,8 @@
     "form": "for (r = 0x17; r >= 0; --r)"
    },
    "why": "DEY/BPL clear of the SID.",
-   "lift": "loop"
+   "lift": "loop",
+   "transform": "T4"
   },
   {
    "id": "voice-reset",
@@ -88,7 +93,8 @@
     "form": "for (v in voice[3])"
    },
    "why": "A real X loop resetting voice state.",
-   "lift": "loop"
+   "lift": "loop",
+   "transform": "T4"
   },
   {
    "id": "raster-wait",
@@ -100,7 +106,8 @@
     "form": "while (VIC.rasterline != DETECT_LINE)"
    },
    "why": "Polls raster line $FC before the SID model probe.",
-   "lift": "loop over a sensitive read"
+   "lift": "loop over a sensitive read",
+   "transform": "T4"
   },
   {
    "id": "full-call-cell",
@@ -113,7 +120,8 @@
     "form": "if (!(calls++ & (FULL_CALLS - 1))) rows()"
    },
    "why": "Play patches RTS over $10D8 to stop before the row step on most calls, restoring it after.",
-   "lift": "opcode cell with a closed value set"
+   "lift": "opcode cell with a closed value set",
+   "transform": "T1"
   },
   {
    "id": "cutoff-shift-cell",
@@ -128,7 +136,8 @@
    "why": "Init writes ASL or NOP at $10D4 by SID model.",
    "lift": "opcode cell with a closed value set",
    "covered": false,
-   "uncovered": "written by init, read by play: def-use is not linked across the init and play coverage runs"
+   "uncovered": "written by init, read by play: def-use is not linked across the init and play coverage runs",
+   "transform": "T1"
   },
   {
    "id": "pw-lo-cell",
@@ -141,7 +150,8 @@
     "form": "v->pw_lo"
    },
    "why": "Voice 0's pulse low byte lives in the band copy's LDX # operand.",
-   "lift": "per-copy state"
+   "lift": "per-copy state",
+   "transform": "T1"
   }
  ]
 }

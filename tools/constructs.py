@@ -111,8 +111,7 @@ class Checker:
         """Errors of one construct entry."""
         k = c["kind"]
         if k == "loop":
-            order = [] if c["head"] <= c["back"] else ["head after back edge"]
-            return self.edge(c["back"], c["head"]) + order
+            return self.edge(c["back"], c["head"])
         if k in ("call", "fall_call", "tail_call"):
             return self.calls(c)
         if k == "unrolled":

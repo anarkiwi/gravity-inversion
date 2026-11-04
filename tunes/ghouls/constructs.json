@@ -25,7 +25,8 @@
     "form": "for (v < 3) play_voice(v)"
    },
    "why": "No loop: three copies chained by JMP, identical up to operand strides (+1 zp, +2 zp words, +7 SID, +$1ED/$1EF own operands) and a CMP #v that voice 0 omits.",
-   "lift": "one function with the voice index"
+   "lift": "one function with the voice index",
+   "transform": "T3"
   },
   {
    "id": "command-dispatch-0",
@@ -36,7 +37,8 @@
     "form": "switch (b)"
    },
    "why": "JMP whose operand is written from the split tables $6C37/$6C76,X.",
-   "lift": "switch over the table extent, trap beyond"
+   "lift": "switch over the table extent, trap beyond",
+   "transform": "T1"
   },
   {
    "id": "command-dispatch-1",
@@ -47,7 +49,8 @@
     "form": "switch (b)"
    },
    "why": "Voice 1's copy of the dispatch.",
-   "lift": "the same switch, voice-indexed"
+   "lift": "the same switch, voice-indexed",
+   "transform": "T1"
   },
   {
    "id": "command-dispatch-2",
@@ -58,7 +61,8 @@
     "form": "switch (b)"
    },
    "why": "Voice 2's copy of the dispatch.",
-   "lift": "the same switch, voice-indexed"
+   "lift": "the same switch, voice-indexed",
+   "transform": "T1"
   },
   {
    "id": "hard-restart-condition",
@@ -75,7 +79,8 @@
    "why": "BEQ and BNE to the same target compose with &&.",
    "lift": "short-circuit condition",
    "covered": false,
-   "uncovered": "the songs have no hard restart longer than one frame; tests/test_ghouls.py's PATTERN variant reaches it"
+   "uncovered": "the songs have no hard restart longer than one frame; tests/test_ghouls.py's PATTERN variant reaches it",
+   "transform": "T5"
   },
   {
    "id": "effect-list",
@@ -87,7 +92,8 @@
     "form": "while (!((v = peek(p + y)) & 0x80))"
    },
    "why": "Walks the effect's voice list.",
-   "lift": "loop"
+   "lift": "loop",
+   "transform": "T4"
   },
   {
    "id": "effect-operand-patch",
@@ -100,19 +106,65 @@
     "form": "zp/operand state per voice v"
    },
    "why": "Patches the operand of STA $640F to address the selected voice copy's operand, through the table $622E/$6231.",
-   "lift": "per-copy state indexed by voice"
+   "lift": "per-copy state indexed by voice",
+   "transform": "T1"
   },
   {
-   "id": "copy-block",
+   "id": "copy-pages",
    "kind": "loop",
-   "head": "$29C6",
-   "back": "$29D4",
+   "head": "$29D1",
+   "back": "$29CF",
    "hand": {
     "fn": "copy_block",
     "form": "for (k = 0; k != len; ++k)"
    },
-   "why": "Copies song blocks within RAM.",
-   "lift": "loop"
+   "why": "A rotated loop over pages: entered at its test by JMP $29D1 from $29C3, the back edge is the fall-through from INC $FD.",
+   "lift": "loop",
+   "hand_differs": "the hand C copies with one for (k = 0; k != len; ++k); the original copies whole pages in nested loops, then the remainder, the count kept in an operand",
+   "transform": "T4"
+  },
+  {
+   "id": "copy-bytes",
+   "kind": "loop",
+   "head": "$29C6",
+   "back": "$29CB",
+   "hand": {
+    "fn": "copy_block",
+    "form": "for (k = 0; k != len; ++k)"
+   },
+   "why": "The byte loop inside each page (INY / BNE).",
+   "lift": "loop nested in copy-pages",
+   "hand_differs": "the hand C copies with one for (k = 0; k != len; ++k); the original copies whole pages in nested loops, then the remainder, the count kept in an operand",
+   "transform": "T4"
+  },
+  {
+   "id": "copy-rest",
+   "kind": "loop",
+   "head": "$29D7",
+   "back": "$29E0",
+   "hand": {
+    "fn": "copy_block",
+    "form": "for (k = 0; k != len; ++k)"
+   },
+   "why": "The remainder loop, CPY # against the count.",
+   "lift": "loop",
+   "hand_differs": "the hand C copies with one for (k = 0; k != len; ++k); the original copies whole pages in nested loops, then the remainder, the count kept in an operand",
+   "transform": "T4"
+  },
+  {
+   "id": "copy-rest-count",
+   "kind": "smc",
+   "writer": "$29BD",
+   "cell": "$29D8",
+   "reader": "$29D7",
+   "hand": {
+    "fn": "copy_block",
+    "form": "len"
+   },
+   "why": "The remainder count is stored into the CPY # operand.",
+   "lift": "variable",
+   "hand_differs": "the hand C copies with one for (k = 0; k != len; ++k); the original copies whole pages in nested loops, then the remainder, the count kept in an operand",
+   "transform": "T1"
   },
   {
    "id": "sid-clear",
@@ -124,7 +176,8 @@
     "form": "while (r--)"
    },
    "why": "DEY/BPL writing 8 then 0 to each SID register.",
-   "lift": "loop"
+   "lift": "loop",
+   "transform": "T4"
   },
   {
    "id": "zp-clear",
@@ -136,7 +189,8 @@
     "form": "for (r < sizeof zp)"
    },
    "why": "Clears the zero-page state.",
-   "lift": "loop"
+   "lift": "loop",
+   "transform": "T4"
   },
   {
    "id": "init-zp-clear",
@@ -148,7 +202,8 @@
     "form": "for (i <= offsetof(gate_off))"
    },
    "why": "Clears zero page $21-$90.",
-   "lift": "loop"
+   "lift": "loop",
+   "transform": "T4"
   },
   {
    "id": "voice-pointer-stores",
@@ -163,7 +218,8 @@
     "form": "for (v < 3)"
    },
    "why": "Per-voice stores unrolled (STY $7b/$7c/$7d).",
-   "lift": "unrolled stores or a loop"
+   "lift": "unrolled stores or a loop",
+   "transform": "T3"
   }
  ]
 }

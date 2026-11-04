@@ -13,7 +13,8 @@
     "form": "for (x = 2; x >= 0; --x)"
    },
    "why": "A real X loop over the voices (mainloop ... dex / bmi / jmp mainloop), Y = sid,x.",
-   "lift": "loop"
+   "lift": "loop",
+   "transform": "T4"
   },
   {
    "id": "init-clear",
@@ -25,7 +26,8 @@
     "form": "for (x = 0; x < 3; ++x) clears"
    },
    "why": "DEX/BPL clear of per-voice state.",
-   "lift": "loop"
+   "lift": "loop",
+   "transform": "T4"
   },
   {
    "id": "init-copy",
@@ -37,7 +39,8 @@
     "form": "for (j = 0; j < 6; ++j)"
    },
    "why": "Copies the song's track pointers.",
-   "lift": "loop"
+   "lift": "loop",
+   "transform": "T4"
   },
   {
    "id": "track-restart",
@@ -49,7 +52,8 @@
     "form": "while ((a = trk[...]) == 0xff)"
    },
    "why": "$ff restarts the track and rereads it.",
-   "lift": "loop"
+   "lift": "loop",
+   "transform": "T4"
   },
   {
    "id": "vibrato-shift",
@@ -61,7 +65,8 @@
     "form": "do dif >>= 1; while (--vib >= 0)"
    },
    "why": "LSR/ROR loop over the vibrato depth.",
-   "lift": "loop"
+   "lift": "loop",
+   "transform": "T4"
   },
   {
    "id": "vibrato-step",
@@ -73,7 +78,8 @@
     "form": "while (vosc--)"
    },
    "why": "DEY/BMI loop adding the step per oscillator phase.",
-   "lift": "loop"
+   "lift": "loop",
+   "transform": "T4"
   },
   {
    "id": "voice-join",
@@ -97,7 +103,8 @@
     "form": "if (tempoc == tempo) {...} effects(x, so)"
    },
    "why": "Off-tempo frames, sustained notes and the hard restart all continue at vibrato: an if/else rejoining at its post-dominator.",
-   "lift": "if/else, no goto"
+   "lift": "if/else, no goto",
+   "transform": "T6"
   },
   {
    "id": "drum-condition",
@@ -113,7 +120,8 @@
     "form": "(fx & FX_DRUM) && v.nfqh[x] && v.notec[x]"
    },
    "why": "Three branches to skydive compose with &&.",
-   "lift": "short-circuit condition"
+   "lift": "short-circuit condition",
+   "transform": "T5"
   },
   {
    "id": "skydive-condition",
@@ -132,7 +140,8 @@
    "why": "Four branches to arpeggio compose with &&.",
    "lift": "short-circuit condition",
    "covered": false,
-   "uncovered": "the song has no skydive instrument; tests/test_commando.py's skydive_vibrato_pwl variant reaches it"
+   "uncovered": "the song has no skydive instrument; tests/test_commando.py's skydive_vibrato_pwl variant reaches it",
+   "transform": "T5"
   },
   {
    "id": "putfreq",
@@ -146,7 +155,8 @@
     "form": "helper"
    },
    "why": "The frequency write is repeated inline at getfreq and arpeggio; the hand C names it.",
-   "lift": "inline (readability choice)"
+   "lift": "inline (readability choice)",
+   "transform": null
   },
   {
    "id": "instrument",
@@ -160,7 +170,8 @@
     "form": "helper"
    },
    "why": "lda instr,x / asl x3 repeated at getinstr and vibrato.",
-   "lift": "inline (readability choice)"
+   "lift": "inline (readability choice)",
+   "transform": null
   },
   {
    "id": "newnote",
@@ -173,7 +184,8 @@
     "form": "function with one call site"
    },
    "why": "steptrack..getinstr is single-entry; the hand C names it and returns 0 for the stop byte.",
-   "lift": "inline (readability choice)"
+   "lift": "inline (readability choice)",
+   "transform": null
   },
   {
    "id": "effects",
@@ -186,7 +198,8 @@
     "form": "function with one call site"
    },
    "why": "vibrato..arpeggio is single-entry; the hand C names it.",
-   "lift": "inline (readability choice)"
+   "lift": "inline (readability choice)",
+   "transform": null
   }
  ]
 }
