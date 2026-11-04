@@ -42,8 +42,7 @@ without hard restart) are read from the code.
 
 The channel routine `$0996` is X-indexed: play calls it with `JSR` for X = 0 and 7, then sets
 X = `$0E` and falls into it, its `RTS` returning from play; init does the same into `$0922`. The
-C calls `voice_play` per voice. `tests/test_structure.py` xfails while the generated C
-specialises the fall-through copy.
+C calls `voice_play` per voice. `tests/test_structure.py` checks the generated C recovers it.
 
 ## Gotos
 

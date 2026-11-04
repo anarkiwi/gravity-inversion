@@ -26,23 +26,10 @@ VOICE_REGS = {
     "incoherent": (0xD40E, 0xD413, 0xD414),
     "automatas": (0xD409, 0xD410),
     "ghouls": (0xD407, 0xD40E),
-    "emomyst": (0xD413, 0xD414),
+    "emomyst": (0xD407, 0xD40E),
 }
-MISSED_VOICES = {
-    "incoherent": "voice 3 falls through into $0996 (init into $0922): copy specialised "
-    "to X=$0E",
-    "automatas": "unrolled voice copies $1022/$1053/$1084, $112A/$11B2/$123A, $12BE+$31k",
-    "ghouls": "unrolled voice copies $6234/$6421/$6610 and their command handlers",
-    "emomyst": "JSR $124D with X=$0E/$07/$00: calls specialised per voice",
-}
-FRAGMENTED = {
-    "incoherent": "joins outlined as functions, e.g. $0BED (hand read_row next:) and $0BF6 "
-    "(hand voice_play regs:)",
-    "automatas": "each voice copy's joins outlined separately",
-    "ghouls": "each voice copy's and command handler's joins outlined separately",
-    "emomyst": "joins outlined as functions where the hand C uses labels "
-    "(wf_arp, vib_slide, filter_prg, pw_prg)",
-}
+MISSED_VOICES = {}
+FRAGMENTED = {}
 OVER_GOTOS = {
     "incoherent": "structuring flags beyond the original's unstructured edges",
 }
