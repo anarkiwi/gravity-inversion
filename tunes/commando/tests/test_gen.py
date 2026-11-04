@@ -16,7 +16,6 @@ from support import (
     assemble,
     gen_prg,
     patched,
-    player_size,
 )
 import mutate
 import sidtrace
@@ -64,10 +63,9 @@ def test_whole_tune_identical(capsys):
 
 
 def test_generated_shape(generated):
-    """Structured C without goto, under twice the playroutine source, quickly made."""
+    """Structured C without goto, quickly made."""
     c, _, _, seconds = generated
     assert not re.search(r"\bgoto\b", c)
-    assert len(c.encode()) < 2 * player_size()
     assert seconds < 10
 
 

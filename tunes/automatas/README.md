@@ -53,5 +53,4 @@ to play calls at the CIA rate. The tests also compare through the arranger loop 
 patched songs: semitone pitch mode, a plain routing byte, high semitone offsets reading
 far past the table, a large detune whose carry is dropped, and an 8580 SID model.
 
-`tests/test_size.py` checks `src/automatas.c` is under twice the size of the jennings
-listing's instruction lines for the image.
+`tests/test_sizes.py` bounds the compiled PRG by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).

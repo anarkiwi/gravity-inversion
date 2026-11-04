@@ -59,5 +59,4 @@ the PSID by `tools/transliterate.py`; `make check` compares it to the tune loop.
 
 ## Size
 
-`tests/test_size.py` checks that `src/commando.c` is under twice the size of the
-original playroutine source, from `TRACK` to the frequency table, comments included.
+`tests/test_sizes.py` bounds the compiled PRG by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).
