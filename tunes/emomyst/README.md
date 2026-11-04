@@ -81,5 +81,4 @@ against `make check` and the variant tests) leaves only equivalent mutants.
 
 ## Size
 
-`tests/test_size.py` checks that `src/emomyst.c` is under twice the size of the
-instruction lines of the jennings listing of the original (`tools/disasm.py`).
+`tests/test_sizes.py` bounds the compiled PRG by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).

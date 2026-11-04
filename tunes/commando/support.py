@@ -2,7 +2,6 @@
 
 import os
 import pathlib
-import re
 import subprocess
 
 from gen_data import generate
@@ -25,12 +24,6 @@ VARIANTS = {
         ("p02", 2, 0x5F),
     ],
 }
-
-
-def player_size():
-    """Bytes of the original playroutine source, `TRACK` to the frequency table."""
-    asm = ASM.read_text(encoding="ascii")
-    return len(re.search(r"^TRACK .*?(?=^freqsh = )", asm, re.S | re.M)[0])
 
 
 def patched(psid, labels, patches):

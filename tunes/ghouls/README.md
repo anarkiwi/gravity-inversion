@@ -70,5 +70,4 @@ every filter command overwrites before the sweep moves).
 
 ## Size
 
-`tests/test_size.py` checks that `src/ghouls.c` is under twice the size of the
-jennings listing of the original's executed code over all subtunes.
+`tests/test_sizes.py` bounds the compiled PRG by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).

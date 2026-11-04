@@ -70,5 +70,4 @@ frequency table (toneportamento carries, speed index 0), a nonzero byte before t
 right column, a wave delay below the counter, vibrato rows between porta rows, and a
 command byte below `$40`.
 
-`tests/test_size.py` checks `src/incoherent.c` is under twice the size of the jennings
-listing's instruction lines for the image.
+`tests/test_sizes.py` bounds the compiled PRG by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).
