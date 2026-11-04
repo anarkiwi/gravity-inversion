@@ -7,7 +7,7 @@ import os
 import tempfile
 
 import numpy as np
-from jennings.coverage import FALLTHRU, TAKEN, CoverageMPU, call
+from jennings.coverage import FALLTHRU, RETURN, TAKEN, CoverageMPU, call
 from jennings.coverage._core import CoverageMap
 from jennings.coverage.cfg import successors
 from jennings.coverage.listing import Listing
@@ -17,6 +17,8 @@ from pysidtracker.emu import run_to_rts
 
 from sidtrace import MAX_CYCLES, default_song, machine, psid_parts, song_calls, songs
 
+RASTER = 0xD012
+
 
 def _image(data):
     load, init, play, image = psid_parts(data)
@@ -25,14 +27,38 @@ def _image(data):
     return mem, (load, load + len(image) - 1), [init, play]
 
 
-def _cover(data, song, frames, path):
+def _init_cover(mpu, init, song, steps=MAX_CYCLES):
+    """Run init under coverage; a raster counter at $D012 advances every 64 steps for polls."""
+    sp = mpu.sp
+    mpu._push_word((RETURN - 1) & 0xFFFF)  # pylint: disable=protected-access
+    mpu.a, mpu.pc = song, init
+    for n in range(steps):
+        mpu.memory[RASTER] = n >> 6 & 0xFF
+        mpu.step()
+        if mpu.pc == RETURN and mpu.sp == sp:
+            return
+    raise RuntimeError(f"init ${init:04X} did not return")
+
+
+def _cover(
+    data, song, frames, path, init_cov=False
+):  # pylint: disable=too-many-arguments
     """Save to `path` the coverage of `frames` play calls after init `song`.
 
-    Init runs on sidtrace's C64 machine; the play calls under coverage on its RAM."""
+    Init runs on sidtrace's C64 machine; the play calls under coverage on its RAM. With
+    `init_cov`, init also runs under coverage, from the loaded image over power-on RAM.
+    """
     load, init, play, image = psid_parts(data)
     mem, native = machine(load, image)
+    mpu = CoverageMPU()
+    if init_cov:
+        mpu.memory = list(bytes(mem.ram))
+        _init_cover(mpu, init, song)
+        cov = mpu.cov
     run_to_rts(native, mem, init, song, MAX_CYCLES)
     mpu = CoverageMPU()
+    if init_cov:
+        mpu.cov = cov
     mpu.memory = list(bytes(mem.ram))
     for _ in range(frames):
         call(mpu, play)
@@ -40,8 +66,10 @@ def _cover(data, song, frames, path):
     return path
 
 
-def coverage(data, frames, song=None, jobs=1):
-    """jennings CoverageMap of init and `frames` play calls.
+def coverage(
+    data, frames, song=None, jobs=1, init=False
+):  # pylint: disable=R0913,R0917
+    """jennings CoverageMap of `frames` play calls (and init, with `init`).
 
     `song` may be a list of subtunes, each run from a fresh image in one of
     `jobs` processes, with coverage merged; `frames` may then be a list of
@@ -56,7 +84,7 @@ def coverage(data, frames, song=None, jobs=1):
         jobs, multiprocessing.get_context("forkserver")
     ) as ex:
         futs = {
-            ex.submit(_cover, data, s, n, os.path.join(tmp, f"{s}.npz")): n
+            ex.submit(_cover, data, s, n, os.path.join(tmp, f"{s}.npz"), init): n
             for s, n in zip(picked, frames)
         }
         for fut in concurrent.futures.as_completed(futs):

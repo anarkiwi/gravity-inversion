@@ -1,0 +1,506 @@
+{
+ "tune": "emomyst",
+ "psid": "fixtures/Emomyst.sid",
+ "frames": 11126,
+ "constructs": [
+  {
+   "id": "voice-calls",
+   "kind": "call",
+   "target": "$124D",
+   "sites": [
+    "$11F4",
+    "$11F9",
+    "$11FE"
+   ],
+   "hand": {
+    "fn": "tune_play",
+    "form": "for (x = 14;; x -= 7) do_track()"
+   },
+   "why": "A real subroutine called per voice with X = $0E, $07, $00.",
+   "lift": "one function with the voice index, three calls"
+  },
+  {
+   "id": "init-voice-loop",
+   "kind": "loop",
+   "head": "$1145",
+   "back": "$1160",
+   "hand": {
+    "fn": "tune_init",
+    "form": "for (x = 14;; x -= 7)"
+   },
+   "why": "A real loop: TXA / SEC / SBC #7 / TAX / BPL.",
+   "lift": "loop"
+  },
+  {
+   "id": "state-clear",
+   "kind": "loop",
+   "head": "$1127",
+   "back": "$112B",
+   "hand": {
+    "fn": "tune_init",
+    "form": "for (r < CLEARED)"
+   },
+   "why": "DEY/BPL clear.",
+   "lift": "loop"
+  },
+  {
+   "id": "sid-clear",
+   "kind": "loop",
+   "head": "$112F",
+   "back": "$1133",
+   "hand": {
+    "fn": "tune_init",
+    "form": "do SIDREG(--r) = 0; while (r)"
+   },
+   "why": "DEY/BPL clear.",
+   "lift": "loop"
+  },
+  {
+   "id": "note_fx.done",
+   "kind": "tail_call",
+   "hand": {
+    "fn": "note_fx",
+    "label": "done"
+   },
+   "why": "Past the wave store $196C the other cases join; $19AB is also a subroutine (tail call).",
+   "lift": "call followed by return (the target is a subroutine)",
+   "covered": false,
+   "uncovered": "the song uses neither gate-off nor portamento note fx; the patched variants in tests/test_emomyst.py reach them",
+   "target": "$19AB",
+   "jumps": [
+    "$195A"
+   ],
+   "falls": [
+    "$19A8"
+   ],
+   "hand_differs": "the hand C writes goto done; done: ins_ptn_fx(); the rule makes an edge into a real procedure a tail call, as ins_ptn_fx's entry records"
+  },
+  {
+   "id": "wf_arp.end",
+   "kind": "goto",
+   "edges": [
+    [
+     "$16D9",
+     "$16EE"
+    ],
+    [
+     "$16EE",
+     "$1776"
+    ],
+    [
+     "$16FD",
+     "$1776"
+    ],
+    [
+     "$1721",
+     "$1776"
+    ]
+   ],
+   "hand": {
+    "fn": "wf_arp",
+    "label": "end"
+   },
+   "why": "Exits to the shared epilogue $1776, past the pitch joins; not the procedure exit.",
+   "lift": "goto",
+   "covered": false,
+   "uncovered": "the song never reads a table jump to a negative row or an arpeggio row $80; the patched variants reach them"
+  },
+  {
+   "id": "wf_arp.pitch",
+   "kind": "goto",
+   "edges": [
+    [
+     "$16F8",
+     "$170B"
+    ]
+   ],
+   "hand": {
+    "fn": "wf_arp",
+    "label": "pitch"
+   },
+   "why": "Past the wave store $1705, which $16F3 and $1703 join.",
+   "lift": "goto"
+  },
+  {
+   "id": "wf_arp.row",
+   "kind": "goto",
+   "edges": [
+    [
+     "$1749",
+     "$16E3"
+    ]
+   ],
+   "hand": {
+    "fn": "wf_arp",
+    "label": "row"
+   },
+   "why": "The chord restart's back edge into a loop that also exits to end and relative.",
+   "lift": "goto",
+   "covered": false,
+   "uncovered": "the song has no chord restart; the patched variants reach it"
+  },
+  {
+   "id": "wf_arp.relative",
+   "kind": "goto",
+   "edges": [
+    [
+     "$175D",
+     "$1760"
+    ],
+    [
+     "$171D",
+     "$1760"
+    ]
+   ],
+   "hand": {
+    "fn": "wf_arp",
+    "label": "relative"
+   },
+   "why": "Entries into the shared sequence $1760 from the chord tail and the arpeggio.",
+   "lift": "goto"
+  },
+  {
+   "id": "wf_arp.absolute",
+   "kind": "goto",
+   "edges": [
+    [
+     "$1725",
+     "$1764"
+    ]
+   ],
+   "hand": {
+    "fn": "wf_arp",
+    "label": "absolute"
+   },
+   "why": "A second entry below $1760.",
+   "lift": "goto"
+  },
+  {
+   "id": "vib_slide.vibrato",
+   "kind": "goto",
+   "edges": [
+    [
+     "$158B",
+     "$1590"
+    ],
+    [
+     "$158D",
+     "$1590"
+    ],
+    [
+     "$1579",
+     "$1590"
+    ]
+   ],
+   "hand": {
+    "fn": "vib_slide",
+    "label": "vibrato"
+   },
+   "why": "$1590 is entered from the increasing vibrato and the expired delay.",
+   "lift": "goto",
+   "covered": false,
+   "uncovered": "the song has no increasing vibrato; the patched variants reach it"
+  },
+  {
+   "id": "vib_slide.down",
+   "kind": "goto",
+   "edges": [
+    [
+     "$1540",
+     "$15A4"
+    ],
+    [
+     "$1565",
+     "$15A4"
+    ]
+   ],
+   "hand": {
+    "fn": "vib_slide",
+    "label": "down"
+   },
+   "why": "The 16-bit subtract $15A4 is shared by slide, portamento and vibrato.",
+   "lift": "goto"
+  },
+  {
+   "id": "vib_slide.up",
+   "kind": "goto",
+   "edges": [
+    [
+     "$1544",
+     "$15BF"
+    ],
+    [
+     "$15BD",
+     "$15BF"
+    ],
+    [
+     "$15A2",
+     "$15BF"
+    ]
+   ],
+   "hand": {
+    "fn": "vib_slide",
+    "label": "up"
+   },
+   "why": "The 16-bit add $15BF is shared by slide, portamento and vibrato.",
+   "lift": "goto"
+  },
+  {
+   "id": "vib_slide.store",
+   "kind": "goto",
+   "edges": [
+    [
+     "$1573",
+     "$15CE"
+    ],
+    [
+     "$15B3",
+     "$15CE"
+    ]
+   ],
+   "hand": {
+    "fn": "vib_slide",
+    "label": "store"
+   },
+   "why": "The store $15CE joins target-reached and subtract.",
+   "lift": "goto"
+  },
+  {
+   "id": "filter_prg.advance",
+   "kind": "goto",
+   "edges": [
+    [
+     "$15DE",
+     "$1649"
+    ]
+   ],
+   "hand": {
+    "fn": "filter_prg",
+    "label": "advance"
+   },
+   "why": "Entry below the set-values top $1630.",
+   "lift": "goto"
+  },
+  {
+   "id": "filter_prg.set_pos",
+   "kind": "goto",
+   "edges": [
+    [
+     "$162E",
+     "$165D"
+    ]
+   ],
+   "hand": {
+    "fn": "filter_prg",
+    "label": "set_pos"
+   },
+   "why": "Entry below $1649.",
+   "lift": "goto",
+   "covered": false,
+   "uncovered": "the song's filter tables jump only to set rows; the patched variants reach it"
+  },
+  {
+   "id": "pw_prg.advance",
+   "kind": "goto",
+   "edges": [
+    [
+     "$1670",
+     "$16AA"
+    ]
+   ],
+   "hand": {
+    "fn": "pw_prg",
+    "label": "advance"
+   },
+   "why": "Entry below the set-value top $169F.",
+   "lift": "goto"
+  },
+  {
+   "id": "pw_prg.write",
+   "kind": "goto",
+   "edges": [
+    [
+     "$1683",
+     "$16BA"
+    ],
+    [
+     "$1688",
+     "$16BA"
+    ],
+    [
+     "$1690",
+     "$16BA"
+    ],
+    [
+     "$1698",
+     "$16BA"
+    ]
+   ],
+   "hand": {
+    "fn": "pw_prg",
+    "label": "write"
+   },
+   "why": "Entries below $16B1.",
+   "lift": "goto",
+   "covered": false,
+   "uncovered": "the song's pulse tables never jump to their own row; the patched variants reach it"
+  },
+  {
+   "id": "pw_prg.set_pos",
+   "kind": "goto",
+   "edges": [
+    [
+     "$169D",
+     "$16B1"
+    ]
+   ],
+   "hand": {
+    "fn": "pw_prg",
+    "label": "set_pos"
+   },
+   "why": "Entry below $16AA.",
+   "lift": "goto"
+  },
+  {
+   "id": "tick0.note",
+   "kind": "goto",
+   "edges": [
+    [
+     "$12AA",
+     "$12BA"
+    ],
+    [
+     "$12AE",
+     "$12BA"
+    ]
+   ],
+   "hand": {
+    "fn": "tick0",
+    "label": "note"
+   },
+   "why": "Past $12B5, which $12A4 and $12B2 join.",
+   "lift": "goto"
+  },
+  {
+   "id": "tune_init.next",
+   "kind": "goto",
+   "edges": [
+    [
+     "$1151",
+     "$115B"
+    ]
+   ],
+   "hand": {
+    "fn": "tune_init",
+    "label": "next"
+   },
+   "why": "The loop's second exit target; the first ($114D BPL and the wrap) is $1158.",
+   "lift": "goto",
+   "covered": false,
+   "uncovered": "the song's orderlists start with no end marker; the patched variants reach it"
+  },
+  {
+   "id": "seq_read",
+   "kind": "per_voice_paths",
+   "pcs": [
+    "$17CE",
+    "$17D2",
+    "$17D6"
+   ],
+   "hand": {
+    "fn": "seq_read",
+    "form": "seq_ptr[voice]"
+   },
+   "why": "CPX #7 picks one of three per-voice LDA base,Y paths whose bases the relocator patches.",
+   "lift": "one access indexed by voice"
+  },
+  {
+   "id": "set_slide",
+   "kind": "multi_entry",
+   "edges": [
+    [
+     "$1AB0",
+     "$1AB4"
+    ],
+    [
+     "$1AB2",
+     "$1AB4"
+    ],
+    [
+     "$1ABF",
+     "$1AB4"
+    ]
+   ],
+   "hand": {
+    "fn": "set_slide",
+    "form": "set_slide(0x80 + fx, a)"
+   },
+   "why": "Three entries load Y = $81/$82/$83 and share the tail $1AB4.",
+   "lift": "one function taking the type"
+  },
+  {
+   "id": "note-fx-dispatch",
+   "kind": "switch",
+   "dispatch": "$1951",
+   "hand": {
+    "fn": "note_fx",
+    "form": "switch (a)"
+   },
+   "why": "A BCC whose offset is written from the table $18B9 by the note: a computed dispatch.",
+   "lift": "switch"
+  },
+  {
+   "id": "note-fx-dispatch-cell",
+   "kind": "smc",
+   "writer": "$194A",
+   "cell": "$1952",
+   "reader": "$1951",
+   "hand": {
+    "fn": "note_fx",
+    "form": "the switch selector"
+   },
+   "why": "The branch offset is the dispatch target.",
+   "lift": "variable"
+  },
+  {
+   "id": "ins_ptn_fx",
+   "kind": "tail_call",
+   "target": "$19AB",
+   "sites": [
+    "$1421",
+    "$1459",
+    "$151A"
+   ],
+   "jumps": [
+    "$1943",
+    "$195A",
+    "$196F"
+   ],
+   "falls": [
+    "$19A8"
+   ],
+   "hand": {
+    "fn": "ins_ptn_fx",
+    "form": "function, called and reached by goto done"
+   },
+   "why": "A subroutine the code also enters by JMP and fall-through: the 6502 tail call.",
+   "lift": "function; jumps and fall-through become calls followed by return",
+   "covered": false,
+   "uncovered": "the song uses neither gate-off nor portamento note fx, which enter $19AB by jump; the patched variants reach them",
+   "hand_differs": "the hand C reaches it from note_fx by goto done rather than as a call"
+  },
+  {
+   "id": "arp-cell",
+   "kind": "smc",
+   "writer": "$1713",
+   "cell": "$171C",
+   "reader": "$171B",
+   "hand": {
+    "fn": "wf_arp",
+    "form": "arp"
+   },
+   "why": "The arpeggio value is kept in LDA #'s operand.",
+   "lift": "variable"
+  }
+ ]
+}

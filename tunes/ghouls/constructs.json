@@ -1,0 +1,169 @@
+{
+ "tune": "ghouls",
+ "psid": "fixtures/Ghouls_n_Ghosts.sid",
+ "songs": [
+  0,
+  11
+ ],
+ "frames": 3000,
+ "constructs": [
+  {
+   "id": "voice-copies",
+   "kind": "unrolled",
+   "copies": [
+    "$6234",
+    "$6421",
+    "$6610"
+   ],
+   "inserted": [
+    "$65C7",
+    "$67B6"
+   ],
+   "insns": 200,
+   "hand": {
+    "fn": "tune_play",
+    "form": "for (v < 3) play_voice(v)"
+   },
+   "why": "No loop: three copies chained by JMP, identical up to operand strides (+1 zp, +2 zp words, +7 SID, +$1ED/$1EF own operands) and a CMP #v that voice 0 omits.",
+   "lift": "one function with the voice index"
+  },
+  {
+   "id": "command-dispatch-0",
+   "kind": "switch",
+   "dispatch": "$6374",
+   "hand": {
+    "fn": "read_pattern",
+    "form": "switch (b)"
+   },
+   "why": "JMP whose operand is written from the split tables $6C37/$6C76,X.",
+   "lift": "switch over the table extent, trap beyond"
+  },
+  {
+   "id": "command-dispatch-1",
+   "kind": "switch",
+   "dispatch": "$6561",
+   "hand": {
+    "fn": "read_pattern",
+    "form": "switch (b)"
+   },
+   "why": "Voice 1's copy of the dispatch.",
+   "lift": "the same switch, voice-indexed"
+  },
+  {
+   "id": "command-dispatch-2",
+   "kind": "switch",
+   "dispatch": "$6750",
+   "hand": {
+    "fn": "read_pattern",
+    "form": "switch (b)"
+   },
+   "why": "Voice 2's copy of the dispatch.",
+   "lift": "the same switch, voice-indexed"
+  },
+  {
+   "id": "hard-restart-condition",
+   "kind": "short_circuit",
+   "branches": [
+    "$623D",
+    "$6241"
+   ],
+   "target": "$6258",
+   "hand": {
+    "fn": "play_voice",
+    "form": "if (zp.hr_count[v] && !--zp.hr_count[v])"
+   },
+   "why": "BEQ and BNE to the same target compose with &&.",
+   "lift": "short-circuit condition",
+   "covered": false,
+   "uncovered": "the songs have no hard restart longer than one frame; tests/test_ghouls.py's PATTERN variant reaches it"
+  },
+  {
+   "id": "effect-list",
+   "kind": "loop",
+   "head": "$61E9",
+   "back": "$622B",
+   "hand": {
+    "fn": "effect_init",
+    "form": "while (!((v = peek(p + y)) & 0x80))"
+   },
+   "why": "Walks the effect's voice list.",
+   "lift": "loop"
+  },
+  {
+   "id": "effect-operand-patch",
+   "kind": "smc",
+   "writer": "$61FF",
+   "cell": "$6219",
+   "reader": "$6218",
+   "hand": {
+    "fn": "effect_init",
+    "form": "zp/operand state per voice v"
+   },
+   "why": "Patches the operand of STA $640F to address the selected voice copy's operand, through the table $622E/$6231.",
+   "lift": "per-copy state indexed by voice"
+  },
+  {
+   "id": "copy-block",
+   "kind": "loop",
+   "head": "$29C6",
+   "back": "$29D4",
+   "hand": {
+    "fn": "copy_block",
+    "form": "for (k = 0; k != len; ++k)"
+   },
+   "why": "Copies song blocks within RAM.",
+   "lift": "loop"
+  },
+  {
+   "id": "sid-clear",
+   "kind": "loop",
+   "head": "$61AA",
+   "back": "$61B5",
+   "hand": {
+    "fn": "music_init",
+    "form": "while (r--)"
+   },
+   "why": "DEY/BPL writing 8 then 0 to each SID register.",
+   "lift": "loop"
+  },
+  {
+   "id": "zp-clear",
+   "kind": "loop",
+   "head": "$61B9",
+   "back": "$61BD",
+   "hand": {
+    "fn": "music_init",
+    "form": "for (r < sizeof zp)"
+   },
+   "why": "Clears the zero-page state.",
+   "lift": "loop"
+  },
+  {
+   "id": "init-zp-clear",
+   "kind": "loop",
+   "head": "$6114",
+   "back": "$6119",
+   "hand": {
+    "fn": "tune_init",
+    "form": "for (i <= offsetof(gate_off))"
+   },
+   "why": "Clears zero page $21-$90.",
+   "lift": "loop"
+  },
+  {
+   "id": "voice-pointer-stores",
+   "kind": "unrolled_stores",
+   "pcs": [
+    "$6174",
+    "$6176",
+    "$6178"
+   ],
+   "hand": {
+    "fn": "music_init",
+    "form": "for (v < 3)"
+   },
+   "why": "Per-voice stores unrolled (STY $7b/$7c/$7d).",
+   "lift": "unrolled stores or a loop"
+  }
+ ]
+}
