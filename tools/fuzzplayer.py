@@ -5,10 +5,23 @@ writes); the style decides how the 6502 reaches it per voice, as real players do
 translation is known: one voice routine and no unstructured edges."""
 
 import argparse
+import re
 
 import numpy as np
 
-STYLES = ("loop", "jsr3", "fallthrough", "unrolled", "smc")
+MOTIFS = (
+    "rti",
+    "brk",
+    "stackswitch",
+    "inlineargs",
+    "skip",
+    "decimal",
+    "rmw",
+    "vflag",
+    "indx",
+    "jam",
+)
+STYLES = ("loop", "jsr3", "fallthrough", "unrolled", "smc") + MOTIFS
 STATE = 0x3000
 VOICE = 7
 HEADER = """!cpu 6510
@@ -98,6 +111,122 @@ def emit(stmts, v, tag):
     return lines
 
 
+def _f(f):
+    return f"${STATE + f * 0x20:04x},X"
+
+
+def motif(name, rng):  # pylint: disable=too-many-return-statements
+    """(voice body lines, subroutines, init lines) exercising instruction class `name`."""
+    f, g, k = int(rng.integers(4)), int(rng.integers(4)), int(rng.integers(1, 0x40))
+    bump = [f"LDA {_f(g)}", "CLC", f"ADC #${k:02x}", f"STA {_f(g)}"]
+    if name == "rti":
+        code = (
+            [
+                f"LDA {_f(f)}",
+                "AND #1",
+                "TAY",
+                "LDA mrh,Y",
+                "PHA",
+                "LDA mrl,Y",
+                "PHA",
+                "PHP",
+                "RTI",
+                "mr0:",
+            ]
+            + bump
+            + ["JMP mrj", "mr1:", f"INC {_f(g)}", "mrj:"]
+        )
+        return code, ["mrl: !byte <mr0, <mr1", "mrh: !byte >mr0, >mr1"], []
+    if name == "brk":
+        handler = ["mbrk:"] + bump + ["RTI"]
+        init = [
+            "LDA #$35",
+            "STA $01",
+            "LDA #<mbrk",
+            "STA $fffe",
+            "LDA #>mbrk",
+            "STA $ffff",
+        ]
+        return ["BRK", "!byte $ea"], handler, init
+    if name == "stackswitch":
+        code = ["STX mx", "TSX", "STX msp", "LDX mx", "JSR mdeep", "mafter:"]
+        subs = (
+            ["mdeep:", "JSR mdeeper", "RTS", "mdeeper:"]
+            + bump
+            + ["LDX msp", "TXS", "LDX mx", "JMP mafter", "mx: !byte 0", "msp: !byte 0"]
+        )
+        return code, subs, []
+    if name == "inlineargs":
+        sub = [
+            "marg:",
+            "PLA",
+            "STA $f0",
+            "PLA",
+            "STA $f1",
+            "LDY #1",
+            "LDA ($f0),Y",
+            "CLC",
+            f"ADC {_f(g)}",
+            f"STA {_f(g)}",
+            "LDA $f0",
+            "CLC",
+            "ADC #1",
+            "TAY",
+            "LDA $f1",
+            "ADC #0",
+            "PHA",
+            "TYA",
+            "PHA",
+            "RTS",
+        ]
+        return ["JSR marg", f"!byte ${k:02x}"], sub, []
+    if name == "skip":
+        code = [
+            f"LDA {_f(f)}",
+            "AND #1",
+            "BEQ ms1",
+            f"LDA #${k:02x}",
+            "!byte $2c",
+            "ms1:",
+            f"LDA #${k + 0x40:02x}",
+            f"STA {_f(g)}",
+        ]
+        return code, [], []
+    if name == "decimal":
+        return ["SED"] + bump + ["CLD"], [], []
+    if name == "rmw":
+        code = [
+            "mc:",
+            f"LDA #${k:02x}",
+            f"STA {_f(g)}",
+            "ISC mc+1",
+            f"LDA #${k:02x}",
+            f"DCP {_f(f)}",
+            "BNE mr",
+            f"INC {_f(g)}",
+            "mr:",
+        ]
+        return code, [], []
+    if name == "vflag":
+        code = (
+            [f"LDA {_f(f)}", "STA $f2", "BIT $f2", "BVC mv", "BMI mv"] + bump + ["mv:"]
+        )
+        return code, [], []
+    if name == "indx":
+        init = []
+        for v in range(3):
+            init += [
+                f"LDA #<${STATE + g * 0x20 + VOICE * v:04x}",
+                f"STA ${0x40 + VOICE * v:02x}",
+                f"LDA #>${STATE + g * 0x20 + VOICE * v:04x}",
+                f"STA ${0x41 + VOICE * v:02x}",
+            ]
+        code = ["LDA ($40,X)", "CLC", f"ADC #${k:02x}", "STA ($40,X)"]
+        return code, [], init
+    code = [f"LDA ${STATE + 0x1F0:04x}", "BEQ mok", "!byte $02", "mok:"] + bump
+    return code, [], []
+
+
 def player(style, seed, fields=4):
     """ACME source of a PSID whose voice routine is dispatched in `style`."""
     rng = np.random.default_rng(seed)
@@ -115,7 +244,16 @@ def player(style, seed, fields=4):
             play += [f"copy{k}:"] + emit(stmts, Voice(style, k, rng), f"c{k}_")
             play += [f"JMP copy{k + 1}"] if k < 2 else ["RTS"]
     else:
-        voice = ["voice:"] + emit(stmts, Voice(style, 0, rng), "v") + ["RTS"]
+        subs = []
+        code = emit(stmts, Voice(style, 0, rng), "v")
+        if style in MOTIFS:
+            body_lines, subs, extra = motif(style, rng)
+            at = int(rng.integers(len(code) + 1))
+            while at < len(code) and code[at].endswith(":"):
+                at += 1
+            code = code[:at] + body_lines + code[at:]
+            init += extra
+        voice = ["voice:"] + code + ["RTS"] + subs
         calls = {
             "loop": [
                 "LDX #14",
@@ -139,9 +277,9 @@ def player(style, seed, fields=4):
             ],
             "fallthrough": ["LDX #0", "JSR voice", "LDX #7", "JSR voice", "LDX #14"],
         }
-        play = calls[style] + voice
+        play = calls.get(style, calls["loop"]) + voice
     lines = ["init:"] + init + ["RTS", "play:"] + play
-    text = "\n".join(l if l.endswith(":") else f"        {l}" for l in lines)
+    text = "\n".join(l if re.match(r"\w+:", l) else f"        {l}" for l in lines)
     return f"{HEADER}{text}\n}}\n"
 
 
