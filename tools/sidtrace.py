@@ -50,21 +50,51 @@ def psid_parts(data):
     )
 
 
-def _log(mpu):
-    """pysidtracker's per-call SID write log, kept as (register, value)."""
-    log = SidWriteLog(mpu)
-    return log, lambda: [[(w[0], w[3]) for w in call] for call in log.calls]
+class _CycleLog(SidWriteLog):
+    """SidWriteLog that also keeps each write's cycle from the start of its call."""
+
+    def __init__(self, mpu):
+        self.starts = []
+        super().__init__(mpu)
+
+    def _write(self, addr, value):
+        super()._write(addr, value)
+        if self.calls:
+            call = self.calls[-1]
+            call[-1] = (*call[-1], self.mpu.processorCycles - self.starts[-1])
+
+    def start(self):
+        self.starts.append(self.mpu.processorCycles)
+        return super().start()
+
+
+def _log(mpu, detail=False):
+    """pysidtracker's per-call SID write log, kept as (register, value), with `detail`
+    as (register, value, cycle of the storing instruction from the call's start, its pc).
+    """
+    log = _CycleLog(mpu)
+    keep = (lambda w: (w[0], w[3], w[4], w[2])) if detail else (lambda w: (w[0], w[3]))
+    return log, lambda: [[keep(w) for w in call] for call in log.calls]
 
 
 def trace_psid(  # pylint: disable=too-many-arguments
-    data, frames, watch=None, on_watch=None, song=None, *, poke=None, sid_model="6581"
+    data,
+    frames,
+    watch=None,
+    on_watch=None,
+    song=None,
+    *,
+    poke=None,
+    sid_model="6581",
+    detail=False,
 ):
     """SID writes of init then `frames` play calls: a list per frame, init first.
 
-    Writes to `watch` addresses are passed to on_watch(frame, addr, value)."""
+    Writes to `watch` addresses are passed to on_watch(frame, addr, value); with
+    `detail` each write also carries its cycle from the start of its call and its pc."""
     load, init, play, image = psid_parts(data)
     mem, mpu = machine(load, image, poke, sid_model)
-    log, writes = _log(mpu)
+    log, writes = _log(mpu, detail)
     if watch:
         mem.subscribe_to_write(
             watch, lambda addr, value: on_watch(len(log.calls) - 1, addr, value)
@@ -76,16 +106,24 @@ def trace_psid(  # pylint: disable=too-many-arguments
     return writes()
 
 
-def trace_prg(prg, frames, song=0, *, poke=None, sid_model="6581"):
+def trace_prg(  # pylint: disable=too-many-arguments
+    prg, frames, song=0, *, poke=None, sid_model="6581", watch=None, on_watch=None
+):
     """SID writes of a C build: frame n holds the writes after its n-th frame_wait.
 
     `prg` links c64/driver.c, with symbols in `prg`.elf; the harness sets
-    song_number on entry to main and returns from each frame_wait at once."""
+    song_number on entry to main and returns from each frame_wait at once.
+    `watch` is a function of the symbol table giving addresses whose writes are
+    passed to on_watch(frame, addr, value)."""
     _, syms = load_elf(f"{prg}.elf")
     with open(prg, "rb") as f:
         data = f.read()
     mem, mpu = machine(data[0] | data[1] << 8, data[2:], poke, sid_model)
     log, writes = _log(mpu)
+    if watch:
+        mem.subscribe_to_write(
+            watch(syms), lambda addr, value: on_watch(len(log.calls) - 1, addr, value)
+        )
     mpu.pc = syms["_start"]
     assert mpu.run_until(max_cycles=MAX_CYCLES, stop_pcs=[syms["main"]]) == "pc"
     mem[syms["song_number"]] = song
