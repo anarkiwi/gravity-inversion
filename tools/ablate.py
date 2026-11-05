@@ -333,7 +333,8 @@ def _split(node, env):
 
 def constant_addresses(unit, ctx):
     """rd()/wr() of a constant address, or a constant plus a byte, index the region array
-    holding every address it can reach; wr() only where the bitmap marks each as data.
+    holding every address it can reach; wr() only where the bitmap marks each as data (every
+    byte past the bitmap is data).
     """
     edits = []
     for f in set(unit.fns) - {"rd", "wr", "codechk"}:
@@ -352,7 +353,8 @@ def constant_addresses(unit, ctx):
             bits = ctx.inits.get(f"{arr}_DATA")
             if name == "wr" and bits is not None:
                 if not all(
-                    bits[(x - org) >> 3] >> ((x - org) & 7) & 1
+                    (x - org) >> 3 >= len(bits)
+                    or bits[(x - org) >> 3] >> ((x - org) & 7) & 1
                     for x in range(a, hi + 1)
                 ):
                     continue
