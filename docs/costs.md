@@ -20,8 +20,8 @@ records each that remains, with its cause, as a strict xfail. The size bounds th
 |---|---|---|
 | Commando | none | |
 | Incoherent | none | |
-| Automatas | K1, K2, K3, K5 | band, row and sidTAB copies keep their voice's state in their own operands, `$31` and `$88` apart, the offsets computed in 16 bits; per-copy constants not affine in the voice |
-| Ghouls | K1, K2, K3, K5, K6 | voice copies' zero-page fields (+1, +2), own operands (+`$1ED`) and SID registers (+7); `CMP #v` and handler tables per voice |
+| Automatas | K1, K2, K5 | copies `$88` apart: the stride does not fit 8 bits, so it is multiplied and the copies' fields indexed in 16 bits; song-data reads through each copy's own operand pointer go through `rd` |
+| Ghouls | K1, K2, K3, K5, K6 | song-data reads through each voice's zero-page pointer go through `rd`; copies' operands `$1ED`/`$1EF` apart indexed in 16 bits; per-voice comparisons |
 | Emomyst | K1, K5 | the relocator's `LDA $1111,Y` at `$1163` through its written operand, called with Y = 0 and 1; the relocator's `($02),Y` stores into the image, indexed by the 16-bit pointer |
 
 ## Fuzz players
@@ -33,5 +33,5 @@ ideal is known by construction. What they show beyond the tunes:
 |---|---|---|
 | `loop` and the instruction-class motifs | K6 | `STA $D4xx,X` always makes a dummy read; X steps 14, 7, 0 by `SBC #7`, which the analysis does not bound, so the read may reach `$D419-$D41C` |
 | every simple style, seed 2 | K2 | three statements loading fields `$20` apart fold as an instance class `f(..., k)`: a coincidental fold, costing a multiply the plain code does not have |
-| `unrolled` | K2, K5 | the copies' state offsets multiplied by the copy index and indexed in 16 bits |
-| `smc` | K1, K2, K3, K5 | the copies' operand cells through `rd`/`wr`, the copy offsets multiplied and indexed in 16 bits, per-copy constants as select-sums |
+| `unrolled` | K2 | the copies' state offset multiplied by the copy index |
+| `smc` | K2, K3 | the copy offset multiplied by the copy index; per-copy constants compared with the index |
