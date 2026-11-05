@@ -17,8 +17,7 @@ DUMMY = "dummy reads of indices and pointers the analysis cannot bound"
 MISSED = {
     ("automatas", "K1"): INSTANCE,
     ("automatas", "K2"): INSTANCE,
-    ("automatas", "K3"): "per-copy constants as select-sums",
-    ("automatas", "K5"): "the copies' offsets ($31, $88 per voice) computed in 16 bits",
+    ("automatas", "K5"): "the copies' offsets ($88 per voice) computed in 16 bits",
     ("ghouls", "K1"): INSTANCE,
     ("ghouls", "K2"): INSTANCE,
     ("ghouls", "K3"): "per-copy constants as select-sums",
@@ -56,8 +55,8 @@ FUZZ_MISSED = (
         }.items()
         for n in seeds
     }
-    | {(k, "unrolled", n): INSTANCE for k in ("K2", "K5") for n in SEEDS}
-    | {(k, "smc", n): INSTANCE for k in ("K1", "K2", "K5") for n in SEEDS}
+    | {("K2", "unrolled", n): INSTANCE for n in SEEDS}
+    | {("K2", "smc", n): INSTANCE for n in SEEDS}
     | {("K3", "smc", n): "per-copy constants as select-sums" for n in SEEDS}
 )
 
