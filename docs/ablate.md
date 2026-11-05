@@ -37,23 +37,25 @@ hand-equivalent needs the accessed bytes: operands accessed plus data accessed.
 ## Results
 
 `.text` bytes after each step, cumulative, with its delta; every exact step verified on every
-tune (`--verify`, default song over its HVSC length). deity-informant 0.17.0, llvm-mos SDK
-v23.4.0, `-Os`.
+tune (`--verify`, default song over its HVSC length). deity-informant 0.18.0, llvm-mos SDK
+v23.4.0, `-Os`. The lift folds each init's decided run into the starting data
+(`init=0`, [transliterate.py](../tools/transliterate.py)): Emomyst's relocator and state clear
+are evaluated there, so no dead init loop is left for the step to remove.
 
 | Step | Kind | Commando | Incoherent | Automatas | Ghouls | Emomyst |
 |---|---|---|---|---|---|---|
-| baseline | exact | 2511 | 3421 | 4206 | 7091 | 7777 |
-| identity returns | exact | 2511 (+0) | 3421 (+0) | 4206 (+0) | 7091 (+0) | 7700 (-77) |
-| rd() direct | representative | 2393 (-118) | 2839 (-582) | 3435 (-771) | 6923 (-168) | 7635 (-65) |
-| wr(), codechk(), guards direct | representative | 2393 (+0) | 2839 (+0) | 3435 (+0) | 6012 (-911) | 7023 (-612) |
-| zero-page pointer reads take Y | exact | 2327 (-66) | 2784 (-55) | 3435 (+0) | 5947 (-65) | 6422 (-601) |
-| cells stored once with a constant | exact | 2327 (+0) | 2784 (+0) | 3435 (+0) | 5947 (+0) | 6296 (-126) |
-| cells play never writes | exact | 2317 (-10) | 2784 (+0) | 3390 (-45) | 5947 (+0) | 6109 (-187) |
-| byte switch | exact | 2317 (+0) | 2780 (-4) | 3390 (+0) | 5947 (+0) | 6028 (-81) |
-| dead init loops | exact | 2317 (+0) | 2780 (+0) | 3390 (+0) | 5947 (+0) | 5690 (-338) |
-| alike branches merged | exact | 2317 (+0) | 2780 (+0) | 3390 (+0) | 5947 (+0) | 5582 (-108) |
+| baseline | exact | 2510 | 3421 | 4204 | 7091 | 7229 |
+| identity returns | exact | 2510 (+0) | 3421 (+0) | 4204 (+0) | 7091 (+0) | 7239 (+10) |
+| rd() direct | representative | 2392 (-118) | 2839 (-582) | 3433 (-771) | 6923 (-168) | 6204 (-1035) |
+| wr(), codechk(), guards direct | representative | 2392 (+0) | 2839 (+0) | 3433 (+0) | 6012 (-911) | 6204 (+0) |
+| zero-page pointer reads take Y | exact | 2326 (-66) | 2784 (-55) | 3433 (+0) | 5947 (-65) | 5619 (-585) |
+| cells stored once with a constant | exact | 2326 (+0) | 2784 (+0) | 3433 (+0) | 5947 (+0) | 5619 (+0) |
+| cells play never writes | exact | 2316 (-10) | 2784 (+0) | 3394 (-39) | 5947 (+0) | 5359 (-260) |
+| byte switch | exact | 2316 (+0) | 2780 (-4) | 3394 (+0) | 5947 (+0) | 5249 (-110) |
+| dead init loops | exact | 2316 (+0) | 2780 (+0) | 3394 (+0) | 5947 (+0) | 5249 (+0) |
+| alike branches merged | exact | 2316 (+0) | 2780 (+0) | 3394 (+0) | 5947 (+0) | 5175 (-74) |
 | hand | | 1534 | 2721 | 2773 | 3670 | 4608 |
-| residual | | +783 | +59 | +617 | +2277 | +974 |
+| residual | | +782 | +59 | +621 | +2277 | +567 |
 
 Code-kept regions, bytes:
 
@@ -68,12 +70,17 @@ Code-kept regions, bytes:
 | Automatas | C4 | $177F | 6193 | 0 | 0 | 5632 | 561 | 0 |
 | Ghouls | C0 | $0000 | 256 | 1 | 0 | 123 | 132 | 0 |
 | Ghouls | C1 | $2980 | 24206 | 2789 | 72 | 12309 | 9108 | 2226 |
-| Emomyst | C0 | $1000 | 5282 | 2173 | 85 | 2157 | 952 | 403 |
+| Emomyst | C0 | $101C | 398 | 204 | 7 | 121 | 73 | 0 |
+| Emomyst | C1 | $11AB | 25 | 0 | 0 | 1 | 24 | 0 |
+| Emomyst | C2 | $1788 | 1 | 1 | 1 | 0 | 0 | 0 |
+| Emomyst | C3 | $17FE | 468 | 194 | 4 | 168 | 106 | 0 |
+| Emomyst | C4 | $19F0 | 16 | 0 | 0 | 7 | 9 | 0 |
+| Emomyst | C5 | $1A6E | 2846 | 43 | 2 | 1860 | 943 | 0 |
 
 Data sections, bytes:
 
 | | Commando | Incoherent | Automatas | Ghouls | Emomyst |
 |---|---|---|---|---|---|
-| generated | 2143 | 5852 | 7610 | 30288 | 5768 |
-| after the last step | 2143 | 5841 | 7602 | 28058 | 5340 |
+| generated | 2143 | 5852 | 7610 | 30288 | 3894 |
+| after the last step | 2143 | 5841 | 7603 | 28058 | 3811 |
 | hand | 1963 | 5839 | 6832 | 30523 | 2862 |

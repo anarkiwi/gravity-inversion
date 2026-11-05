@@ -23,10 +23,12 @@ MISSED = {
 
 @functools.cache
 def provenance(tune):
-    """cgen's provenance of the tune's generated C."""
+    """cgen's provenance of the tune's generated C, with the instructions its folded init
+    ran at lift time (`folded`)."""
     m = constructs.load(tune)
     _, _, info = transliterate((constructs.ROOT / m["psid"]).read_bytes(), "t.h")
-    return info["provenance"]
+    folded = [pc for pc, _ in (info["init"] or {}).get("code", ())]
+    return {**info["provenance"], "folded": folded}
 
 
 def _entries():
@@ -63,7 +65,7 @@ def lifted(c, prov):  # pylint: disable=too-many-return-statements
     """True if the generated C has the construct in the form the hand C gives it."""
     k, gotos = c["kind"], {tuple(e) for e in prov["gotos"]}
     if k == "loop":
-        return c["head"] in prov["loops"]
+        return c["head"] in prov["loops"] or c["head"] in prov["folded"]
     if k == "multi_entry_loop":
         return c["head"] in prov["loops"] and not {tuple(e) for e in c["edges"]} & gotos
     if k in ("call", "fall_call", "tail_call"):

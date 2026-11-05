@@ -1,7 +1,8 @@
-"""Translate a PSID's playroutine to C with vagrant-moses' cgen (deity-informant).
+"""Translate a PSID's playroutine to C with deity-informant's cgen and vagrant-moses' C64 model.
 
 Writes the player and C64 host (`tune_init`/`tune_play` for c64/driver.c) to OUT.c and
-the song data to the header."""
+the song data to the header. Init is called once, before any play call, as c64/driver.c
+does: its run is folded into the song data where it is the same for every song."""
 
 import argparse
 import os
@@ -9,8 +10,9 @@ import pathlib
 import subprocess
 import sys
 
+from deity_informant import cgen
 from vagrant_moses.c64 import poweron_ram
-from vagrant_moses.cgen import translate_c64
+from vagrant_moses.cgen import ENTRIES, HOST, SENSITIVE, VOLATILE
 
 from sidtrace import psid_parts
 
@@ -22,9 +24,16 @@ def transliterate(psid, header):
     load, init, play, image = psid_parts(psid)
     ram = bytearray(poweron_ram())
     ram[load : load + len(image)] = image
-    return translate_c64(
-        ram, init, play, loaded=(load, load + len(image)), header=header
+    c, h, info = cgen.translate(
+        ram,
+        list(zip((init, play), ENTRIES)),
+        VOLATILE,
+        SENSITIVE,
+        loaded=(load, load + len(image)),
+        header=header,
+        init=0,
     )
+    return c + HOST, h, info
 
 
 def build(psid, out_dir, name="gen", flags=()):

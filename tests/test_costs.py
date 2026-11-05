@@ -21,13 +21,6 @@ MISSED = {
     ("ghouls", "K3"): "per-copy constants as select-sums",
     ("ghouls", "K5"): "region indices computed in 16 bits",
     ("ghouls", "K6"): DUMMY,
-    ("emomyst", "K1"): "the relocator's LDA $1111,Y at $1163 reads through its written "
-    "operand, called with Y = 0 and 1",
-    (
-        "emomyst",
-        "K5",
-    ): "the relocator's ($02),Y stores into the image, indexed by the 16-bit "
-    "pointer",
 }
 
 SEEDS = range(3)
