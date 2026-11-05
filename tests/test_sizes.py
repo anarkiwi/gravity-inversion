@@ -34,13 +34,25 @@ MISSED = {
     ("generated", "incoherent", "code"): RD,
     ("generated", "automatas", "code"): WR,
     ("generated", "ghouls", "code"): f"{WR} and {DUMMY}",
-    ("generated", "emomyst", "code"): WR,
+    (
+        "generated",
+        "emomyst",
+        "code",
+    ): "rd() for song-data reads through zero-page pointers "
+    "loaded from split tables a song byte indexes, passing 16-bit addresses, and cells init "
+    "writes after its SID clear",
     ("generated", "commando", "data"): f"{CODE}, and R1 spans bytes past the image "
     "nothing writes",
     ("generated", "ghouls", "data"): f"{CODE}, and the music init's block copy ($29C6) "
     "writes each song's data to $730E and $914F-$9614: RAM regions spanning every song's copy",
     ("generated", "automatas", "data"): f"{CODE}, with {BITMAP}",
-    ("generated", "emomyst", "data"): f"{CODE}, with {BITMAP}",
+    (
+        "generated",
+        "emomyst",
+        "data",
+    ): "C0, C3 and C5 hold 442 instruction bytes that voice "
+    "state accesses ($1028,X ...) reach with the voice index unbounded, and the rd() pointer "
+    "reads keep every other byte of the image as data",
 }
 
 

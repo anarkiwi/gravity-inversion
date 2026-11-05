@@ -43,7 +43,7 @@
     "form": "for (r < CLEARED)"
    },
    "why": "DEY/BPL clear.",
-   "lift": "loop",
+   "lift": "evaluated at lift time: the init run folds into the starting memory",
    "transform": "T4"
   },
   {
@@ -56,7 +56,7 @@
     "form": "do SIDREG(--r) = 0; while (r)"
    },
    "why": "DEY/BPL clear.",
-   "lift": "loop",
+   "lift": "evaluated at lift time: the init run folds into the starting memory",
    "transform": "T4"
   },
   {

@@ -22,7 +22,7 @@ records each that remains, with its cause, as a strict xfail. The size bounds th
 | Incoherent | none | |
 | Automatas | K1, K5 | copies `$88` apart: the offsets do not fit 8 bits, so the copies' fields are indexed in 16 bits; song-data reads through each copy's own operand pointer go through `rd` |
 | Ghouls | K1, K3, K5, K6 | song-data reads through each voice's zero-page pointer go through `rd`; copies' operands `$1ED`/`$1EF` apart indexed in 16 bits; per-voice comparisons |
-| Emomyst | K1, K5 | the relocator's `LDA $1111,Y` at `$1163` through its written operand, called with Y = 0 and 1; the relocator's `($02),Y` stores into the image, indexed by the 16-bit pointer |
+| Emomyst | none | the init's relocator runs once at lift time: its operands are constants and its code is not translated |
 
 ## Fuzz players
 
