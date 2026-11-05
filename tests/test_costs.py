@@ -16,10 +16,8 @@ INSTANCE = "folded copies' state addressed as base + stride * k"
 DUMMY = "dummy reads of indices and pointers the analysis cannot bound"
 MISSED = {
     ("automatas", "K1"): INSTANCE,
-    ("automatas", "K2"): INSTANCE,
     ("automatas", "K5"): "the copies' offsets ($88 per voice) computed in 16 bits",
     ("ghouls", "K1"): INSTANCE,
-    ("ghouls", "K2"): INSTANCE,
     ("ghouls", "K3"): "per-copy constants as select-sums",
     ("ghouls", "K5"): "region indices computed in 16 bits",
     ("ghouls", "K6"): DUMMY,
@@ -33,32 +31,7 @@ MISSED = {
 }
 
 SEEDS = range(3)
-SIMPLE = ("loop", "jsr3", "fallthrough") + fuzzplayer.MOTIFS
-FALSE_FOLD = "statements on fields $20 apart fold as a coincidental instance class"
-DUMMY_FUZZ = "dummy reads of a voice index the analysis does not bound"
-FUZZ_MISSED = (
-    {("K2", s, 2): FALSE_FOLD for s in SIMPLE}
-    | {
-        ("K6", s, n): DUMMY_FUZZ
-        for s, seeds in {
-            "loop": (1, 2),
-            "rti": (0, 1, 2),
-            "brk": (0, 1, 2),
-            "stackswitch": (1, 2),
-            "inlineargs": (2,),
-            "skip": (1, 2),
-            "decimal": (2,),
-            "rmw": (1, 2),
-            "vflag": (1, 2),
-            "indx": (0, 1, 2),
-            "jam": (0, 1, 2),
-        }.items()
-        for n in seeds
-    }
-    | {("K2", "unrolled", n): INSTANCE for n in SEEDS}
-    | {("K2", "smc", n): INSTANCE for n in SEEDS}
-    | {("K3", "smc", n): "per-copy constants as select-sums" for n in SEEDS}
-)
+FUZZ_MISSED = {}
 
 
 def _write(out, c, h):

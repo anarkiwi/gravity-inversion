@@ -22,20 +22,7 @@ FRAMES = 200
 IDEAL_FUNCTIONS = 3
 EXTRA_FUNCTIONS = {"brk": 1, "inlineargs": 1}
 VOICE_REGS = range(0xD407, 0xD415)
-MISSED = {
-    (
-        "functions",
-        "jsr3",
-        2,
-    ): "the voice routine's increments at $1054/$106E/$1080, alike "
-    "up to operands, fold into an indexed function",
-    (
-        "functions",
-        "fallthrough",
-        2,
-    ): "the voice routine's increments at $1050/$106A/$107C, "
-    "alike up to operands, fold into an indexed function",
-}
+MISSED = {}
 
 
 def _cases(check):

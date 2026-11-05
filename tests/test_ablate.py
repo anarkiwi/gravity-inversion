@@ -311,6 +311,20 @@ def test_fold(tiny):
     )
 
 
+def test_store_past_the_bitmap_is_data(tmp_path):
+    """wr() of a constant address past a span's bitmap (every byte past it is data) indexes the
+    span; one at a constant byte the bitmap marks does not."""
+    (tmp_path / "tiny.h").write_text(
+        HEADER.replace("#define C0_DATA_INIT 0x30, 0x00", "#define C0_DATA_INIT 0x30"),
+        encoding="ascii",
+    )
+    text = SOURCE.replace("  wr(q, a);\n", "  wr(0x100C, a);\n  wr(0x1001, a);\n")
+    (tmp_path / "tiny.c").write_text(text, encoding="ascii")
+    ctx = ablate.Ablation(tmp_path / "tiny.c", work=tmp_path / "work")
+    out = _pass(ctx, ablate.constant_addresses, text)
+    assert "(C0[0xC] = (a))" in out and "wr(0x1001, a)" in out
+
+
 def test_fold_play(tiny):
     """Reads in play of cells play never writes fold to their value after init; a cell play
     writes does not."""
