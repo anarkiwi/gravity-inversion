@@ -15,7 +15,8 @@ instructions); it is llvm-mos's cost of 6502 idioms in C: 16-bit pointer arithme
 values, register traffic through zero page. The data bound holds every byte the original uses
 once and nothing else.
 
-The generated C's constructs that cost code size are detected in [costs.md](costs.md).
+The generated C's constructs that cost code size are detected in [costs.md](costs.md); where
+the generated PRGs' bytes go is measured by ablation in [ablate.md](ablate.md).
 
 ## Translations against the bounds
 
