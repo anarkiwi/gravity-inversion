@@ -38,30 +38,33 @@ def ast(source, includes, cc=None):
     return json.loads(subprocess.run(args, capture_output=True, check=True).stdout)
 
 
-def _walk(node, parent=None):
+def walk(node, parent=None):
+    """(node, parent) of every node of an AST subtree, preorder."""
     yield node, parent
     for child in node.get("inner", ()):
-        yield from _walk(child, node)
+        yield from walk(child, node)
 
 
-def _refs(node):
+def refs(node):
     """Ids of the declarations a subtree refers to."""
     return {
         n["referencedDecl"]["id"]
-        for n, _ in _walk(node)
+        for n, _ in walk(node)
         if n.get("kind") == "DeclRefExpr"
     }
 
 
-def _callee(call):
-    for n, _ in _walk(call["inner"][0]):
+def callee(call):
+    """Name of the function a CallExpr calls, or None."""
+    for n, _ in walk(call["inner"][0]):
         if n.get("kind") == "DeclRefExpr":
             return n["referencedDecl"]["name"]
     return None
 
 
-def _literal(node):
-    for n, _ in _walk(node):
+def literal(node):
+    """Value of an integer literal under casts and parentheses, or None."""
+    for n, _ in walk(node):
         if n.get("kind") == "IntegerLiteral":
             return int(n["value"])
         if n.get("kind") not in ("ImplicitCastExpr", "ParenExpr", "IntegerLiteral"):
@@ -85,7 +88,7 @@ def condition_tests(node):
     """Ids of the `==` comparisons used only as conditions (a branch, `&&`, `||`, `!`, through
     parentheses and casts), not as values."""
     out = set()
-    for n, _ in _walk(node):
+    for n, _ in walk(node):
         kind, op = n.get("kind"), n.get("opcode")
         if kind in CONDITIONAL:
             subs = n["inner"][:1]
@@ -106,9 +109,9 @@ def index_params(tree):
     the literals being 0..m, m >= 1."""
     fns = dict(functions(tree))
     args = {}
-    for n, _ in _walk(tree):
-        if n.get("kind") == "CallExpr" and (name := _callee(n)) in fns:
-            args.setdefault(name, []).append([_literal(a) for a in n["inner"][1:]])
+    for n, _ in walk(tree):
+        if n.get("kind") == "CallExpr" and (name := callee(n)) in fns:
+            args.setdefault(name, []).append([literal(a) for a in n["inner"][1:]])
     out = {}
     for name, calls in args.items():
         params = [p for p in fns[name]["inner"] if p.get("kind") == "ParmVarDecl"]
@@ -127,9 +130,9 @@ def tainted(decl, seed):
     out, changed = {seed}, True
     while changed:
         changed = False
-        for n, _ in _walk(decl):
+        for n, _ in walk(decl):
             if n.get("kind") == "VarDecl" and n.get("inner") and n["id"] not in out:
-                if _refs(n) & out:
+                if refs(n) & out:
                     out.add(n["id"])
                     changed = True
             elif n.get("kind") in (
@@ -137,7 +140,7 @@ def tainted(decl, seed):
                 "CompoundAssignOperator",
             ) and n.get("opcode", "").endswith("="):
                 lhs, rhs = n["inner"][0], n["inner"][1]
-                if lhs.get("kind") == "DeclRefExpr" and _refs(rhs) & out:
+                if lhs.get("kind") == "DeclRefExpr" and refs(rhs) & out:
                     target = lhs["referencedDecl"]["id"]
                     if target not in out:
                         out.add(target)
@@ -150,7 +153,7 @@ def costs(tree):
     index = index_params(tree)
     wide = {
         n["id"]
-        for n, _ in _walk(tree)
+        for n, _ in walk(tree)
         if n.get("kind") in ("VarDecl", "ParmVarDecl")
         and n.get("type", {}).get("qualType") == "uint16_t"
     }
@@ -161,32 +164,32 @@ def costs(tree):
         conds = condition_tests(decl) if k else set()
         if decl["type"]["qualType"].startswith("struct"):
             c["K4"] += 1
-        for n, parent in _walk(decl):
+        for n, parent in walk(decl):
             kind = n.get("kind")
             if kind == "CallExpr":
-                callee = _callee(n)
-                if k and callee in ("rd", "wr") and _refs(n["inner"][1]) & dep:
+                called = callee(n)
+                if k and called in ("rd", "wr") and refs(n["inner"][1]) & dep:
                     c["K1"] += 1
-                if callee in READS and parent and parent.get("kind") == "CompoundStmt":
+                if called in READS and parent and parent.get("kind") == "CompoundStmt":
                     c["K6"] += 1
-            elif kind == "BinaryOperator" and k and _refs(n) & dep:
+            elif kind == "BinaryOperator" and k and refs(n) & dep:
                 c["K2"] += n.get("opcode") == "*"
                 if (
                     n.get("opcode") == "=="
                     and n["id"] not in conds
-                    and any(_literal(s) is not None for s in n["inner"])
+                    and any(literal(s) is not None for s in n["inner"])
                 ):
                     c["K3"] += 1
             elif kind == "ArraySubscriptExpr":
                 base = next(
                     (
                         r["referencedDecl"]["name"]
-                        for r, _ in _walk(n["inner"][0])
+                        for r, _ in walk(n["inner"][0])
                         if r.get("kind") == "DeclRefExpr"
                     ),
                     "",
                 )
-                if REGION.match(base) and _refs(n["inner"][1]) & wide:
+                if REGION.match(base) and refs(n["inner"][1]) & wide:
                     c["K5"] += 1
         out[name] = c
     return out

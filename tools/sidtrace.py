@@ -107,14 +107,23 @@ def trace_psid(  # pylint: disable=too-many-arguments
 
 
 def trace_prg(  # pylint: disable=too-many-arguments
-    prg, frames, song=0, *, poke=None, sid_model="6581", watch=None, on_watch=None
+    prg,
+    frames,
+    song=0,
+    *,
+    poke=None,
+    sid_model="6581",
+    watch=None,
+    on_watch=None,
+    observe=None,
 ):
     """SID writes of a C build: frame n holds the writes after its n-th frame_wait.
 
     `prg` links c64/driver.c, with symbols in `prg`.elf; the harness sets
     song_number on entry to main and returns from each frame_wait at once.
     `watch` is a function of the symbol table giving addresses whose writes are
-    passed to on_watch(frame, addr, value)."""
+    passed to on_watch(frame, addr, value). `observe(mpu, syms, log)` is called once the
+    machine is wired, before the C runtime starts; len(log.calls) is 0 until init."""
     _, syms = load_elf(f"{prg}.elf")
     with open(prg, "rb") as f:
         data = f.read()
@@ -124,6 +133,8 @@ def trace_prg(  # pylint: disable=too-many-arguments
         mem.subscribe_to_write(
             watch(syms), lambda addr, value: on_watch(len(log.calls) - 1, addr, value)
         )
+    if observe:
+        observe(mpu, syms, log)
     mpu.pc = syms["_start"]
     assert mpu.run_until(max_cycles=MAX_CYCLES, stop_pcs=[syms["main"]]) == "pc"
     mem[syms["song_number"]] = song

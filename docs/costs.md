@@ -3,7 +3,7 @@
 `tools/costs.py` reads clang's AST of a generated translation and counts the constructs llvm-mos
 compiles to more code than the 6502 idiom they translate; `tests/test_costs.py` requires none and
 records each that remains, with its cause, as a strict xfail. The size bounds themselves are in
-[sizes.md](sizes.md).
+[sizes.md](sizes.md); what each mechanism costs, measured by ablation, in [ablate.md](ablate.md).
 
 | Kind | Construct | 6502 idiom | Form that costs no more |
 |---|---|---|---|
