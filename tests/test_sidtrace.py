@@ -64,3 +64,13 @@ def test_songs():
     data[0x0F] = 4
     assert sidtrace.songs("all", bytes(data)) == [0, 1, 2, 3]
     assert sidtrace.songs("1,3-4", bytes(data)) == [0, 2, 3]
+
+
+def test_detail():
+    """Detailed writes carry the storing instruction's cycle from the call's start and pc."""
+    code = [0xA9, 0x01, 0x8D, 0x00, 0xD4, 0xEA, 0x8D, 0x01, 0xD4, 0x60]
+    data = _code_psid(code)
+    assert sidtrace.trace_psid(data, 1, detail=True)[1] == [
+        (0, 1, 2, 0x1002),
+        (1, 1, 8, 0x1006),
+    ]
