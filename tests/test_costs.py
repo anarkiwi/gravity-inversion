@@ -19,12 +19,6 @@ MISSED = {
     ): "each voice's song pointer is loaded from song data (a jump command's two bytes) and "
     "from its return stack, which a call command pushes at a depth it never bounds: reads "
     "through the pointer and stores to the stack go through rd()/wr()",
-    (
-        "ghouls",
-        "K6",
-    ): "dummy reads the 6502 makes of read-sensitive SID registers: the init's SID clear "
-    "(STA $D400,Y from Y = $1C down) reads $D419-$D41C, and a SID-write command's register "
-    "is a song byte read through that pointer",
 }
 
 SEEDS = range(3)
