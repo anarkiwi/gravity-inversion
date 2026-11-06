@@ -14,7 +14,6 @@ import constructs
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
 UNCHECKED = {"region", "inline_repeat", "unrolled_stores", "per_voice_paths"}
 MISSED = {
-    "automatas:row-copies": "the copies fold as two classes, entered at $112C and $115E",
     "emomyst:wf_arp.end": "$16D9 → $16EE is threaded into the JMP's goto $16EE → $1776, and "
     "$1721 → $1776 prints structured with the fall-through $1773 → $1776 as a goto",
     "emomyst:vib_slide.vibrato": "$1579/$158B/$158D → $1590 print structured",
