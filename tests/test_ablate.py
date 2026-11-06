@@ -150,7 +150,7 @@ void tune_play(void) { cgen_play(0); }
 """
 
 PLAYER = """init:
-    AND #1
+    LDA $D41B
     STA sel
     LDA #<song
     STA $02
@@ -363,8 +363,8 @@ def test_absent(tiny):
 @pytest.fixture(scope="module", name="player")
 def fixture_player(tmp_path_factory):
     """(PSID, report) of the test player: zero-page and self-modified pointers, a branch
-    offset dispatch, a dead init loop (after a store of the song, so the lift does not fold
-    it), a code byte read as data."""
+    offset dispatch, a dead init loop (after a store of a byte read from the SID, which the
+    lift does not fold past), a code byte read as data."""
     out = tmp_path_factory.mktemp("player")
     psid = _psid(fuzzplayer.HEADER + PLAYER, out)
     return psid, ablate.ablate(

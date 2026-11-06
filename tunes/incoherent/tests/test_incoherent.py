@@ -1,15 +1,23 @@
 """The hand and generated C translations against the original, per SID write and play call."""
 
+import functools
+
 import pytest
 
 from incoherent_support import BUILD, FIX, SID, VARIANTS, build_prg, gen_prg, patched
 import sidtrace
+import transliterate
 
 PRG = BUILD / "incoherent.prg"
 PRGS = {"hand": PRG, "generated": BUILD / "gen.prg"}
 BUILDERS = {"hand": build_prg, "generated": gen_prg}
 SONG_POS = range(0x0C66, 0x0C7B, 7)
 VARIANT_FRAMES = 6000
+
+
+@functools.cache
+def _base_c(psid):
+    return transliterate.transliterate(psid, "gen.h")[0]
 
 
 def test_song_identical(psid, capsys):
@@ -42,13 +50,19 @@ def test_loop_identical(kind, psid):
     assert sidtrace.diff(ref, sidtrace.trace_prg(PRGS[kind], frames)) is None
 
 
-@pytest.mark.parametrize("kind", PRGS)
-def test_without_init_identical(kind, psid):
+def test_without_init_identical(psid):
     """A song number with bit 7 set skips init: play runs on the image's state."""
     ref = sidtrace.trace_psid(psid, VARIANT_FRAMES, song=0x80)
     assert sidtrace.diff(ref, sidtrace.trace_psid(psid, VARIANT_FRAMES)) is not None
-    got = sidtrace.trace_prg(PRGS[kind], VARIANT_FRAMES, song=0x80)
+    got = sidtrace.trace_prg(PRG, VARIANT_FRAMES, song=0x80)
     assert sidtrace.diff(ref, got) is None
+
+
+def test_song_outside_range_traps():
+    """The generated init is translated for the songs the PSID header counts: a song number
+    outside them (bit 7 set) traps at init."""
+    with pytest.raises(AssertionError, match=r"jam at \$[0-9a-f]+ \(trap \d+\)"):
+        sidtrace.trace_prg(PRGS["generated"], VARIANT_FRAMES, song=0x80)
 
 
 @pytest.mark.parametrize("kind", BUILDERS)
@@ -62,6 +76,13 @@ def test_variant_identical(name, kind, psid, tmp_path):
     assert same == unchanged
     got = sidtrace.trace_prg(BUILDERS[kind](variant, tmp_path), VARIANT_FRAMES)
     assert sidtrace.diff(ref, got) is None
+
+
+@pytest.mark.parametrize("name", sorted(VARIANTS))
+def test_variant_c_identical(name, psid):
+    """A patched song generates the original's .c: song data is only in the .h."""
+    variant = patched(psid, VARIANTS[name][0])
+    assert transliterate.transliterate(variant, "gen.h")[0] == _base_c(psid)
 
 
 def test_mismatch_reported(psid, capsys):

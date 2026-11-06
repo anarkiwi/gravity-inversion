@@ -452,7 +452,7 @@
     "label": "next"
    },
    "why": "The loop's second exit target; the first ($114D BPL and the wrap) is $1158.",
-   "lift": "goto",
+   "lift": "evaluated at lift time: the init run folds into the starting memory",
    "covered": false,
    "uncovered": "the song's orderlists start with no end marker; the patched variants reach it",
    "transform": "T7"

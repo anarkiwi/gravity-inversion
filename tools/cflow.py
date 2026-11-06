@@ -205,9 +205,10 @@ class Unit:
         return b["offset"], e["offset"] + e["tokLen"]
 
     def extent(self, node):
-        """span() of a statement, with a do-while's closing semicolon."""
+        """span() of a statement, with the semicolon closing it (a do-while's, or a loop's
+        whose body is a simple statement)."""
         b, e = self.span(node)
-        return b, self.text.index(";", e) + 1 if node.get("kind") == "DoStmt" else e
+        return b, self.text.index(";", e) + 1 if self.text[e - 1] not in ";}" else e
 
     def src(self, node):
         """Source text of a node."""

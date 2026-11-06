@@ -2,7 +2,7 @@
 
 Writes the player and C64 host (`tune_init`/`tune_play` for c64/driver.c) to OUT.c and
 the song data to the header. Init is called once, before any play call, as c64/driver.c
-does: its run is folded into the song data where it is the same for every song."""
+does, with A each song the PSID header counts: its run is folded into the song data."""
 
 import argparse
 import os
@@ -11,6 +11,7 @@ import subprocess
 import sys
 
 from deity_informant import cgen
+from pysidtracker.header import parse_sid_header
 from vagrant_moses.c64 import poweron_ram
 from vagrant_moses.cgen import ENTRIES, HOST, SENSITIVE, VOLATILE
 
@@ -32,6 +33,7 @@ def transliterate(psid, header):
         loaded=(load, load + len(image)),
         header=header,
         init=0,
+        songs=range(parse_sid_header(psid).songs),
     )
     return c + HOST, h, info
 

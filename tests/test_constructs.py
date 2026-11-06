@@ -23,11 +23,11 @@ MISSED = {
 @functools.cache
 def provenance(tune):
     """cgen's provenance of the tune's generated C, with the instructions its folded init
-    ran at lift time (`folded`)."""
+    ran at lift time (`folded`) and those the C translates (`starts`)."""
     m = constructs.load(tune)
     _, _, info = transliterate((constructs.ROOT / m["psid"]).read_bytes(), "t.h")
     folded = [pc for pc, _ in (info["init"] or {}).get("code", ())]
-    return {**info["provenance"], "folded": folded}
+    return {**info["provenance"], "folded": folded, "starts": set(info["starts"])}
 
 
 def _entries():
@@ -79,7 +79,11 @@ def lifted(c, prov):  # pylint: disable=too-many-return-statements
     if k == "smc":
         return c["cell"] in prov["cells"]
     if k == "goto":
-        return {tuple(e) for e in c["edges"]} <= gotos
+        # Init folded at lift time ran or decided against each edge: no goto is left.
+        gone = all(
+            e[0] in prov["folded"] or e[0] not in prov["starts"] for e in c["edges"]
+        )
+        return gone or {tuple(e) for e in c["edges"]} <= gotos
     if k == "join":
         return not {tuple(e) for e in c["edges"]} & gotos
     if k == "short_circuit":
