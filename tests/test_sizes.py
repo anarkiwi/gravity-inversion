@@ -27,14 +27,6 @@ MISSED = {
     ): "voice state is copied out of the code image as well as kept in DATA",
     (
         "generated",
-        "emomyst",
-        "code",
-    ): "pattern numbers (song bytes below $80) index 21-entry tables 128 entries wide: each "
-    "load past the image is checked against its region (oob_rd past it), and each store to "
-    "the $02/$03 pointer keeps its window check, as the high bytes in that width name I/O "
-    "pages",
-    (
-        "generated",
         "commando",
         "data",
     ): "the instrument table's rows past the image ($1B57-$1BF0) are written by the "
@@ -57,9 +49,10 @@ MISSED = {
         "generated",
         "emomyst",
         "data",
-    ): "held spans keep instruction bytes that voice state accesses ($1028,X ...) reach "
-    "with the voice index unbounded, and those inside the span a pointer left by init may "
-    "address",
+    ): "the voice index comes back from routines that save it in an operand ($17AF) and "
+    "reload it, so the voice functions take any byte: their accesses ($1028,X ...) reach "
+    "instruction bytes, which held spans keep, as they keep those inside the span a pointer "
+    "left by init may address",
 }
 
 

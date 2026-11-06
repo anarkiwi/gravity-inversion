@@ -1,15 +1,23 @@
 """The hand and generated C translations against the original, per SID write and play call."""
 
+import functools
+
 import pytest
 
 from incoherent_support import BUILD, FIX, SID, VARIANTS, build_prg, gen_prg, patched
 import sidtrace
+import transliterate
 
 PRG = BUILD / "incoherent.prg"
 PRGS = {"hand": PRG, "generated": BUILD / "gen.prg"}
 BUILDERS = {"hand": build_prg, "generated": gen_prg}
 SONG_POS = range(0x0C66, 0x0C7B, 7)
 VARIANT_FRAMES = 6000
+
+
+@functools.cache
+def _base_c(psid):
+    return transliterate.transliterate(psid, "gen.h")[0]
 
 
 def test_song_identical(psid, capsys):
@@ -68,6 +76,13 @@ def test_variant_identical(name, kind, psid, tmp_path):
     assert same == unchanged
     got = sidtrace.trace_prg(BUILDERS[kind](variant, tmp_path), VARIANT_FRAMES)
     assert sidtrace.diff(ref, got) is None
+
+
+@pytest.mark.parametrize("name", sorted(VARIANTS))
+def test_variant_c_identical(name, psid):
+    """A patched song generates the original's .c: song data is only in the .h."""
+    variant = patched(psid, VARIANTS[name][0])
+    assert transliterate.transliterate(variant, "gen.h")[0] == _base_c(psid)
 
 
 def test_mismatch_reported(psid, capsys):

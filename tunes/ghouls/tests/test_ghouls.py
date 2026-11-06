@@ -5,6 +5,7 @@ import pytest
 
 import disasm
 import sidtrace
+import transliterate
 from ghouls_support import HVSC, BUILD, build_prg, gen_prg, with_pattern
 
 SONGS = range(32)
@@ -72,6 +73,12 @@ def test_variant_identical(variant):
     data, prg = variant
     _, writes, bad = sidtrace.compare(data, str(prg), VARIANT_FRAMES, VARIANT_SONG)
     assert bad is None and writes
+
+
+def test_variant_c_identical(variant, psid):
+    """The patched song generates the original's .c: song data is only in the .h."""
+    c = transliterate.transliterate(variant[0], "gen.h")[0]
+    assert c == transliterate.transliterate(psid, "gen.h")[0]
 
 
 def test_variant_generated(variant, tmp_path):

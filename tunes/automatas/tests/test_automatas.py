@@ -1,11 +1,14 @@
 """The hand and generated C translations against the original, per SID write and play call."""
 
+import functools
+
 import pytest
 
 from automatas_support import BUILD, FIX, SID, build_prg, gen_prg
 from vagrant_moses.memmap import PAL
 
 import sidtrace
+import transliterate
 
 ARRANGER_POS = range(0x10EB, 0x10EC)
 VARIANT_CALLS = 30000
@@ -40,6 +43,11 @@ def test_loop_identical(kind, psid):
     assert sidtrace.diff(ref, sidtrace.trace_prg(PRGS[kind], calls)) is None
 
 
+@functools.cache
+def _base_c(psid):
+    return transliterate.transliterate(psid, "gen.h")[0]
+
+
 def _patched(psid, patches):
     data = bytearray(psid)
     for addr, value in patches.items():
@@ -66,6 +74,13 @@ def test_variant_identical(name, kind, psid, tmp_path):
     assert sidtrace.diff(ref, sidtrace.trace_psid(psid, VARIANT_CALLS)) is not None
     got = sidtrace.trace_prg(prg, VARIANT_CALLS, **machine)
     assert sidtrace.diff(ref, got) is None
+
+
+@pytest.mark.parametrize("name", sorted(VARIANTS))
+def test_variant_c_identical(name, psid):
+    """A patched song generates the original's .c: song data is only in the .h."""
+    variant = _patched(psid, VARIANTS[name][0])
+    assert transliterate.transliterate(variant, "gen.h")[0] == _base_c(psid)
 
 
 def test_mismatch_reported(psid, capsys):

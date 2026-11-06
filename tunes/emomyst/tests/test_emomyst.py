@@ -1,5 +1,7 @@
 """The C translation against the original: the tune, and patched variants."""
 
+import functools
+
 import pytest
 
 import disasm
@@ -299,6 +301,19 @@ def test_variant_identical(  # pylint: disable=too-many-arguments,too-many-posit
     prg = swp.build_prg(data, gen, tmp_path)
     ref = sidtrace.trace_psid(data, frames)
     assert sidtrace.diff(ref, sidtrace.trace_prg(prg, frames)) is None
+
+
+@functools.cache
+def _base_c(psid):
+    return transliterate.transliterate(psid, "gen.h")[0]
+
+
+@pytest.mark.parametrize("name", sorted(VARIANTS))
+def test_variant_c_identical(name, psid, gen, swp):
+    """A patched song generates the original's .c: song data is only in the .h."""
+    m = swp.Music(psid, gen)
+    VARIANTS[name][0](m)
+    assert transliterate.transliterate(m.bytes(), "gen.h")[0] == _base_c(psid)
 
 
 GEN_MISSED = {}
