@@ -3,7 +3,8 @@
 `tools/costs.py` reads clang's AST of a generated translation and counts the constructs llvm-mos
 compiles to more code than the 6502 idiom they translate (`--sites` lists each by line);
 `tests/test_costs.py` requires none and records each that remains, with its cause, as a strict
-xfail. The size bounds themselves are in [sizes.md](sizes.md); what each mechanism costs,
+xfail. cgen's runtime (`rd`, `wr`, the bounds-checked span readers `rdCj`, ...) is not
+counted. The size bounds themselves are in [sizes.md](sizes.md); what each mechanism costs,
 measured by ablation, in [ablate.md](ablate.md).
 
     python3 tools/costs.py tunes/ghouls/build/gen/ghouls.c -I tunes/ghouls/build/gen -I c64 --sites

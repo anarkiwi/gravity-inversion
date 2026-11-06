@@ -14,7 +14,10 @@ import sizes
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
 DRIVER = ROOT / "c64"
 CFLAGS = {"automatas": ["-DFRAME_CIA"]}
-RD = "rd() dispatch for pointer reads"
+CHECKED = (
+    "song-data reads through zero-page pointers go through a bounds-checked reader of one "
+    "span: their tables are read inside their extents only by assumption"
+)
 WR = "rd()/wr() dispatch and code store checks where indices are unbounded"
 CODE = "C0 keeps the instruction bytes the player never reads as data"
 BITMAP = "the C0_DATA bitmap"
@@ -29,18 +32,22 @@ MISSED = {
         "automatas",
         "data",
     ): "voice state is copied out of the code image as well as kept in DATA",
-    ("generated", "commando", "code"): RD,
-    ("generated", "incoherent", "code"): RD,
-    ("generated", "automatas", "code"): WR,
+    ("generated", "incoherent", "code"): CHECKED,
+    (
+        "generated",
+        "automatas",
+        "code",
+    ): f"{WR}: each row copy's operand pointer advances by "
+    "its row's length (its high byte's increment is unbounded), and $FB/$FC's high byte comes "
+    "from a table holding a zero end marker",
     (
         "generated",
         "emomyst",
         "code",
-    ): "rd() for song-data reads through zero-page pointers "
-    "loaded from split tables a song byte indexes, passing 16-bit addresses, and cells init "
-    "writes after its SID clear",
-    ("generated", "commando", "data"): f"{CODE}, and R1 spans bytes past the image "
-    "nothing writes",
+    ): f"{CHECKED}; each pointer store keeps the lift's window check, and cells init writes "
+    "after its SID clear",
+    ("generated", "commando", "data"): "the instrument table's region spans bytes past "
+    "the image nothing writes, which its index (any multiple of 8) may reach",
     ("generated", "ghouls", "data"): f"{CODE}, and the music init's block copy ($29C6) "
     "writes each song's data to $730E and $914F-$9614: RAM regions spanning every song's copy",
     ("generated", "automatas", "data"): f"{CODE}, with {BITMAP}",
@@ -48,9 +55,9 @@ MISSED = {
         "generated",
         "emomyst",
         "data",
-    ): "C0, C3 and C5 hold 442 instruction bytes that voice "
-    "state accesses ($1028,X ...) reach with the voice index unbounded, and the rd() pointer "
-    "reads keep every other byte of the image as data",
+    ): "held spans keep instruction bytes that voice state accesses ($1028,X ...) reach "
+    "with the voice index unbounded, and those inside the span a pointer left by init may "
+    "address",
 }
 
 

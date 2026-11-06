@@ -15,6 +15,8 @@ from collections import Counter
 RUNTIME = frozenset(
     "io_read io_write trap oob_rd oob_wr rd wr codechk tune_init tune_play".split()
 )
+#: cgen's bounds-checked readers of one held span (`rdC0`, ...), runtime like `rd`.
+CHECKED = re.compile(r"rdC\d+$")
 READS = frozenset(("rd", "io_read"))
 KINDS = ("K1", "K2", "K3", "K4", "K5", "K6")
 REGION = re.compile(r"(?:[RC]\d+|CODE)$")
@@ -80,6 +82,7 @@ def functions(tree):
         if d.get("kind") == "FunctionDecl"
         and "inner" in d
         and d["name"] not in RUNTIME
+        and not CHECKED.match(d["name"])
         and any(c.get("kind") == "CompoundStmt" for c in d["inner"])
     ]
 
