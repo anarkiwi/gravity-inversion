@@ -15,7 +15,6 @@ TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
 DRIVER = ROOT / "c64"
 CFLAGS = {"automatas": ["-DFRAME_CIA"]}
 RD = "rd() dispatch for pointer reads"
-DUMMY = "the 6502's dummy reads (page crossings, indexed I/O stores)"
 WR = "rd()/wr() dispatch and code store checks where indices are unbounded"
 CODE = "C0 keeps the instruction bytes the player never reads as data"
 BITMAP = "the C0_DATA bitmap"
@@ -33,7 +32,6 @@ MISSED = {
     ("generated", "commando", "code"): RD,
     ("generated", "incoherent", "code"): RD,
     ("generated", "automatas", "code"): WR,
-    ("generated", "ghouls", "code"): f"{WR} and {DUMMY}",
     (
         "generated",
         "emomyst",

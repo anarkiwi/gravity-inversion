@@ -86,7 +86,7 @@ def functions(tree):
 
 def condition_tests(node):
     """Ids of the `==` comparisons used only as conditions (a branch, `&&`, `||`, `!`, through
-    parentheses and casts), not as values."""
+    parentheses, casts and the value of a comma expression), not as values."""
     out = set()
     for n, _ in walk(node):
         kind, op = n.get("kind"), n.get("opcode")
@@ -97,8 +97,8 @@ def condition_tests(node):
         else:
             continue
         for sub in subs:
-            while sub.get("kind") in WRAP:
-                sub = sub["inner"][0]
+            while sub.get("kind") in WRAP or sub.get("opcode") == ",":
+                sub = sub["inner"][-1]
             if sub.get("opcode") == "==":
                 out.add(sub["id"])
     return out
@@ -148,8 +148,8 @@ def tainted(decl, seed):
     return out
 
 
-def costs(tree):
-    """{function: Counter of kinds} of the tune functions in an AST."""
+def sites(tree):
+    """(function, kind, node) of every costly construct of the tune functions in an AST."""
     index = index_params(tree)
     wide = {
         n["id"]
@@ -157,29 +157,29 @@ def costs(tree):
         if n.get("kind") in ("VarDecl", "ParmVarDecl")
         and n.get("type", {}).get("qualType") == "uint16_t"
     }
-    out = {}
     for name, decl in functions(tree):
-        k, c = index.get(name), Counter()
+        k = index.get(name)
         dep = tainted(decl, k) if k else set()
         conds = condition_tests(decl) if k else set()
         if decl["type"]["qualType"].startswith("struct"):
-            c["K4"] += 1
+            yield name, "K4", decl
         for n, parent in walk(decl):
             kind = n.get("kind")
             if kind == "CallExpr":
                 called = callee(n)
                 if k and called in ("rd", "wr") and refs(n["inner"][1]) & dep:
-                    c["K1"] += 1
+                    yield name, "K1", n
                 if called in READS and parent and parent.get("kind") == "CompoundStmt":
-                    c["K6"] += 1
+                    yield name, "K6", n
             elif kind == "BinaryOperator" and k and refs(n) & dep:
-                c["K2"] += n.get("opcode") == "*"
+                if n.get("opcode") == "*":
+                    yield name, "K2", n
                 if (
                     n.get("opcode") == "=="
                     and n["id"] not in conds
                     and any(literal(s) is not None for s in n["inner"])
                 ):
-                    c["K3"] += 1
+                    yield name, "K3", n
             elif kind == "ArraySubscriptExpr":
                 base = next(
                     (
@@ -190,9 +190,21 @@ def costs(tree):
                     "",
                 )
                 if REGION.match(base) and refs(n["inner"][1]) & wide:
-                    c["K5"] += 1
-        out[name] = c
+                    yield name, "K5", n
+
+
+def costs(tree):
+    """{function: Counter of kinds} of the tune functions in an AST."""
+    out = {name: Counter() for name, _ in functions(tree)}
+    for name, kind, _ in sites(tree):
+        out[name][kind] += 1
     return out
+
+
+def offset(node):
+    """Byte offset in the main file where a node begins (its expansion, inside a macro)."""
+    begin = node.get("range", {}).get("begin", {})
+    return begin.get("expansionLoc", begin).get("offset")
 
 
 def totals(tree):
@@ -205,8 +217,17 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("source", type=pathlib.Path)
     ap.add_argument("-I", dest="includes", action="append", default=[])
+    ap.add_argument("--sites", action="store_true", help="list each construct's line")
     args = ap.parse_args(argv)
-    per = costs(ast(args.source, args.includes))
+    tree = ast(args.source, args.includes)
+    if args.sites:
+        text = args.source.read_bytes()
+        for name, kind, n in sites(tree):
+            at = offset(n)
+            line = text.count(b"\n", 0, at) + 1
+            src = text[at:].split(b"\n", 1)[0].decode().strip()
+            print(f"{line}: {kind} {name}: {src}")
+    per = costs(tree)
     for name, c in sorted(per.items()):
         if c:
             print(name, " ".join(f"{k}={c[k]}" for k in KINDS if c[k]))
