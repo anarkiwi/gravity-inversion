@@ -2,7 +2,10 @@
 
 The routine body is drawn from a seeded RNG (counters, masked skips, an inner DEY/BPL loop, SID
 writes); the style decides how the 6502 reaches it per voice, as real players do, so the ideal
-translation is known: one voice routine and no unstructured edges."""
+translation is known: one voice routine and no unstructured edges. A sequencer (``seq``) reads
+song rows per voice through a pointer: notes, legato notes and rests, its SID writes direct or
+to a shadow buffer copied to the SID after the voices or at the start of the next call.
+"""
 
 import argparse
 import re
@@ -24,6 +27,11 @@ MOTIFS = (
 STYLES = ("loop", "jsr3", "fallthrough", "unrolled", "smc") + MOTIFS
 STATE = 0x3000
 VOICE = 7
+SEQ = ("direct", "shadow", "shadow_next")
+SHADOW, PTR, SIDREGS = 0x3200, 0xF0, 25
+DUR, NOTE, START_LO, START_HI = 4, 5, 6, 7
+NOTES, REST, LEGATO, JUMP = 32, 0x80, 0x60, 0xFF
+FREQ = [round(0x0400 * 2 ** (n / 12)) for n in range(NOTES)]
 HEADER = """!cpu 6510
 * = 0
 !text "PSID"
@@ -41,8 +49,9 @@ ADDR = $1000
 """
 
 
-def body(rng, fields):
-    """Voice routine statements drawn from `rng` over state `fields`: each kind at least once."""
+def body(rng, fields, regs=VOICE):
+    """Voice routine statements drawn from `rng` over state `fields`, writing SID voice
+    registers `regs` (a count or a sequence): each kind at least once."""
     kinds = ["count", "write", "skip", "inner"]
     kinds += list(rng.choice(kinds, size=rng.integers(0, 4)))
     out = []
@@ -51,7 +60,8 @@ def body(rng, fields):
         if kind == "count":
             out.append(("count", f, int(rng.integers(1, 0x40))))
         elif kind == "write":
-            out.append(("write", f, int(rng.integers(VOICE))))
+            r = rng.integers(regs) if isinstance(regs, int) else rng.choice(regs)
+            out.append(("write", f, int(r)))
         elif kind == "skip":
             g = int(rng.integers(fields))
             out.append(
@@ -65,8 +75,9 @@ def body(rng, fields):
 class Voice:
     """Operand text of one voice's state and SID registers in a style."""
 
-    def __init__(self, style, k, rng):
+    def __init__(self, style, k, rng, shadow=False):
         self.style, self.k, self.rng, self.cells = style, k, rng, set()
+        self.shadow = shadow
 
     def load(self, f):
         """Lines loading field f into A."""
@@ -85,11 +96,89 @@ class Voice:
             return f"${STATE + f * 0x20 + VOICE * self.k:04x}"
         return f"${STATE + f * 0x20:04x},X"
 
+    def fixed(self):
+        """Whether the copy addresses its voice by fixed operands rather than ``X``."""
+        return self.style in ("unrolled", "smc")
+
     def sid(self, r):
-        """Operand text of SID voice register r."""
-        if self.style in ("unrolled", "smc"):
-            return f"$d4{r + VOICE * self.k:02x}"
-        return f"$d4{r:02x},X"
+        """Operand text of SID voice register r (its shadow byte with a shadow buffer)."""
+        base = SHADOW if self.shadow else 0xD400
+        if self.fixed():
+            return f"${base + r + VOICE * self.k:04x}"
+        return f"${base + r:04x},X"
+
+    def cell(self, f):
+        """Operand text of sequencer field f: a plain cell in every style."""
+        if self.fixed():
+            return f"${STATE + f * 0x20 + VOICE * self.k:04x}"
+        return f"${STATE + f * 0x20:04x},X"
+
+    def pointer(self, half=0):
+        """Operand text of a half of the voice's song pointer."""
+        if self.fixed():
+            return f"${PTR + half + VOICE * self.k:02x}"
+        return f"${PTR + half:02x},X"
+
+    def read(self):
+        """Lines loading the byte at the song pointer into A."""
+        if self.fixed():
+            return ["LDY #0", f"LDA (${PTR + VOICE * self.k:02x}),Y"]
+        return [f"LDA (${PTR:02x},X)"]
+
+
+def song(rng, rows=24):
+    """Song bytes of one voice: notes (a few pitches, so repeats occur) with a duration,
+    legato notes with a duration, rests, and the jump back to the start."""
+    pitches = rng.choice(NOTES, size=4, replace=False)
+    out = []
+    for _ in range(rows):
+        kind = rng.choice(3, p=[0.2, 0.5, 0.3])
+        if kind == 0:
+            out.append(REST | int(rng.integers(1, 5)))
+        else:
+            out += [
+                int(rng.choice(pitches)) + (LEGATO if kind == 2 else 0),
+                int(rng.integers(6)),
+            ]
+    return out + [JUMP]
+
+
+def sequencer(v, tag):
+    """ACME lines of one voice's sequencer: a row when its duration runs out."""
+    adv = [
+        f"INC {v.pointer()}",
+        f"BNE {tag}a{{n}}",
+        f"INC {v.pointer(1)}",
+        f"{tag}a{{n}}:",
+    ]
+
+    def step(n):
+        return [x.replace("{n}", str(n)) for x in adv]
+
+    return (
+        [f"DEC {v.cell(DUR)}", f"BPL {tag}done", f"{tag}row:"]
+        + v.read()
+        + [f"CMP #${JUMP:02x}", f"BNE {tag}nj"]
+        + [f"LDA {v.cell(START_LO)}", f"STA {v.pointer()}"]
+        + [
+            f"LDA {v.cell(START_HI)}",
+            f"STA {v.pointer(1)}",
+            f"JMP {tag}row",
+            f"{tag}nj:",
+        ]
+        + [f"CMP #${REST:02x}", f"BCC {tag}note", f"AND #${REST - 1:02x}"]
+        + [f"STA {v.cell(DUR)}", "LDA #$40", f"STA {v.sid(4)}"]
+        + step(0)
+        + [f"JMP {tag}done", f"{tag}note:", f"STA {v.cell(NOTE)}"]
+        + [f"CMP #${LEGATO:02x}", "PHP", f"AND #${NOTES - 1:02x}", "TAY"]
+        + ["LDA freqlo,Y", f"STA {v.sid(0)}", "LDA freqhi,Y", f"STA {v.sid(1)}"]
+        + ["PLP", f"BCS {tag}leg", "LDA #$41", f"STA {v.sid(4)}", f"{tag}leg:"]
+        + step(1)
+        + v.read()
+        + [f"STA {v.cell(DUR)}"]
+        + step(2)
+        + [f"{tag}done:"]
+    )
 
 
 def emit(stmts, v, tag):
@@ -227,25 +316,55 @@ def motif(name, rng):  # pylint: disable=too-many-return-statements
     return code, [], []
 
 
-def player(style, seed, fields=4):
-    """ACME source of a PSID whose voice routine is dispatched in `style`."""
+def player(style, seed, fields=4, seq=None):  # pylint: disable=too-many-locals
+    """ACME source of a PSID whose voice routine is dispatched in `style`, with a
+    sequencer writing the SID `seq` (one of SEQ) when given."""
     rng = np.random.default_rng(seed)
-    stmts = body(rng, fields)
-    init = []
+    stmts = body(rng, fields, (2, 3) if seq else VOICE)
+    shadow = seq in ("shadow", "shadow_next")
+    init, tables = [], []
     for f in range(fields):
         for k in range(3):
             init += [
                 f"LDA #${int(rng.integers(256)):02x}",
                 f"STA ${STATE + f * 0x20 + VOICE * k:04x}",
             ]
+    if seq:
+        if shadow:
+            init += [
+                "LDA #0",
+                f"LDX #{SIDREGS - 1}",
+                "sc:",
+                f"STA ${SHADOW:04x},X",
+                "DEX",
+                "BPL sc",
+            ]
+        for k in range(3):
+            v = Voice("unrolled", k, rng, shadow)
+            tables += [f"song{k}: !byte " + ", ".join(f"${b:02x}" for b in song(rng))]
+            for half, f in ((0, START_LO), (1, START_HI)):
+                op = "<" if half == 0 else ">"
+                init += [
+                    f"LDA #{op}song{k}",
+                    f"STA {v.cell(f)}",
+                    f"STA {v.pointer(half)}",
+                ]
+            init += ["LDA #0", f"STA {v.cell(DUR)}", "LDA #$09", f"STA {v.sid(5)}"]
+            init += ["LDA #$a0", f"STA {v.sid(6)}"]
+        init += ["LDA #$0f", f"STA ${(SHADOW if shadow else 0xD400) + 0x18:04x}"]
+        tables += ["freqlo: !byte " + ", ".join(f"${x & 0xFF:02x}" for x in FREQ)]
+        tables += ["freqhi: !byte " + ", ".join(f"${x >> 8:02x}" for x in FREQ)]
     if style in ("unrolled", "smc"):
         play = []
         for k in range(3):
-            play += [f"copy{k}:"] + emit(stmts, Voice(style, k, rng), f"c{k}_")
+            v = Voice(style, k, rng, shadow)
+            play += [f"copy{k}:"] + (sequencer(v, f"q{k}") if seq else [])
+            play += emit(stmts, v, f"c{k}_")
             play += [f"JMP copy{k + 1}"] if k < 2 else ["RTS"]
     else:
         subs = []
-        code = emit(stmts, Voice(style, 0, rng), "v")
+        v = Voice(style, 0, rng, shadow)
+        code = (sequencer(v, "q") if seq else []) + emit(stmts, v, "v")
         if style in MOTIFS:
             body_lines, subs, extra = motif(style, rng)
             at = int(rng.integers(len(code) + 1))
@@ -278,7 +397,19 @@ def player(style, seed, fields=4):
             "fallthrough": ["LDX #0", "JSR voice", "LDX #7", "JSR voice", "LDX #14"],
         }
         play = calls.get(style, calls["loop"]) + voice
-    lines = ["init:"] + init + ["RTS", "play:"] + play
+    if shadow:
+        copy = [
+            "LDX #24",
+            "cp:",
+            f"LDA ${SHADOW:04x},X",
+            "STA $d400,X",
+            "DEX",
+            "BPL cp",
+        ]
+        first = copy if seq == "shadow_next" else []
+        last = copy if seq == "shadow" else []
+        play = first + ["JSR main"] + last + ["RTS", "main:"] + play
+    lines = ["init:"] + init + ["RTS", "play:"] + play + tables
     text = "\n".join(l if re.match(r"\w+:", l) else f"        {l}" for l in lines)
     return f"{HEADER}{text}\n}}\n"
 
@@ -289,9 +420,10 @@ def main(argv=None):
     ap.add_argument("style", choices=STYLES)
     ap.add_argument("seed", type=int)
     ap.add_argument("out")
+    ap.add_argument("--seq", choices=SEQ, help="add a sequencer writing the SID so")
     args = ap.parse_args(argv)
     with open(args.out, "w", encoding="ascii") as f:
-        f.write(player(args.style, args.seed))
+        f.write(player(args.style, args.seed, seq=args.seq))
 
 
 if __name__ == "__main__":
