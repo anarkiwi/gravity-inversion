@@ -18,7 +18,6 @@ CHECKED = (
     "song-data reads through zero-page pointers go through a bounds-checked reader of one "
     "span: their tables are read inside their extents only by assumption"
 )
-WR = "rd()/wr() dispatch and code store checks where indices are unbounded"
 CODE = "C0 keeps the instruction bytes the player never reads as data"
 BITMAP = "the C0_DATA bitmap"
 MISSED = {
@@ -32,14 +31,12 @@ MISSED = {
         "automatas",
         "data",
     ): "voice state is copied out of the code image as well as kept in DATA",
-    ("generated", "incoherent", "code"): CHECKED,
     (
         "generated",
-        "automatas",
+        "incoherent",
         "code",
-    ): f"{WR}: each row copy's operand pointer advances by "
-    "its row's length (its high byte's increment is unbounded), and $FB/$FC's high byte comes "
-    "from a table holding a zero end marker",
+    ): f"{CHECKED}: they are indexed by order indices init's STA $0C92,X may write and by "
+    "pattern numbers from the song, so neither bound of the reader's check is proved",
     (
         "generated",
         "emomyst",
@@ -47,7 +44,8 @@ MISSED = {
     ): f"{CHECKED}; each pointer store keeps the lift's window check, and cells init writes "
     "after its SID clear",
     ("generated", "commando", "data"): "the instrument table's region spans bytes past "
-    "the image nothing writes, which its index (any multiple of 8) may reach",
+    "the image: its index is eight times a song byte below $80, and which song bytes are "
+    "instrument numbers is the order of the stream, not a bound on their values",
     ("generated", "ghouls", "data"): f"{CODE}, and the music init's block copy ($29C6) "
     "writes each song's data to $730E and $914F-$9614: RAM regions spanning every song's copy",
     ("generated", "automatas", "data"): f"{CODE}, with {BITMAP}",
