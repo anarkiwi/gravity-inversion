@@ -24,8 +24,8 @@ measured by ablation, in [ablate.md](ablate.md).
 |---|---|---|
 | Commando | none | |
 | Incoherent | none | |
-| Automatas | K1 | song-data reads through each row copy's own operand pointer go through `rd`: the pointer advances by each row's length, which the analysis does not bound |
-| Ghouls | K1, K6 | song-data reads through each voice's zero-page pointer go through `rd` (advanced by each command's length), as do stores to each voice's return stack at an unbounded depth; dummy reads of indices the analysis cannot bound |
+| Automatas | none | each row copy's operand pointer, advanced by its row's length, keeps its table's least base |
+| Ghouls | K1, K6 | each voice's song pointer is loaded from song data (a jump command) and from a return stack a call command pushes at an unbounded depth: reads through it and stores to the stack go through `rd`/`wr`; dummy reads the 6502 makes of read-sensitive SID registers (the init's SID clear, a SID-write command's register from the song) |
 | Emomyst | none | the init's relocator runs once at lift time: its operands are constants and its code is not translated |
 
 ## Fuzz players

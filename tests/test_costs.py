@@ -12,19 +12,19 @@ import costs
 
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
 DRIVER = ROOT / "c64"
-DUMMY = "dummy reads of indices and pointers the analysis cannot bound"
 MISSED = {
-    (
-        "automatas",
-        "K1",
-    ): "song-data reads through each row copy's operand pointer, advanced "
-    "by each row's length: the analysis does not bound it",
     (
         "ghouls",
         "K1",
-    ): "song-data reads through each voice's zero-page pointer, advanced by "
-    "each command's length, and stores to its return stack at an unbounded depth",
-    ("ghouls", "K6"): DUMMY,
+    ): "each voice's song pointer is loaded from song data (a jump command's two bytes) and "
+    "from its return stack, which a call command pushes at a depth it never bounds: reads "
+    "through the pointer and stores to the stack go through rd()/wr()",
+    (
+        "ghouls",
+        "K6",
+    ): "dummy reads the 6502 makes of read-sensitive SID registers: the init's SID clear "
+    "(STA $D400,Y from Y = $1C down) reads $D419-$D41C, and a SID-write command's register "
+    "is a song byte read through that pointer",
 }
 
 SEEDS = range(3)
