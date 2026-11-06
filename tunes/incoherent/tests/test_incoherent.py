@@ -42,13 +42,19 @@ def test_loop_identical(kind, psid):
     assert sidtrace.diff(ref, sidtrace.trace_prg(PRGS[kind], frames)) is None
 
 
-@pytest.mark.parametrize("kind", PRGS)
-def test_without_init_identical(kind, psid):
+def test_without_init_identical(psid):
     """A song number with bit 7 set skips init: play runs on the image's state."""
     ref = sidtrace.trace_psid(psid, VARIANT_FRAMES, song=0x80)
     assert sidtrace.diff(ref, sidtrace.trace_psid(psid, VARIANT_FRAMES)) is not None
-    got = sidtrace.trace_prg(PRGS[kind], VARIANT_FRAMES, song=0x80)
+    got = sidtrace.trace_prg(PRG, VARIANT_FRAMES, song=0x80)
     assert sidtrace.diff(ref, got) is None
+
+
+def test_song_outside_range_traps():
+    """The generated init is translated for the songs the PSID header counts: a song number
+    outside them (bit 7 set) traps at init."""
+    with pytest.raises(AssertionError, match=r"jam at \$[0-9a-f]+ \(trap \d+\)"):
+        sidtrace.trace_prg(PRGS["generated"], VARIANT_FRAMES, song=0x80)
 
 
 @pytest.mark.parametrize("kind", BUILDERS)

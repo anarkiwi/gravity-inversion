@@ -14,12 +14,6 @@ import sizes
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
 DRIVER = ROOT / "c64"
 CFLAGS = {"automatas": ["-DFRAME_CIA"]}
-CHECKED = (
-    "song-data reads through zero-page pointers go through a bounds-checked reader of one "
-    "span: their tables are read inside their extents only by assumption"
-)
-CODE = "C0 keeps the instruction bytes the player never reads as data"
-BITMAP = "the C0_DATA bitmap"
 MISSED = {
     (
         "hand",
@@ -33,22 +27,32 @@ MISSED = {
     ): "voice state is copied out of the code image as well as kept in DATA",
     (
         "generated",
-        "incoherent",
-        "code",
-    ): f"{CHECKED}: they are indexed by order indices init's STA $0C92,X may write and by "
-    "pattern numbers from the song, so neither bound of the reader's check is proved",
-    (
-        "generated",
         "emomyst",
         "code",
-    ): f"{CHECKED}; each pointer store keeps the lift's window check, and cells init writes "
-    "after its SID clear",
-    ("generated", "commando", "data"): "the instrument table's region spans bytes past "
-    "the image: its index is eight times a song byte below $80, and which song bytes are "
-    "instrument numbers is the order of the stream, not a bound on their values",
-    ("generated", "ghouls", "data"): f"{CODE}, and the music init's block copy ($29C6) "
-    "writes each song's data to $730E and $914F-$9614: RAM regions spanning every song's copy",
-    ("generated", "automatas", "data"): f"{CODE}, with {BITMAP}",
+    ): "pattern numbers (song bytes below $80) index 21-entry tables 128 entries wide: each "
+    "load past the image is checked against its region (oob_rd past it), and each store to "
+    "the $02/$03 pointer keeps its window check, as the high bytes in that width name I/O "
+    "pages",
+    (
+        "generated",
+        "commando",
+        "data",
+    ): "the instrument table's rows past the image ($1B57-$1BF0) are written by the "
+    "pulse-width store at 8 times a song byte below $80 (rows 0-31, the image holding 13), "
+    "so they stay data",
+    (
+        "generated",
+        "ghouls",
+        "data",
+    ): "the music init's block copy ($29C6) writes each song's data to $730E and "
+    "$914F-$9614: RAM regions spanning every song's copy, and the copy writes code init "
+    "then runs, so init's runs are not decided",
+    (
+        "generated",
+        "automatas",
+        "data",
+    ): "held spans keep the instruction bytes between the operand cells the band copies "
+    "keep their state in, and those between the tables interleaved with code",
     (
         "generated",
         "emomyst",
