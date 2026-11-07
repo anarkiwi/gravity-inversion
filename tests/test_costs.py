@@ -16,10 +16,13 @@ MISSED = {
     (
         "ghouls",
         "K1",
-    ): "init clears zero page, the voices' song pointers ($21/$22,X) with it, and an "
-    "effect song's init loads none of them: the least value init leaves is 0, so the hull of "
-    "play's reads through them runs from zero page to the song data and they read through "
-    "rd()",
+    ): "init clears zero page, the voices' song pointers ($21/$22,X) and loop pointers "
+    "($30/$31,X) with it, and play's loop end ($81) copies the loop pointer into the song "
+    "pointer whenever its decremented count is nonzero: a voice reaching $81 before any $82 "
+    "reads through pointer 0 while active, and an effect list's voice byte with bit 0 set "
+    "marks voice X/2 active with a pointer's low byte in its pointer's high byte. Only the "
+    "song data rules both out, so the hull of play's reads through the song pointers runs "
+    "from zero page to the song data and they read through rd()",
     (
         "emomyst",
         "K5",
