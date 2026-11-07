@@ -12,14 +12,7 @@ import costs
 
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
 DRIVER = ROOT / "c64"
-MISSED = {
-    (
-        "ghouls",
-        "K1",
-    ): "each voice's song pointer is loaded from song data (a jump command's two bytes) and "
-    "from its return stack, which a call command pushes at a depth it never bounds: reads "
-    "through the pointer and stores to the stack go through rd()/wr()",
-}
+MISSED = {}
 
 SEEDS = range(3)
 FUZZ_MISSED = {}

@@ -85,10 +85,6 @@
    "kind": "goto",
    "edges": [
     [
-     "$16D9",
-     "$16EE"
-    ],
-    [
      "$16EE",
      "$1776"
     ],
@@ -97,7 +93,7 @@
      "$1776"
     ],
     [
-     "$1721",
+     "$1773",
      "$1776"
     ]
    ],
@@ -105,11 +101,12 @@
     "fn": "wf_arp",
     "label": "end"
    },
-   "why": "Exits to the shared epilogue $1776, past the pitch joins; not the procedure exit.",
+   "why": "Leaves the row loop for the shared epilogue $1776 past the pitch joins: the table end ($16EE JMP) and a negative jump row ($16FD BMI) from inside the loop, and the pitch store ($1773), which the C places in the loop body with the pitch joins $1760/$1764, entered from inside the loop by the chord tail's fall-through $175D; $1776 is the loop's second exit target.",
    "lift": "goto",
    "covered": false,
-   "uncovered": "the song never reads a table jump to a negative row or an arpeggio row $80; the patched variants reach them",
-   "transform": "T7"
+   "uncovered": "the song never reads a table jump to a negative row; the patched variants reach it",
+   "transform": "T7",
+   "hand_differs": "the hand C also writes goto end for $16D9 BPL ($16EE JMP $1776) and $1721 BEQ $1776, if/else arms ending at their branch's immediate post-dominator $1776, structured by the rule; it places the pitch joins after the loop, so $1773 falls into end and the chord tail's fall-through $175D -> $1760 becomes goto relative instead"
   },
   {
    "id": "wf_arp.pitch",
@@ -180,7 +177,7 @@
   },
   {
    "id": "vib_slide.vibrato",
-   "kind": "goto",
+   "kind": "join",
    "edges": [
     [
      "$158B",
@@ -199,10 +196,29 @@
     "fn": "vib_slide",
     "label": "vibrato"
    },
-   "why": "$1590 is entered from the increasing vibrato and the expired delay.",
-   "lift": "goto",
+   "why": "$1590 follows the slide byte's if/else chain: its zero arm (the INC $158D the BCC $158B skips, both reaching their branch's post-dominator $1590) and its positive arm's expired delay ($1579 BMI) rejoin there, once the arm's decrement leaves past the joined steps ($157E JMP $15D1, vib_slide.exit) and the portamento arm through up/down/store.",
+   "lift": "if/else arms rejoining, no goto",
+   "hand_differs": "the hand C writes goto vibrato",
    "covered": false,
    "uncovered": "the song has no increasing vibrato; the patched variants reach it",
+   "transform": "T6"
+  },
+  {
+   "id": "vib_slide.exit",
+   "kind": "goto",
+   "edges": [
+    [
+     "$157E",
+     "$15D1"
+    ]
+   ],
+   "hand": {
+    "fn": "vib_slide",
+    "form": "return"
+   },
+   "why": "The decrement of a pending vibrato delay jumps past the joined vibrato and slide steps to $15D1, which the slide's store falls into.",
+   "lift": "goto",
+   "hand_differs": "the hand C ends vib_slide at $15D1 and returns; $15D1 is no procedure entry, so the edge is a goto in the generated C",
    "transform": "T7"
   },
   {

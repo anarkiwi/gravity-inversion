@@ -32,10 +32,8 @@ OTHER_GOTOS = {
     "$0B90/$0BAA → $0BC0, $0B71/$0BA0 → $0BF6",
     "emomyst": "gotos beyond the map: $11DB → $11F4, $125A → $1268, $130B → $1378, "
     "$1319/$13C6/$13ED → $1520, $1332 → $1337, $13CB → $13E0, $13E2 → $13E3, $14C1 → $14D1, "
-    "$14CF → $14D7, $157E → $15D1, $1727 → $1760, "
-    "$1773 → $1776, $1817 → $181A, $1829 → $182C, $1B25 → $1AFD; map gotos not printed: "
-    "$1151 → $115B (init's, folded at lift time), $1579/$158B/$158D → $1590, "
-    "$16D9 → $16EE, $1721 → $1776",
+    "$14CF → $14D7, $1727 → $1760, $1817 → $181A, $1829 → $182C, $1B25 → $1AFD; map gotos "
+    "not printed: $1151 → $115B (init's, folded at lift time)",
 }
 
 

@@ -36,23 +36,17 @@ MISSED = {
         "generated",
         "ghouls",
         "data",
-    ): "the music init's block copy ($29C6) writes each song's data to $730E and "
-    "$914F-$9614: RAM regions spanning every song's copy, and the copy writes code init "
-    "then runs, so init's runs are not decided",
+    ): "the music init's block copy ($29C6) writes each song's data to $730E and past the "
+    "image to $914F-$9F14, RAM spanning every song's copy; the voices' song pointers read "
+    "one span from the image's song data through that copy, holding the bytes between the "
+    "image and it too; and the copy writes code init then runs, so init's runs are not "
+    "decided",
     (
         "generated",
         "automatas",
         "data",
     ): "held spans keep the instruction bytes between the operand cells the band copies "
     "keep their state in, and those between the tables interleaved with code",
-    (
-        "generated",
-        "emomyst",
-        "data",
-    ): "the voice index comes back from routines that save it in an operand ($17AF) and "
-    "reload it, so the voice functions take any byte: their accesses ($1028,X ...) reach "
-    "instruction bytes, which held spans keep, as they keep those inside the span a pointer "
-    "left by init may address",
 }
 
 

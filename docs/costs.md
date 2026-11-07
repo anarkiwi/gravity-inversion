@@ -25,7 +25,7 @@ measured by ablation, in [ablate.md](ablate.md).
 | Commando | none | |
 | Incoherent | none | |
 | Automatas | none | each row copy's operand pointer, advanced by its row's length, keeps its table's least base |
-| Ghouls | K1 | each voice's song pointer is loaded from song data (a jump command) and from a return stack a call command pushes at an unbounded depth: reads through it and stores to the stack go through `rd`/`wr` |
+| Ghouls | none | each voice's song pointer, loaded from song data by a jump command and popped from the return stack a call command pushes at an unbounded depth, points into the song: its reads are one span's bounds-checked reads, and the pushes are bounds-checked against the stack (`oob_wr` past it) |
 | Emomyst | none | the init's relocator runs once at lift time: its operands are constants and its code is not translated |
 
 ## Fuzz players
