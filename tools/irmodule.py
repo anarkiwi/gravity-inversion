@@ -199,7 +199,10 @@ def _op(ins, text):
     code, text, ops = ins.opcode, text.strip(), list(ins.operands)
     extra = None
     if code == "icmp":
-        extra = (re.search(r"icmp (\w+)", text).group(1), width(ops[0].type))
+        extra = (
+            re.search(r"icmp (?:samesign )?(\w+)", text).group(1),
+            width(ops[0].type),
+        )
     elif code == "getelementptr":
         extra = _type(
             re.search(r"getelementptr (?:inbounds |nuw |nusw )*(.*)", text).group(1)

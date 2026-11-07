@@ -308,20 +308,20 @@ def test_synthetic_player(copy, tmp_path):
     kinds = initiations.Analysis(
         m, eventlog.frequency_registers(), ["cgen_play"], ["cgen_init"]
     ).analyze()
-    arrays = {
-        (fn, op[1]): op[3][0][1][0]
+    defs = {
+        (fn, op[1]): op
         for fn, (_, blocks, _) in m.funcs.items()
         for ops in blocks.values()
         for op in ops
-        if op[0] == "getelementptr" and op[3][0][0] == "p"
+        if op[1]
     }
-    loads = {
-        (fn, op[1]): arrays.get((fn, op[3][0][1]))
-        for fn, (_, blocks, _) in m.funcs.items()
-        for ops in blocks.values()
-        for op in ops
-        if op[0] == "load"
-    }
+
+    def base(fn, o):
+        while o[0] == "v" and defs.get((fn, o[1]), ("",))[0] == "getelementptr":
+            o = defs[fn, o[1]][3][0]
+        return o[1][0] if o[0] == "p" else None
+
+    loads = {k: base(k[0], op[3][0]) for k, op in defs.items() if op[0] == "load"}
     assert {loads[k]: kind for k, kind in kinds.items()} == {
         "notes": "note",
         "lens": "other",
