@@ -104,7 +104,7 @@ class Player:  # pylint: disable=too-few-public-methods
         src.write_text(c_path.read_text(encoding="utf-8"), encoding="utf-8")
         src.with_suffix(".h").write_text(unfold(h_text), encoding="utf-8")
         text = irmodule.lower(src, [c_path.parent, DRIVER], ["CGEN_HOST"])
-        helpers = set(re.findall(r"^define [^@]*@(rd(?:C\d+)?)\(", text, re.M))
+        helpers = set(re.findall(r"^define [^@]*@((?:oob_)?rd(?:C\d+)?)\(", text, re.M))
         self.origins = origins(h_text)
         text, self.sites = irmodule.instrument(
             text, {**self.origins, "cgen_k": 0}, song, helpers, set(copies)

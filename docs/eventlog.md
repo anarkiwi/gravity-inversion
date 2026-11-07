@@ -19,7 +19,7 @@ This writes `OUT/events.jsonl` and `OUT/summary.json`.
    array read is one `load` with its source line. A site is a load from a `Cj`, at a byte of
    song data when its offset is constant, or through a pointer value. Loads from locals,
    `K` constants and state at constant offsets are not sites. A load inside the read helpers
-   `rd`/`rdCj` reports the site of the call that entered it. A byte the lift proves constant
+   `rd`/`rdCj`/`oob_rd` reports the site of the call that entered it. A byte the lift proves constant
    is named in the `.h` (`X_K<offset>`, the byte at `X_ORG` + offset) and read by name in
    the `.c`; the IR is lowered with each name defined as a load of that original address
    from one array (`eventlog.unfold`), so its uses are sites too.

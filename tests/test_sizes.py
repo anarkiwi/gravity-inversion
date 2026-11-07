@@ -49,6 +49,20 @@ MISSED = {
     "so they stay data",
     (
         "generated",
+        "incoherent",
+        "code",
+    ): "play's reads through its song pointer, whose hull the lift bounds on no run, are the "
+    "song span's bounds-checked reads, falling back to oob_rd, which reads the 6502's byte at "
+    "any address: its loop over the arrays the program holds (zero page, the 14 operand cells "
+    "below the span, the span) makes the span reader a call of a non-leaf",
+    (
+        "generated",
+        "incoherent",
+        "data",
+    ): "oob_rd's tables give each of the 16 arrays it reads (zero page, the 14 operand cells "
+    "below the song span, the span) its place, origin and length",
+    (
+        "generated",
         "ghouls",
         "data",
     ): "the music init's block copy ($29C6) writes each song's data to $730E and past the "

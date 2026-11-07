@@ -14,16 +14,6 @@ TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
 DRIVER = ROOT / "c64"
 MISSED = {
     (
-        "ghouls",
-        "K1",
-    ): "init clears zero page, the voices' song pointers ($21/$22,X) and loop pointers "
-    "($30/$31,X) with it, and play's loop end ($81) copies the loop pointer into the song "
-    "pointer whenever its decremented count is nonzero: a voice reaching $81 before any $82 "
-    "reads through pointer 0 while active, and an effect list's voice byte with bit 0 set "
-    "marks voice X/2 active with a pointer's low byte in its pointer's high byte. Only the "
-    "song data rules both out, so the hull of play's reads through the song pointers runs "
-    "from zero page to the song data and they read through rd()",
-    (
         "emomyst",
         "K5",
     ): "init's relocator stores each operand byte through its patch-site table: the 30 "
