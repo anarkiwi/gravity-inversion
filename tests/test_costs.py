@@ -22,14 +22,10 @@ MISSED = {
     "rd()",
     (
         "emomyst",
-        "K1",
-    ): "the operands the relocator patches from the SWP header are pointer variables whose "
-    "values the analysis does not bound: play's reads through them go through rd()",
-    (
-        "emomyst",
         "K5",
-    ): "init's relocator stores each operand byte through its patch-site table, an address "
-    "the store's set bounds inside the held span but which indexes it by 16 bits",
+    ): "init's relocator stores each operand byte through its patch-site table: the 30 "
+    "operands it patches lie scattered through the player ($1256-$1B4F), so the store's "
+    "address set is one held span's, indexed by 16 bits",
 }
 
 SEEDS = range(3)

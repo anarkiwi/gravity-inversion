@@ -75,8 +75,7 @@ over the records rebuilds the reference write stream (`eventlog.rebuild`).
   - Emomyst ($19F1–$19FF, $1A6E–$1AAD), Ghouls ($6CB7–$6D34) and Incoherent ($0C4F–$0C63)
     dispatch commands through tables of branch offsets or jump vectors. The original stores
     each value into its own code (a lift code cell), while the hand C uses a `switch`.
-  - Emomyst's generated init runs the original's relocator, reading its offset table
-    ($1B55) and patch-site table ($1B92); the hand init sets its pointers from the SWP
-    header and has no relocator (a strict xfail of `test_hand`).
 
-  Without exactly those reads the sets are equal.
+  Without exactly those reads the sets are equal. Emomyst's generated init runs the
+  original's relocator, reading the SWP header words the hand init reads, and its offset
+  and patch-site tables ($1B55, $1B92), which lie outside the hand C's arrays.

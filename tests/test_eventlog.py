@@ -234,26 +234,8 @@ def _spans(tune):
     }
 
 
-#: Tunes whose generated C's song data reads differ from the hand C's, and why.
-HAND_MISSED = {
-    "emomyst": "the generated init runs the original's relocator as code, reading its "
-    "offset table ($1B55) and patch-site table ($1B92) once at init; the hand C sets its "
-    "pointer variables from the SWP header words and has no relocator",
-}
-
-
 @pytest.mark.slow
-@pytest.mark.parametrize(
-    "tune",
-    [
-        (
-            pytest.param(t, marks=pytest.mark.xfail(strict=True, reason=HAND_MISSED[t]))
-            if t in HAND_MISSED
-            else t
-        )
-        for t in sorted(PSIDS)
-    ],
-)
+@pytest.mark.parametrize("tune", sorted(PSIDS))
 def test_hand(tune):
     """Over the song (Commando 6000 calls) the generated C's song data reads (call, address)
     are the original's, with its values; those of bytes in the -O0 hand C's data arrays
