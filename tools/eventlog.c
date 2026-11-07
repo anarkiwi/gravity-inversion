@@ -11,7 +11,7 @@ void cgen_init(uint8_t a);
 void cgen_play(uint8_t a);
 
 #define MAXW 4096
-#define SLOTS (1 << 16)
+#define SLOTS (1 << 22)
 #define MAXT (1 << 22)
 
 uint8_t io[0x1000];
@@ -59,7 +59,7 @@ uint32_t cgen_tag(uint16_t read) {
 
 static uint32_t slot(const void *p) {
   uintptr_t k = (uintptr_t)p;
-  uint32_t h = (uint32_t)((k * 0x9E3779B97F4A7C15u) >> 48);
+  uint32_t h = (uint32_t)((k * 0x9E3779B97F4A7C15u) >> 42);
   while (keys[h] && keys[h] != k)
     h = (h + 1) & (SLOTS - 1);
   return h;

@@ -27,38 +27,47 @@ def width(ty):
 
 
 def _type(s):
-    """``(type, rest)``: the IR type at the start of ``s`` (arrays nested)."""
+    """``(type, rest)``: the IR type at the start of ``s`` (arrays and structs nested)."""
     s = s.lstrip()
-    if not s.startswith("["):
+    if s[0] not in "[{<":
         m = re.match(r"[\w.]+", s)
         return m.group(0), s[m.end() :]
     depth = 0
     for i, ch in enumerate(s):
-        depth += {"[": 1, "]": -1}.get(ch, 0)
-        if not depth:
-            return s[: i + 1], s[i + 1 :]
+        depth += {"[": 1, "{": 1, "]": -1, "}": -1}.get(ch, 0)
+        if not depth and ch in "]}":
+            end = i + 2 if s[0] == "<" else i + 1
+            return s[:end], s[end:]
     raise ValueError(s)
 
 
+def _fields(ty):
+    """The field types of a (packed) struct type."""
+    body = ty[2:-2] if ty.startswith("<") else ty[1:-1]
+    return [_type(f)[0] for f in _items(body)]
+
+
 def _size(ty):
-    """Byte size of an IR type."""
+    """Byte size of an IR type (structs packed)."""
     if ty.startswith("["):
         n, rest = ty[1:].split(" x ", 1)
         return int(n) * _size(rest[:-1])
+    if ty[0] in "{<":
+        return sum(_size(f) for f in _fields(ty))
     return SIZE[ty]
-
-
-def _elem(ty):
-    """The element type of an array type."""
-    return ty[1:-1].split(" x ", 1)[1]
 
 
 def offset(ty, idx):
     """Byte offset of GEP indices ``idx`` over source element type ``ty``."""
     off = idx[0] * _size(ty)
     for i in idx[1:]:
-        ty = _elem(ty)
-        off += i * _size(ty)
+        if ty[0] in "{<":
+            fields = _fields(ty)
+            off += sum(_size(f) for f in fields[:i])
+            ty = fields[i]
+        else:
+            ty = ty[1:-1].split(" x ", 1)[1]
+            off += i * _size(ty)
     return off
 
 
@@ -156,9 +165,9 @@ def _bytes(ty, init):
         return [0] * _size(ty)
     if init.startswith('c"'):
         return _escaped(init[2:-1])
-    if ty.startswith("["):
+    if ty[0] in "[{<":
         out = []
-        for item in _items(init[1:-1]):
+        for item in _items(init[2:-2] if init.startswith("<") else init[1:-1]):
             ety, rest = _type(item)
             out += _bytes(ety, rest)
         return out
