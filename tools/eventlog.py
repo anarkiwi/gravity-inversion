@@ -53,19 +53,12 @@ def loaded_image(psid):
 def song_mask(image, info):
     """Per original address, whether it is song data: a byte of a held span (``Cj``) in no
     region (``Rk``) and no instruction, by the lift's ``info``."""
-    init = info.get("init") or {}
-    image = bytearray(image)
-    for a, b in init.get("image", ()):
-        image[a] = b
     mask = np.zeros(0x10000, bool)
     for lo, hi in info["code_held"]:
         mask[lo:hi] = True
     for org, n in info["regions"]:
         mask[org : org + n] = False
-    ran = code_bytes(image, info["starts"])
-    for pc, n in init.get("code", ()):
-        ran[(pc + np.arange(n)) & 0xFFFF] = True
-    return mask & ~ran
+    return mask & ~code_bytes(image, info["starts"])
 
 
 def origins(h_text):

@@ -16,6 +16,19 @@ DRIVER = ROOT / "c64"
 CFLAGS = {"automatas": ["-DFRAME_CIA"]}
 MISSED = {
     (
+        "generated",
+        "emomyst",
+        "code",
+    ): "init's relocator is lifted as code and play reads through the operands it patches, "
+    "pointer variables the analysis does not bound, through rd(); a write through one goes "
+    "through wr() and codechk()",
+    (
+        "generated",
+        "emomyst",
+        "data",
+    ): "the reads through the relocated operands may reach any byte of the player, so the "
+    "whole image is held as one span with a write mask of its data bytes",
+    (
         "hand",
         "ghouls",
         "data",
@@ -39,8 +52,7 @@ MISSED = {
     ): "the music init's block copy ($29C6) writes each song's data to $730E and past the "
     "image to $914F-$9F14, RAM spanning every song's copy; the voices' song pointers read "
     "one span from the image's song data through that copy, holding the bytes between the "
-    "image and it too; and the copy writes code init then runs, so init's runs are not "
-    "decided",
+    "image and it too",
     (
         "generated",
         "automatas",

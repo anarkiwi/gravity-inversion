@@ -13,8 +13,8 @@ This writes `OUT/events.jsonl` and `OUT/summary.json`.
 1. **Song data.** `tools/transliterate.py` lifts the PSID. The `.c` is the code alone, and the
    `.h` holds the data: regions `Rk` (state, the bytes the program writes) and held spans
    `Cj` (constant bytes, with the regions inside them as slices). Song data is every held span
-   byte that is in no region and in no instruction (`info["starts"]`, the folded init path's
-   included): `eventlog.song_mask`.
+   byte that is in no region and in no instruction (`info["starts"]`):
+   `eventlog.song_mask`.
 2. **Sites.** `tools/irmodule.py` lowers the `.c` to LLVM IR with clang at `-O0`, so each C
    array read is one `load` with its source line. A site is a load from a `Cj`, at a byte of
    song data when its offset is constant, or through a pointer value. Loads from locals,
@@ -75,7 +75,8 @@ over the records rebuilds the reference write stream (`eventlog.rebuild`).
   - Emomyst ($19F1–$19FF, $1A6E–$1AAD), Ghouls ($6CB7–$6D34) and Incoherent ($0C4F–$0C63)
     dispatch commands through tables of branch offsets or jump vectors. The original stores
     each value into its own code (a lift code cell), while the hand C uses a `switch`.
-  - Emomyst's hand init reads three subtune header bytes ($1C40, $1C4E, $1C5C) that the lift
-    folds into the image the `.c` starts from.
+  - Emomyst's generated init runs the original's relocator, reading its offset table
+    ($1B55) and patch-site table ($1B92); the hand init sets its pointers from the SWP
+    header and has no relocator (a strict xfail of `test_hand`).
 
   Without exactly those reads the sets are equal.

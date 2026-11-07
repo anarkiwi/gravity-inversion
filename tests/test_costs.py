@@ -12,7 +12,25 @@ import costs
 
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
 DRIVER = ROOT / "c64"
-MISSED = {}
+MISSED = {
+    (
+        "ghouls",
+        "K1",
+    ): "init clears zero page, the voices' song pointers ($21/$22,X) with it, and an "
+    "effect song's init loads none of them: the least value init leaves is 0, so the hull of "
+    "play's reads through them runs from zero page to the song data and they read through "
+    "rd()",
+    (
+        "emomyst",
+        "K1",
+    ): "the operands the relocator patches from the SWP header are pointer variables whose "
+    "values the analysis does not bound: play's reads through them go through rd()",
+    (
+        "emomyst",
+        "K5",
+    ): "init's relocator stores each operand byte through its patch-site table, an address "
+    "the store's set bounds inside the held span but which indexes it by 16 bits",
+}
 
 SEEDS = range(3)
 FUZZ_MISSED = {}

@@ -2,7 +2,7 @@
 
 Writes the player and C64 host (`tune_init`/`tune_play` for c64/driver.c) to OUT.c and
 the song data to the header. Init is called once, before any play call, as c64/driver.c
-does, with A each song the PSID header counts: its run is folded into the song data."""
+does, with A each song the PSID header counts: it is lifted as code like play."""
 
 import argparse
 import os

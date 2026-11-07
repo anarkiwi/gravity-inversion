@@ -25,8 +25,8 @@ measured by ablation, in [ablate.md](ablate.md).
 | Commando | none | |
 | Incoherent | none | |
 | Automatas | none | each row copy's operand pointer, advanced by its row's length, keeps its table's least base |
-| Ghouls | none | each voice's song pointer, loaded from song data by a jump command and popped from the return stack a call command pushes at an unbounded depth, points into the song: its reads are one span's bounds-checked reads, and the pushes are bounds-checked against the stack (`oob_wr` past it) |
-| Emomyst | none | the init's relocator runs once at lift time: its operands are constants and its code is not translated |
+| Ghouls | K1 | init clears zero page and an effect song's init loads no song pointer, so each voice's song pointer may hold 0 when play reads through it: its reads go through `rd()`. Each voice's song pointer, loaded from song data by a jump command and popped from the return stack a call command pushes at an unbounded depth, points into the song: its reads are one span's bounds-checked reads, and the pushes are bounds-checked against the stack (`oob_wr` past it) |
+| Emomyst | K1, K5 | init's relocator is lifted as code: play reads through the operands it patches, pointer variables the analysis does not bound, through `rd()` (K1), and its stores through its patch-site table index the held span by 16 bits (K5) |
 
 ## Fuzz players
 

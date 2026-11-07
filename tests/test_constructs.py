@@ -18,12 +18,11 @@ MISSED = {}
 
 @functools.cache
 def provenance(tune):
-    """cgen's provenance of the tune's generated C, with the instructions its folded init
-    ran at lift time (`folded`) and those the C translates (`starts`)."""
+    """cgen's provenance of the tune's generated C, with the instructions the C translates
+    (`starts`)."""
     m = constructs.load(tune)
     _, _, info = transliterate((constructs.ROOT / m["psid"]).read_bytes(), "t.h")
-    folded = [pc for pc, _ in (info["init"] or {}).get("code", ())]
-    return {**info["provenance"], "folded": folded, "starts": set(info["starts"])}
+    return {**info["provenance"], "starts": set(info["starts"])}
 
 
 def _entries():
@@ -60,7 +59,7 @@ def lifted(c, prov):  # pylint: disable=too-many-return-statements
     """True if the generated C has the construct in the form the hand C gives it."""
     k, gotos = c["kind"], {tuple(e) for e in prov["gotos"]}
     if k == "loop":
-        return c["head"] in prov["loops"] or c["head"] in prov["folded"]
+        return c["head"] in prov["loops"]
     if k == "multi_entry_loop":
         return c["head"] in prov["loops"] and not {tuple(e) for e in c["edges"]} & gotos
     if k in ("call", "fall_call", "tail_call"):
@@ -75,10 +74,8 @@ def lifted(c, prov):  # pylint: disable=too-many-return-statements
     if k == "smc":
         return c["cell"] in prov["cells"]
     if k == "goto":
-        # Init folded at lift time ran or decided against each edge: no goto is left.
-        gone = all(
-            e[0] in prov["folded"] or e[0] not in prov["starts"] for e in c["edges"]
-        )
+        # An edge from code the C does not translate leaves no goto.
+        gone = all(e[0] not in prov["starts"] for e in c["edges"])
         return gone or {tuple(e) for e in c["edges"]} <= gotos
     if k == "join":
         return not {tuple(e) for e in c["edges"]} & gotos

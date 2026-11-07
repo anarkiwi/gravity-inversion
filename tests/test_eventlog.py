@@ -45,8 +45,6 @@ DISPATCH = {
     "ghouls": [(0x6CB7, 0x6D35)],
     "incoherent": [(0x0C4F, 0x0C64)],
 }
-#: The hand C's init reads (subtune header bytes) the lift folds into the .c's image.
-FOLDED = {"emomyst": {(0, 0x1C40), (0, 0x1C4E), (0, 0x1C5C)}}
 HAND_CYCLES = 20_000_000
 
 
@@ -57,15 +55,13 @@ def test_same_values():
 
 
 def test_song_mask():
-    """Song data: held span bytes outside the regions and the instructions, the init
-    path's included."""
+    """Song data: held span bytes outside the regions and the instructions."""
     image = bytearray(0x10000)
-    image[0x1000:0x1003] = b"\x4c\x00\x10"
+    image[0x1000:0x1004] = b"\x4c\x00\x10\xea"
     info = {
         "code_held": [(0x1000, 0x1010)],
         "regions": [(0x1008, 2)],
-        "starts": [0x1000],
-        "init": {"image": [(0x1003, 0xEA)], "code": [(0x1003, 1)]},
+        "starts": [0x1000, 0x1003],
     }
     mask = eventlog.song_mask(image, info)
     want = [0x1004, 0x1005, 0x1006, 0x1007] + list(range(0x100A, 0x1010))
@@ -238,14 +234,31 @@ def _spans(tune):
     }
 
 
+#: Tunes whose generated C's song data reads differ from the hand C's, and why.
+HAND_MISSED = {
+    "emomyst": "the generated init runs the original's relocator as code, reading its "
+    "offset table ($1B55) and patch-site table ($1B92) once at init; the hand C sets its "
+    "pointer variables from the SWP header words and has no relocator",
+}
+
+
 @pytest.mark.slow
-@pytest.mark.parametrize("tune", sorted(PSIDS))
+@pytest.mark.parametrize(
+    "tune",
+    [
+        (
+            pytest.param(t, marks=pytest.mark.xfail(strict=True, reason=HAND_MISSED[t]))
+            if t in HAND_MISSED
+            else t
+        )
+        for t in sorted(PSIDS)
+    ],
+)
 def test_hand(tune):
     """Over the song (Commando 6000 calls) the generated C's song data reads (call, address)
     are the original's, with its values; those of bytes in the -O0 hand C's data arrays
     equal the hand C's, whose SID writes equal the original's, but for the DISPATCH tables
-    (each read's value stored to a lift code cell, none read by the hand C) and the FOLDED
-    init reads."""
+    (each read's value stored to a lift code cell, none read by the hand C)."""
     prg = ROOT / "tunes" / tune / "build" / "hand-O0.prg"
     if not (PSIDS[tune].exists() and prg.exists()):
         pytest.skip("needs `make` builds")
@@ -276,7 +289,7 @@ def test_hand(tune):
         held[lo : lo + n] = True
     gen = {k for k, _ in gen if held[k[1]] and not table[k[1]]}
     assert not any(table[a] for _, a in hand)
-    assert gen <= hand and hand - gen == FOLDED.get(tune, set())
+    assert gen == hand
 
 
 def test_main(tmp_path):
