@@ -40,12 +40,12 @@ TUNE := $(notdir $(CURDIR))
 
 all: $(B)/gen.prg
 
-$(B)/gen/$(TUNE).c $(B)/gen/$(TUNE).h &: $(PSID) $(ROOT)/tools/transliterate.py
+$(B)/gen/$(TUNE).c $(B)/gen/$(TUNE).h $(B)/gen/cgen_trap.c &: $(PSID) $(ROOT)/tools/transliterate.py
 	mkdir -p $(B)/gen
 	$(PY) $(ROOT)/tools/transliterate.py $< $(B)/gen/$(TUNE).c --header $(B)/gen/$(TUNE).h
 
 $(B)/gen.prg: $(B)/gen/$(TUNE).c $(B)/gen/$(TUNE).h $(DRIVER)
-	$(call mosbuild,$@,$(B)/gen,$<)
+	$(call mosbuild,$@,$(B)/gen,$< $(B)/gen/cgen_trap.c)
 
 check: check-gen
 

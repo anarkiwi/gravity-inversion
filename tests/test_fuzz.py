@@ -14,7 +14,7 @@ import pytest
 
 import fuzzplayer
 import sidtrace
-from transliterate import transliterate
+from transliterate import trap_source, transliterate
 
 DRIVER = pathlib.Path(__file__).resolve().parent.parent / "c64"
 SEEDS = range(3)
@@ -92,7 +92,7 @@ def test_exact(style, seed, translated, tmp_path):
     prg = tmp_path / "fuzz.prg"
     subprocess.run(
         [os.environ.get("CC", "mos-c64-clang"), "-Os", f"-I{tmp_path}", f"-I{DRIVER}"]
-        + ["-o", prg, tmp_path / "fuzz.c", DRIVER / "driver.c"],
+        + ["-o", prg, tmp_path / "fuzz.c", trap_source(tmp_path), DRIVER / "driver.c"],
         check=True,
     )
     _, writes, bad = sidtrace.compare(psid, str(prg), FRAMES, 0)

@@ -58,6 +58,7 @@ from sidtrace import (
     trace_prg,
 )
 from sizes import DATA_SECTIONS, sections
+from transliterate import trap_source
 
 DRIVER = ROOT / "c64"
 GUARD = frozenset({1, *range(0xD0, 0xE0)})
@@ -658,7 +659,7 @@ class Ablation:  # pylint: disable=too-many-instance-attributes
                 prg,
                 src,
             ]
-            + [DRIVER / "driver.c"],
+            + [trap_source(self.work), DRIVER / "driver.c"],
             check=True,
         )
         return prg

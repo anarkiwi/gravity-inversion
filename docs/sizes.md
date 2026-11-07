@@ -24,10 +24,10 @@ Bytes, from `tools/sizes.py`; the hand and generated PRGs all load below `$D000`
 
 | Tune | Code bound | Hand code | Generated code | Data bound | Hand data | Generated data |
 |---|---|---|---|---|---|---|
-| Commando | 2315 | 1416 | 2206 | 1981 | 1963 | 2137 |
-| Incoherent | 2675 | 2603 | 2642 | 5863 | 5839 | 5837 |
-| Automatas | 4000 | 2655 | 3301 | 6583 | 6832 | 7462 |
-| Ghouls | 6662 | 3552 | 4647 | 23291 | 30523 | 30433 |
-| Emomyst | 5432 | 4490 | 7153 | 3170 | 2862 | 5047 |
+| Commando | 2315 | 1416 | 2211 | 1981 | 1963 | 2135 |
+| Incoherent | 2675 | 2603 | 2564 | 5863 | 5839 | 5839 |
+| Automatas | 4000 | 2655 | 3144 | 6583 | 6832 | 7470 |
+| Ghouls | 6662 | 3552 | 4376 | 23291 | 30523 | 30468 |
+| Emomyst | 5432 | 4490 | 6693 | 3170 | 2862 | 5080 |
 
 Where a translation exceeds a bound, `tests/test_sizes.py` records the cause as a strict xfail.

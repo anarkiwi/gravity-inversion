@@ -36,7 +36,7 @@ SOURCE = """#include "tiny.h"
 
 uint8_t io_read(uint16_t a);
 void io_write(uint16_t a, uint8_t v);
-void trap(uint16_t k);
+__attribute__((noreturn, leaf)) void trap(uint16_t k);
 
 uint8_t C0[C0_LEN] = {C0_INIT};
 uint8_t R0[R0_LEN] = {R0_INIT};
@@ -137,12 +137,6 @@ void cgen_play(uint8_t a) {
 uint8_t io_read(uint16_t a) { return *(volatile uint8_t *)a; }
 
 void io_write(uint16_t a, uint8_t v) { *(volatile uint8_t *)a = v; }
-
-__attribute__((noinline)) void trap(uint16_t k) {
-  (void)k;
-  for (;;)
-    __asm__ volatile(".byte 0x02");
-}
 
 void tune_init(uint8_t song) { cgen_init(song); }
 
