@@ -87,11 +87,14 @@ def trace_psid(  # pylint: disable=too-many-arguments
     poke=None,
     sid_model="6581",
     detail=False,
+    observe=None,
 ):
     """SID writes of init then `frames` play calls: a list per frame, init first.
 
-    Writes to `watch` addresses are passed to on_watch(frame, addr, value); with
-    `detail` each write also carries its cycle from the start of its call and its pc."""
+    Writes to `watch` addresses are passed to on_watch(frame, addr, value); with `detail`
+    each write also carries its cycle from its call's start and its pc. `observe(mpu, mem,
+    log)` is called once the machine is wired; len(log.calls) - 1 is the current call.
+    """
     load, init, play, image = psid_parts(data)
     mem, mpu = machine(load, image, poke, sid_model)
     log, writes = _log(mpu, detail)
@@ -99,6 +102,8 @@ def trace_psid(  # pylint: disable=too-many-arguments
         mem.subscribe_to_write(
             watch, lambda addr, value: on_watch(len(log.calls) - 1, addr, value)
         )
+    if observe:
+        observe(mpu, mem, log)
     log.start()
     run_to_rts(mpu, mem, init, default_song(data) if song is None else song, MAX_CYCLES)
     for _ in tqdm(range(frames), desc="psid", unit="frame"):
@@ -116,6 +121,7 @@ def trace_prg(  # pylint: disable=too-many-arguments
     watch=None,
     on_watch=None,
     observe=None,
+    max_cycles=MAX_CYCLES,
 ):
     """SID writes of a C build: frame n holds the writes after its n-th frame_wait.
 
@@ -123,7 +129,8 @@ def trace_prg(  # pylint: disable=too-many-arguments
     song_number on entry to main and returns from each frame_wait at once.
     `watch` is a function of the symbol table giving addresses whose writes are
     passed to on_watch(frame, addr, value). `observe(mpu, syms, log)` is called once the
-    machine is wired, before the C runtime starts; len(log.calls) is 0 until init."""
+    machine is wired, before the C runtime starts; len(log.calls) is 0 until init.
+    `max_cycles` bounds each call."""
     _, syms = load_elf(f"{prg}.elf")
     with open(prg, "rb") as f:
         data = f.read()
@@ -140,7 +147,7 @@ def trace_prg(  # pylint: disable=too-many-arguments
     mem[syms["song_number"]] = song
 
     def to_wait():
-        reason = mpu.run_until(max_cycles=MAX_CYCLES, stop_pcs=[syms["frame_wait"]])
+        reason = mpu.run_until(max_cycles=max_cycles, stop_pcs=[syms["frame_wait"]])
         trap = syms.get("cgen_trap")
         k = "" if trap is None else f" (trap {mem[trap] | mem[trap + 1] << 8})"
         assert reason == "pc", f"call {len(log.calls)}: {reason} at ${mpu.pc:04x}{k}"

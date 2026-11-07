@@ -49,6 +49,12 @@ $(B)/gen.prg: $(B)/gen/$(TUNE).c $(B)/gen/$(TUNE).h $(DRIVER)
 
 check: check-gen
 
+# The hand C at -O0: each C read of its data is one load (tests/test_eventlog.py).
+all: $(B)/hand-O0.prg
+
+$(B)/hand-O0.prg: src/$(TUNE).c $(B)/$(TUNE)_data.h $(DRIVER)
+	$(CC) -O0 -Wall -Wextra -Werror $(CFLAGS_TUNE) -I$(B) -I$(ROOT)/c64 -o $@ $< $(ROOT)/c64/driver.c
+
 check-gen: $(B)/gen.prg
 	$(PY) $(ROOT)/tools/sidtrace.py $(PSID) $< $(CHECK_ARGS)
 

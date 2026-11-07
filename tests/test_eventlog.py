@@ -1,337 +1,170 @@
-"""Tests for tools/eventlog.py and tools/initiations.py: register logs, synthetic C players,
-fuzz players, Emomyst and Commando against their hand C's note reads."""
+"""Tests for tools/eventlog.py and tools/irmodule.py: read sites of synthetic C, fuzz players
+against their originals, and the five tunes against their hand C's reads of the same data.
+"""
 
 import json
 import pathlib
+import re
 import subprocess
 
 import numpy as np
 import pytest
-from jennings.coverage.elf import load_elf
 
 import fuzzplayer
-import initiations
 import irmodule
 import sidtrace
 
 import eventlog
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-EMOMYST = ROOT / "fixtures" / "Emomyst.sid"
-EMOMYST_PRG = ROOT / "tunes" / "emomyst" / "build" / "emomyst.prg"
+FIX = ROOT / "fixtures"
 COMMANDO = ROOT / "tunes" / "commando" / "build"
-
-
-def _needs(*paths):
-    return pytest.mark.skipif(
-        not all(p.exists() for p in paths), reason="needs `make` builds"
-    )
-
-
-@pytest.mark.parametrize("cents", [-49.0, -20.0, 0.0, 13.0, 49.0])
-def test_note_round_trip(cents):
-    """Register values of equal-tempered notes name back to the note; the cents error is
-    bounded by half a register step."""
-    notes = np.arange(12, 108)
-    freq = eventlog.freq_of(notes, cents)
-    reg = np.round(freq).astype(int)
-    keep = (reg > 0) & (reg <= 0xFFFF)
-    near, got = eventlog.note_of(reg[keep])
-    want = np.round(notes[keep] + cents / 100).astype(int)
-    clear = abs(cents) + 1200 * np.log2(reg[keep] / (reg[keep] - 0.5)) < 50
-    assert (near == want)[clear].all() and clear.any()
-    step = 1200 * np.log2(reg[keep] / (reg[keep] - 0.5))
-    err = got - (cents - 100 * (want - notes[keep]))
-    assert (np.abs(err) <= step)[clear].all()
-
-
-def test_note_names():
-    """Middle C, A4 and silence."""
-    assert eventlog.name_of(60) == "C-4"
-    assert eventlog.name_of(69) == "A-4"
-    assert eventlog.name_of(-1) == "---"
-    assert eventlog.note_of([0])[0][0] == -1
-    assert abs(eventlog.freq_of(69) * eventlog.PAL.clock_hz / (1 << 24) - 440) < 1e-9
-
-
-def test_frequency_registers():
-    """The six frequency registers and their mirrors map to their voices; nothing else."""
-    regs = eventlog.frequency_registers()
-    assert {a: regs[a] for a in range(0xD400, 0xD415) if a in regs} == {
-        0xD400: 0,
-        0xD401: 0,
-        0xD407: 1,
-        0xD408: 1,
-        0xD40E: 2,
-        0xD40F: 2,
-    }
-    assert regs[0xD7EE] == 2 and 0xD404 not in regs and len(regs) == 6 * 32
-
-
-def _onsets(frames, voice=0):
-    out = eventlog.register_onsets(eventlog.flatten(frames), len(frames))
-    got = {
-        k: np.flatnonzero(v[:, voice]).tolist() for k, v in out.items() if k != "prep"
-    }
-    return got, out["prep"][:, voice]
-
-
-def test_gate_edge():
-    """Gate rises are onsets; waveform changes with the gate held are not."""
-    got, _ = _onsets([[(4, 0x10)], [(4, 0x11)], [(4, 0x21)], [(4, 0x20)], [(4, 0x21)]])
-    assert got == {"gate": [1, 4], "test": [], "hard_restart": []}
-
-
-def test_hard_restart():
-    """Gate off with an AD/SR change, then gate on: a hard restart prepared from the frame of
-    the change. Rewriting the same AD/SR values every frame, as a shadow buffer does, is not
-    a change."""
-    frames = [
-        [(5, 0x22), (6, 0x88), (4, 0x41)],
-        [(5, 0x22), (6, 0x88), (4, 0x40)],
-        [(5, 0x00), (6, 0x00), (4, 0x40)],
-        [(5, 0x22), (6, 0x88), (4, 0x41)],
-        [(5, 0x22), (6, 0x88), (4, 0x40)],
-        [(5, 0x22), (6, 0x88), (4, 0x41)],
-    ]
-    got, prep = _onsets(frames)
-    assert got == {"gate": [0, 3, 5], "test": [], "hard_restart": [3]}
-    assert prep[3] == 2 and prep[5] == 5
-
-
-def test_test_bit_retrigger():
-    """The test bit set and cleared with the gate held is a retrigger; the test bit at a
-    gate rise is part of that onset."""
-    frames = [[(11, 0x41)], [(11, 0x49)], [(11, 0x41)], [(11, 0x08)], [(11, 0x09)]]
-    frames += [[(11, 0x41)]]
-    got, _ = _onsets(frames, voice=1)
-    assert got == {"gate": [0, 4], "test": [2], "hard_restart": []}
-
-
-def test_legato_is_not_a_register_onset():
-    """A pitch change with the gate held shows no register onset."""
-    got, _ = _onsets([[(0, 0x10), (1, 0x10), (4, 0x41)], [(0, 0x20), (1, 0x12)]])
-    assert got == {"gate": [0], "test": [], "hard_restart": []}
+PSIDS = {
+    "commando": COMMANDO / "ref.sid",
+    "emomyst": FIX / "Emomyst.sid",
+    "ghouls": FIX / "Ghouls_n_Ghosts.sid",
+    "incoherent": FIX / "Incoherent_Nightmare_tune_2.sid",
+    "automatas": FIX / "Automatas.sid",
+}
+#: The hand C's data arrays, ``{symbol: (origin macro or ref.labels name, data macro)}``.
+HAND = {
+    "commando": {
+        "song": ("SONG_ORG", "SONG_DATA"),
+        "v": ("freqsl", "FREQ_TABLE"),
+        "sid": ("sid", "SID_OFFSETS"),
+    },
+    "emomyst": {"tab": ("TABLES_ORG", "TABLES"), "music": ("MUSIC_ORG", "MUSIC")},
+    "ghouls": {"ram": ("IMAGE_ORG", "IMAGE")},
+    "incoherent": {"data": ("DATA_ORG", "DATA")},
+    "automatas": {"data": ("DATA_ORG", "DATA")},
+}
+#: The original's dispatch tables ``[lo, hi)``, branch offsets and jump vectors it stores
+#: into its own code: the hand C dispatches with a switch instead and reads none of them.
+DISPATCH = {
+    "emomyst": [(0x19F1, 0x1A00), (0x1A6E, 0x1AAE)],
+    "ghouls": [(0x6CB7, 0x6D35)],
+    "incoherent": [(0x0C4F, 0x0C64)],
+}
+#: The hand C's init reads (subtune header bytes) the lift folds into the .c's image.
+FOLDED = {"emomyst": {(0, 0x1C40), (0, 0x1C4E), (0, 0x1C5C)}}
+HAND_CYCLES = 20_000_000
 
 
 def test_same_values():
     """A write is a refresh when its register already holds the value."""
-    flat = eventlog.flatten([[(0, 1), (1, 2)], [(0, 1), (1, 3), (0, 1)]])
-    assert eventlog.same_values(flat).tolist() == [False, False, True, False, True]
+    got = eventlog.same_values([0, 1, 0, 1, 0], [1, 2, 1, 3, 1])
+    assert got.tolist() == [False, False, True, False, True]
 
 
-def test_pair_values():
-    """Frequency, pulse and cutoff pairs carry their value and change; others the byte."""
-    flat = eventlog.flatten(
-        [[(0, 0x34), (1, 0x12), (2, 0xFF), (3, 0x1F), (0x15, 7), (0x16, 1), (4, 9)]]
-    )
-    value, delta = eventlog.pair_values(flat)
-    assert value.tolist() == [0x34, 0x1234, 0xFF, 0xFFF, 7, 15, 9]
-    assert delta.tolist() == [0x34, 0x1200, 0xFF, 0xF00, 7, 8, 0]
+def test_song_mask():
+    """Song data: held span bytes outside the regions and the instructions, the init
+    path's included."""
+    image = bytearray(0x10000)
+    image[0x1000:0x1003] = b"\x4c\x00\x10"
+    info = {
+        "code_held": [(0x1000, 0x1010)],
+        "regions": [(0x1008, 2)],
+        "starts": [0x1000],
+        "init": {"image": [(0x1003, 0xEA)], "code": [(0x1003, 1)]},
+    }
+    mask = eventlog.song_mask(image, info)
+    want = [0x1004, 0x1005, 0x1006, 0x1007] + list(range(0x100A, 0x1010))
+    assert np.flatnonzero(mask).tolist() == want
 
 
-def test_decode_shared():
-    """Resonance/routing and mode/volume fields."""
-    assert eventlog.decode_shared(0x17, 0xF5) == {"res": 15, "routing": 5, "ext": 0}
-    assert eventlog.decode_shared(0x18, 0x9A)["voice3_off"] == 1
-    assert not eventlog.decode_shared(0x15, 3)
+def test_origins():
+    """Region and held span origins of a cgen header."""
+    h = "#define R0_ORG 0x00F0\n#define C0_ORG 0x139E\n#define CODE_ORG 0x1000\n"
+    assert eventlog.origins(h) == {"R0": 0xF0, "C0": 0x139E}
 
 
-def test_initiations_of():
-    """A read initiates on a voice where its tag first reaches that voice's frequency
-    registers, newer than any tag that reached them before; timed by its read."""
-    writes = [[], [(0, 1), (4, 0x41)], [(1, 2), (7, 5)], [(0, 3), (14, 4)], [(8, 1)]]
-    tags = [[], [1, 1], [1, 2], [3, 4], [2]]
-    reads = np.array([[0, 0], [1, 0], [1, 1], [2, 0], [3, 1]])
-    got = eventlog.initiations_of(writes, tags, reads)
-    assert got == {(1, 0): (0, 0), (1, 1): (1, 1), (2, 0): (0, 1), (3, 2): (1, 0)}
-
-
-def _synthetic():
-    """A two-note voice 0 with a gate-held third initiation, a filter write, and the
-    initiations."""
-    ref = [[(0x18, 0x1F, 10, 0)]]
-    notes = {1: 0x1000, 6: 0x1800, 9: 0x1800}
-    for f in range(1, 12):
-        w = []
-        if f in notes:
-            w += [(0, notes[f] & 0xFF), (1, notes[f] >> 8)]
-        if f in (1, 6):
-            w += [(5, 0x11), (6, 0xF0), (4, 0x41)]
-        if f == 5:
-            w += [(4, 0x40), (5, 0), (6, 0)]
-        if f == 3:
-            w += [(0, 0x40), (2, 0x00), (3, 0x08)]
-        if f == 4:
-            w += [(0x16, 0x20)]
-        if f == 10:
-            w += [(4, 0x40)]
-        ref.append([(*x, 20 * i, 0) for i, x in enumerate(w)])
-    writes = [[tuple(w[:2]) for w in f] for f in ref]
-    initiated = {(f, 0): (0, 0) for f in notes}
-    return ref, writes, initiated
-
-
-def test_events_synthetic():
-    """Events start at each initiation, the gate-held one included; the log rebuilds the
-    write stream; frequency offsets are relative to the base pitch."""
-    ref, writes, initiated = _synthetic()
-    log = eventlog.Log(ref, writes, initiated)
-    events, shared = log.events(), log.shared()
-    v0 = [e for e in events if e["voice"] == 0]
-    assert [(e["frame"], e["start"], e["lead"]) for e in v0] == [
-        (0, 0, True),
-        (1, 0, False),
-        (6, -1, False),
-        (9, 0, False),
-    ]
-    assert v0[1]["registers"] == ["gate"] and v0[2]["registers"] == [
-        "gate",
-        "hard_restart",
-    ]
-    assert v0[3]["registers"] == [] and v0[3]["delay"] == 0
-    assert v0[1]["gate_frames"] is None and v0[3]["gate_frames"] == 1
-    assert v0[1]["base"]["freq"] == 0x1000 and v0[1]["cycle"] == 0
-    up = next(op for op in v0[1]["ops"] if op[0] == 2)
-    assert up[4] == 0x1040 and up[5] == 0x40 and up[7] == 0
-    assert up[6] == round(1200 * np.log2(0x1040 / 0x1000), 2)
-    assert [op[7] for op in v0[2]["ops"] if op[2] in (5, 6)] == [0, 0, 0, 0]
-    assert [op[7] for op in v0[3]["ops"] if op[2] in (0, 1)] == [1, 1]
-    pw = [op for op in v0[1]["ops"] if op[2] == 3][0]
-    assert pw[4] == 0x800 and pw[5] == 0x800
-    assert [(s["reg"], s.get("cutoff")) for s in shared] == [(0x18, None), (0x16, 256)]
-    assert shared[0]["volume"] == 15 and shared[0]["mode"] == 1
-    flat = [(f, r, v) for f, ws in enumerate(ref) for r, v, *_ in ws]
-    assert eventlog.rebuild(events, shared) == flat
-    s = log.summary()
-    assert s["violations"] == [] and s["initiations"] == 3 and s["register_onsets"] == 2
-    assert eventlog.Log(ref, writes, {(5, 0): (0, 1)}).matches(0) == {5: (6, 6)}
-
-
-def test_violations():
-    """A gate rise with no initiation at its frame is a violation."""
-    ref, writes, initiated = _synthetic()
-    del initiated[6, 0]
-    assert eventlog.Log(ref, writes, initiated).violations() == [[6, 0]]
+def test_pointer():
+    """Constant pointers of IR operands, nested and through struct fields; a value has
+    none."""
+    gep = "getelementptr inbounds ([4 x i8], ptr @C0, i64 0, i64 3)"
+    assert irmodule.pointer(gep) == ("C0", 3)
+    nested = f"getelementptr inbounds (i8, ptr {gep}, i64 2)"
+    assert irmodule.pointer(nested) == ("C0", 5)
+    assert irmodule.pointer("getelementptr (i8, ptr @C0, i64 %x)") == ("C0", None)
+    s = "getelementptr inbounds ({ [2 x i8], i16 }, ptr @s, i64 0, i32 1)"
+    assert irmodule.pointer(s) == ("s", 2) and irmodule.pointer("%5") is None
+    assert irmodule.size("<{ i8, [3 x i16] }>") == 7
 
 
 PLAYER = """#include <stdint.h>
+#include "player.h"
 void io_write(uint16_t a, uint8_t v);
 uint8_t io_read(uint16_t a);
 void trap(uint16_t k);
-static const uint8_t notes[3][8] = {%s};
-static const uint8_t lens[3][8] = {%s};
-static const uint8_t lo[8] = {0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80};
-static const uint8_t hi[8] = {1, 2, 3, 4, 5, 6, 7, 8};
-uint8_t pos[3], dur[3], shadow[25];
-static void put(uint8_t r, uint8_t v) { %s; }
-static void copy(void) {
-  for (uint8_t r = 0; r < 25; r++)
-    io_write(0xD400 + r, shadow[r]);
+uint8_t C0[C0_LEN] = {C0_INIT};
+uint8_t R0[2];
+#define R1 (C0 + (R1_ORG - C0_ORG))
+static const uint8_t K0[] = {0, 7};
+static __attribute__((noinline)) uint8_t rdC0(uint16_t p, uint8_t y) {
+  uint16_t o = p - C0_ORG + y;
+  return o < C0_LEN ? C0[o] : 0;
+}
+static void f1(uint8_t v1) {
+  uint8_t n = rdC0(C0_ORG + 4, R1[v1]);
+  R1[v1] = (R1[v1] + 1) & 3;
+  io_write(0xD400 + K0[v1], C0[n]);
+  io_write(0xD404 + K0[v1], 0x41);
 }
 void cgen_init(uint8_t a) {
-  for (uint8_t v = 0; v < 3; v++)
-    pos[v] = dur[v] = a;
+  R0[0] = io_read(0xD012);
+  R1[0] = R1[1] = a;
 }
 void cgen_play(uint8_t a) {
   (void)a;
-  %s
-  for (uint8_t v = 0; v < 3; v++) {
-    if (dur[v]) {
-      dur[v]--;
-      continue;
-    }
-    uint8_t n = notes[v][pos[v]];
-    dur[v] = lens[v][pos[v]];
-    pos[v] = (pos[v] + 1) & 7;
-    if (n < 0x80) {
-      put(7 * v, lo[n & 7]);
-      put(7 * v + 1, hi[n & 7]);
-      put(7 * v + 4, 0x41);
-    } else {
-      put(7 * v + 4, 0x40);
-    }
-  }
-  %s
+  f1(0);
+  f1(1);
+  io_write(0xD418, C0[2 + R0[0]]);
 }
 """
-SONG = [
-    [0, 0x80, 3, 3, 5, 0x80, 1, 2],
-    [2, 2, 2, 0x80, 7, 6, 0x80, 4],
-    [0x80, 1, 3, 5, 0x80, 0x80, 6, 0],
-]
-LENS = [[1, 0, 2, 0, 1, 1, 0, 3], [0, 0, 1, 2, 0, 1, 0, 0], [2, 0, 1, 0, 0, 1, 3, 0]]
+HEADER = """#define C0_ORG 0x1000
+#define C0_LEN 10
+#define C0_INIT 0x11, 0x22, 0x33, 0x44, 1, 0, 2, 1, 0, 0
+#define R0_ORG 0x0002
+#define R1_ORG 0x1008
+"""
 
 
-def _player(tmp_path, copy):
-    """A C player of SONG with SID writes direct (`copy` None) or through a shadow buffer
-    copied "after" the voices or "before" them."""
-
-    def rows(table):
-        return ", ".join("{" + ", ".join(map(str, r)) + "}" for r in table)
-
-    put = "io_write(0xD400 + r, v)" if copy is None else "shadow[r] = v"
-    text = PLAYER % (
-        rows(SONG),
-        rows(LENS),
-        put,
-        "copy();" if copy == "before" else "",
-        "copy();" if copy == "after" else "",
-    )
+def test_synthetic_player(tmp_path):
+    """Sites are the loads that may read song data (a region slice at a variable offset
+    too, not K0 or a constant state offset); each song byte read is logged with its copy, in
+    rdC0 at the call's site, followed by its stores and SID writes; I/O reads replayed.
+    """
     path = tmp_path / "player.c"
-    path.write_text(text, encoding="ascii")
-    return path
-
-
-def _note_reads(frames):
-    """{(frame, voice)} of the rows of SONG reading a note."""
-    out, pos, dur = set(), [0] * 3, [0] * 3
-    for f in range(1, frames + 1):
-        for v in range(3):
-            if dur[v]:
-                dur[v] -= 1
-                continue
-            if SONG[v][pos[v]] < 0x80:
-                out.add((f, v))
-            dur[v] = LENS[v][pos[v]]
-            pos[v] = (pos[v] + 1) & 7
-    return out
-
-
-@pytest.mark.parametrize("copy", [None, "after", "before"])
-def test_synthetic_player(copy, tmp_path):
-    """A pointer advanced per row with a note byte into a frequency table: the note read is
-    a note read, the duration byte another; initiations are the rows reading a note, through
-    a shadow buffer too, whose copy before the voices delays the registers a call."""
-    path = _player(tmp_path, copy)
-    m = irmodule.Module(irmodule.lower(path, [path.parent], []))
-    kinds = initiations.Analysis(
-        m, eventlog.frequency_registers(), ["cgen_play"], ["cgen_init"]
-    ).analyze()
-    defs = {
-        (fn, op[1]): op
-        for fn, (_, blocks, _) in m.funcs.items()
-        for ops in blocks.values()
-        for op in ops
-        if op[1]
+    path.write_text(PLAYER, encoding="ascii")
+    path.with_suffix(".h").write_text(HEADER, encoding="ascii")
+    song = np.zeros(0x10000, bool)
+    song[0x1000:0x1008] = True
+    player = eventlog.Player(path, tmp_path, song, ["f1"])
+    lines = PLAYER.split("\n")
+    assert {(lines[l - 1].strip()[:20], fn) for fn, l, _ in player.sites} == {
+        ("uint8_t n = rdC0(C0_", "f1"),
+        ("R1[v1] = (R1[v1] + 1", "f1"),
+        ("io_write(0xD400 + K0", "f1"),
+        ("io_write(0xD418, C0[", "cgen_play"),
     }
-
-    def base(fn, o):
-        while o[0] == "v" and defs.get((fn, o[1]), ("",))[0] == "getelementptr":
-            o = defs[fn, o[1]][3][0]
-        return o[1][0] if o[0] == "p" else None
-
-    loads = {k: base(k[0], op[3][0]) for k, op in defs.items() if op[0] == "load"}
-    assert {loads[k]: kind for k, kind in kinds.items()} == {
-        "notes": "note",
-        "lens": "other",
-    }
-    player = eventlog.Player(path, tmp_path)
-    writes, tags, reads = player.run(0, 40)
-    got = eventlog.initiations_of(writes, tags, reads)
-    delay = 1 if copy == "before" else 0
-    assert set(got) == {(f, v) for f, v in _note_reads(40) if f + delay <= 40}
-    assert {d for _, d in got.values()} == {delay}
+    rec = player.run(0, 4, {0: [(0xD012, 1), (0xD012, 9)]})
+    evs = eventlog.events(rec, player.sites, player.origins)
+    want = []
+    for f in range(1, 5):
+        n = [1, 0, 2, 1][(f - 1) % 4]
+        for v in (0, 1):
+            want += [
+                (f, v, 0x1004 + (f - 1) % 4, n),
+                (f, v, 0x1000 + n, 0x11 * (n + 1)),
+            ]
+        want.append((f, None, 0x1003, 0x44))
+    assert [(e["frame"], e["copy"], e["addr"], e["value"]) for e in evs[1:]] == want
+    assert evs[0]["site"] is None and evs[0]["cells"][0] == [0, 2, 1, 0]
+    assert evs[1]["region"] == "C0" and evs[1]["offset"] == 4
+    assert evs[1]["cells"] == [[0, 0x1008, 1, 0]] and evs[1]["sid"] == []
+    assert evs[2]["sid"] == [[0, 0, 0x22, 0], [0, 4, 0x41, 0]]
+    assert evs[4]["sid"] == [[0, 7, 0x22, 0], [0, 11, 0x41, 0]]
+    assert evs[7]["sid"][1] == [0, 4, 0x41, 1]
 
 
 def _fuzz(style, seed, tmp_path, seq=None):
@@ -349,134 +182,77 @@ FUZZ_FRAMES = 200
 @pytest.mark.parametrize("style", ["loop", "jsr3", "fallthrough", "unrolled", "smc"])
 @pytest.mark.parametrize("seed", [4, 13])
 def test_fuzz(style, seed, seq, tmp_path):
-    """Sequencer players: initiations are exactly the generated note reads (notes, legato
-    notes with the gate held, repeated pitches) whose registers land within the run, direct
-    or through a shadow buffer copied after the voices or at the start of the next call;
-    the log rebuilds the writes; every register onset is at an initiation; no hard restart
-    is found."""
+    """Sequencer players, SID writes direct or through a shadow buffer copied after the
+    voices or at the next call: the generated C reads exactly the song bytes the original
+    reads, call by call; the log rebuilds the writes."""
     psid = _fuzz(style, seed, tmp_path, seq).read_bytes()
-    cells = {fuzzplayer.STATE + fuzzplayer.NOTE * 0x20 + 7 * k: k for k in range(3)}
-    truth = set()
-    trace = sidtrace.trace_psid(
-        psid,
-        FUZZ_FRAMES,
-        watch=list(cells),
-        on_watch=lambda f, a, v: truth.add((f, cells[a])),
+    evs, summary, orig, _ = eventlog.run_tune(psid, FUZZ_FRAMES)
+    got = {(e["frame"], e["addr"]) for e in evs[1:]}
+    assert got == orig and summary["reads"] >= len(got) > 0
+    trace = sidtrace.trace_psid(psid, FUZZ_FRAMES)
+    want = [(f, r, v) for f, ws in enumerate(trace) for r, v in ws]
+    assert eventlog.rebuild(evs) == want
+
+
+def _spans(tune):
+    """The hand C's ``{symbol: (origin, length)}``."""
+    h = (ROOT / "tunes" / tune / "build" / f"{tune}_data.h").read_text(encoding="ascii")
+    defs = dict(re.findall(r"#define (\w+) ((?:[^\n\\]|\\\n)*)", h))
+    labels = sidtrace.parse_labels(
+        (COMMANDO / "ref.labels").read_text(encoding="ascii")
     )
-    events, shared, summary = eventlog.run_tune(psid, FUZZ_FRAMES)
-    delay = 1 if seq == "shadow_next" else 0
-    truth = {(f, v) for f, v in truth if f + delay <= FUZZ_FRAMES}
-    assert {(e["frame"], e["voice"]) for e in events if not e["lead"]} == truth
-    flat = [(f, r, v) for f, ws in enumerate(trace) for r, v in ws]
-    assert eventlog.rebuild(events, shared) == flat
-    assert summary["violations"] == [] and summary["note_reads"]
-    assert not any("hard_restart" in e["registers"] for e in events)
-    delays = {e["delay"] for e in events if not e["lead"]}
-    assert delays == {1 if seq == "shadow_next" else 0}
+    return {
+        s: (
+            int(defs[o], 16) if o in defs else labels[o],
+            len(re.findall(r"0x[0-9a-fA-F]+", defs[n])),
+        )
+        for s, (o, n) in HAND[tune].items()
+    }
 
 
-def _hand(prg, frames, watch, keep):
-    """{(frame, voice)} of the hand build's writes that `keep(addr, value, syms)` maps to
-    a voice, for addresses `watch(syms)`."""
-    _, syms = load_elf(f"{prg}.elf")
-    hits = set()
-
-    def on(frame, addr, value):
-        v = keep(addr, value, syms)
-        if v is not None:
-            hits.add((frame, v))
-
-    sidtrace.trace_prg(prg, frames, 0, watch=watch, on_watch=on)
-    return hits
-
-
-def _check(psid, frames):
-    events, shared, summary = eventlog.run_tune(psid, frames)
-    got = {(e["frame"], e["voice"]) for e in events if not e["lead"]}
-    flat = [
-        (f, r, v)
-        for f, ws in enumerate(sidtrace.trace_psid(psid, frames))
-        for r, v in ws
+@pytest.mark.slow
+@pytest.mark.parametrize("tune", sorted(PSIDS))
+def test_hand(tune):
+    """Over the song (Commando 6000 calls) the generated C's song data reads (call, address)
+    equal the -O0 hand C's, whose SID writes equal the original's, but for the DISPATCH
+    tables (each read's value stored to a lift code cell) and the FOLDED init reads."""
+    prg = ROOT / "tunes" / tune / "build" / "hand-O0.prg"
+    if not (PSIDS[tune].exists() and prg.exists()):
+        pytest.skip("needs `make` builds")
+    psid = PSIDS[tune].read_bytes()
+    song = sidtrace.default_song(psid)
+    frames = 6000 if tune == "commando" else sidtrace.song_calls(psid, song, FIX)
+    evs, summary, _, mask = eventlog.run_tune(psid, frames)
+    image = eventlog.loaded_image(psid)
+    assert all(image[e["addr"]] == e["value"] for e in evs[1:])
+    writes, hand = eventlog.prg_reads(
+        prg, frames, song, _spans(tune), mask, HAND_CYCLES
+    )
+    trace = sidtrace.trace_psid(psid, frames, song=song)
+    assert writes == trace
+    assert eventlog.rebuild(evs) == [
+        (f, r, v) for f, ws in enumerate(trace) for r, v in ws
     ]
-    assert eventlog.rebuild(events, shared) == flat
-    assert summary["violations"] == []
-    return got
-
-
-NOTE_ROWS = 0x60
-
-
-@pytest.fixture(scope="module")
-def emomyst():
-    """``(initiations, rows reading a note, summary)`` of Emomyst over its HVSC length:
-    the rows are where the hand C sets CUR_NOTE to a pitch."""
-    psid = EMOMYST.read_bytes()
-    frames = sidtrace.song_calls(psid, 0, ROOT / "fixtures")
-    rows = _hand(
-        EMOMYST_PRG,
-        frames,
-        lambda s: [s["ch"] + 0x2B + 7 * v for v in range(3)],
-        lambda a, v, s: (a - s["ch"] - 0x2B) // 7 if 0 < v < NOTE_ROWS else None,
+    table = np.zeros(0x10000, bool)
+    for lo, hi in DISPATCH.get(tune, ()):
+        table[lo:hi] = True
+    dispatch = [e for e in evs[1:] if table[e["addr"]]]
+    code = set(summary["code_cells"])
+    assert all(
+        any(c[1] in code and c[2] == e["value"] for c in e["cells"]) for e in dispatch
     )
-    events, shared, summary = eventlog.run_tune(psid, frames)
-    flat = [
-        (f, r, v)
-        for f, ws in enumerate(sidtrace.trace_psid(psid, frames))
-        for r, v in ws
-    ]
-    assert eventlog.rebuild(events, shared) == flat
-    return {(e["frame"], e["voice"]) for e in events if not e["lead"]}, rows, summary
-
-
-@pytest.mark.slow
-@_needs(EMOMYST, EMOMYST_PRG)
-def test_emomyst_initiations_read_notes(
-    emomyst,
-):  # pylint: disable=redefined-outer-name
-    """Every initiation is a row where the hand C reads a note, timed by that read."""
-    got, rows, summary = emomyst
-    assert got and got <= rows and summary["note_reads"]
-
-
-@pytest.mark.slow
-@_needs(EMOMYST, EMOMYST_PRG)
-@pytest.mark.xfail(
-    strict=True,
-    reason="drum rows: the instrument's wavetable sets absolute pitches, so the note value "
-    "never reaches the frequency registers (docs/eventlog.md)",
-)
-def test_emomyst_hand_note_rows(emomyst):  # pylint: disable=redefined-outer-name
-    """Initiations are exactly the rows where the hand C reads a note."""
-    got, rows, _ = emomyst
-    assert got == rows
-
-
-@pytest.mark.slow
-@_needs(COMMANDO / "ref.sid", COMMANDO / "commando.prg")
-def test_commando_hand_note_ons():
-    """Rob Hubbard's player: initiations are exactly the hand C's newnote calls that read
-    a note (notelen without the legato bit, which only releases the gate)."""
-    psid = (COMMANDO / "ref.sid").read_bytes()
-    notelen = 192 + 9
-
-    def keep(addr, value, syms):
-        return None if value & 0x40 else addr - syms["v"] - notelen
-
-    truth = _hand(
-        COMMANDO / "commando.prg",
-        6000,
-        lambda s: [s["v"] + notelen + x for x in range(3)],
-        keep,
-    )
-    assert _check(psid, 6000) == truth
+    gen = {(e["frame"], e["addr"]) for e in evs[1:]}
+    assert gen - hand == {(e["frame"], e["addr"]) for e in dispatch}
+    assert hand - gen == FOLDED.get(tune, set())
 
 
 def test_main(tmp_path):
-    """The CLI writes the event, shared and summary files."""
+    """The CLI writes the event and summary files."""
     sid = _fuzz("loop", 14, tmp_path, "direct")
     out = tmp_path / "log"
     assert eventlog.main([str(sid), str(out), "--frames", "50"]) == 0
     events = [json.loads(l) for l in (out / "events.jsonl").read_text().splitlines()]
-    assert {e["voice"] for e in events} == {0, 1, 2}
-    assert json.loads((out / "summary.json").read_text())["frames"] == 51
-    assert (out / "shared.jsonl").exists()
+    assert events[0]["site"] is None and len(events) > 1
+    assert {e["copy"] for e in events[1:]} == {None}
+    summary = json.loads((out / "summary.json").read_text())
+    assert summary["frames"] == 51 and summary["reads"] == len(events) - 1
