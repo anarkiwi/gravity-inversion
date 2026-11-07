@@ -25,7 +25,7 @@ measured by ablation, in [ablate.md](ablate.md).
 | Commando | none | |
 | Incoherent | none | |
 | Automatas | none | each row copy's operand pointer, advanced by its row's length, keeps its table's least base |
-| Ghouls | none | each voice's song pointer may hold 0 (init clears zero page; a loop end restores the cleared loop pointer) or only a high byte an effect list wrote, yet its in-image values lie in the song: its reads are the song span's bounds-checked reads, `oob_rd` (the 6502's byte, zero page's live one) outside it. Loaded from song data by a jump command and popped from the return stack a call command pushes at an unbounded depth, it points into the song; the pushes are bounds-checked against the stack (`oob_wr` past it) |
+| Ghouls | none | each voice's song pointer may hold 0 (init clears zero page; a loop end restores the cleared loop pointer) or only a high byte an effect list wrote, yet its in-image values lie in the song: its reads are the song span's bounds-checked reads, `oob_rd` (a trap; with `CGEN_OOB_EXACT` the 6502's byte, zero page's live one) outside it. Loaded from song data by a jump command and popped from the return stack a call command pushes at an unbounded depth, it points into the song; the pushes are bounds-checked against the stack (`oob_wr` past it) |
 | Emomyst | K5 | init's relocator is lifted as code: its stores through its patch-site table write 30 operands scattered through the player, one held span's bytes, indexed by 16 bits (K5). The operands it patches from the SWP header words are pointers into the song, and play reads through them with the span's bounds-checked reader |
 
 ## Fuzz players

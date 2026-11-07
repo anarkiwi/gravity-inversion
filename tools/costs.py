@@ -13,7 +13,7 @@ import subprocess
 from collections import Counter
 
 RUNTIME = frozenset(
-    "io_read io_write trap oob_rd oob_wr rd wr codechk tune_init tune_play".split()
+    "io_read io_write trap oob_rd oob_wr rd cgen_rd wr codechk tune_init tune_play".split()
 )
 #: cgen's bounds-checked readers of one held span (`rdC0`, ...), runtime like `rd`.
 CHECKED = re.compile(r"rdC\d+$")
