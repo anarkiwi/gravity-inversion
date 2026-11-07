@@ -19,7 +19,10 @@ This writes `OUT/events.jsonl` and `OUT/summary.json`.
    array read is one `load` with its source line. A site is a load from a `Cj`, at a byte of
    song data when its offset is constant, or through a pointer value. Loads from locals,
    `K` constants and state at constant offsets are not sites. A load inside the read helpers
-   `rd`/`rdCj` reports the site of the call that entered it.
+   `rd`/`rdCj` reports the site of the call that entered it. A byte the lift proves constant
+   is named in the `.h` (`X_K<offset>`, the byte at `X_ORG` + offset) and read by name in
+   the `.c`; the IR is lowered with each name defined as a load of that original address
+   from one array (`eventlog.unfold`), so its uses are sites too.
 3. **Native run.** The instrumented IR, linked with `tools/eventlog.c`, runs init and the play
    calls. It logs each site's read of a song data byte (the original address from the array
    and the `.h` origin) and each store to a region or span (the cell's original address, value
@@ -39,7 +42,7 @@ holds the writes before the first read.
 |---|---|
 | `frame` | play call (0 is init) |
 | `site`, `function`, `line`, `column` | the read site in the generated `.c` |
-| `region`, `offset`, `addr` | the held span read, the offset in it and the original address |
+| `region`, `offset`, `addr` | the held span read (`CODE`, the code span, when the `.h` has none), the offset in it and the original address |
 | `value` | the byte read |
 | `copy` | the copy index of the code reading it, else null |
 | `cells` | `[frame, address, value, same]` per state cell store up to the next read |
@@ -56,17 +59,19 @@ over the records rebuilds the reference write stream (`eventlog.rebuild`).
 
 `tests/test_eventlog.py`:
 
-- **Synthetic C.** Site selection, helper and copy attribution, the stores and SID writes after
-  each read and the replayed I/O reads.
+- **Synthetic C.** Site selection (a byte read by name included), helper and copy
+  attribution, the stores and SID writes after each read and the replayed I/O reads.
 - **Fuzz players** (`tools/fuzzplayer.py`, every style, sequencer SID writes direct or
   through a shadow buffer copied after the voices or at the next call). The generated C
-  reads exactly the song bytes the original reads, as (call, address), and the log
-  rebuilds the writes.
-- **Tunes**, over the song (Commando 6000 calls), against each hand C built at `-O0`
+  reads exactly the song bytes the original reads, as (call, address) with the value, and
+  the log rebuilds the writes.
+- **Tunes**, over the song (Commando 6000 calls). Every song data read of the generated C,
+  with its value, is a read the original makes in the same call; the original reads more
+  where the lift forwards a value through state. Against each hand C built at `-O0`
   (`tunes/*/build/hand-O0.prg`, so each C read is one load), whose SID writes must equal the
-  original's. The hand C's reads of its data arrays are mapped to original addresses.
-  Commando and Automatas are equal exactly. Elsewhere the hand C differs from the original in
-  structure:
+  original's, the hand C's reads of its data arrays are mapped to original addresses and
+  compared with the generated C's reads of those bytes. Commando and Automatas are equal
+  exactly. Elsewhere the hand C differs from the original in structure:
   - Emomyst ($19F1–$19FF, $1A6E–$1AAD), Ghouls ($6CB7–$6D34) and Incoherent ($0C4F–$0C63)
     dispatch commands through tables of branch offsets or jump vectors. The original stores
     each value into its own code (a lift code cell), while the hand C uses a `switch`.

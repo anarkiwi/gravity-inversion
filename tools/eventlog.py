@@ -38,6 +38,8 @@ COLS = (
     ("copy", "ec", "u1"),
 )
 REC = [("frame", "i4")] + [(n, t) for n, _, t in COLS]
+ORG = re.compile(r"^#define (\w+)_ORG 0x([0-9A-F]+)$", re.M)
+KONST = re.compile(r"^#define (\w+)_K([0-9A-F]+) (0x[0-9A-F]+)$", re.M)
 
 
 def loaded_image(psid):
@@ -67,11 +69,34 @@ def song_mask(image, info):
 
 
 def origins(h_text):
-    """``{array: origin}`` of the regions and held spans a cgen .h defines."""
+    """``{array: origin}`` of the regions, held spans and code span a cgen .h defines."""
     return {
         m[1]: int(m[2], 16)
-        for m in re.finditer(r"#define ([CR]\d+)_ORG 0x([0-9A-F]+)", h_text)
+        for m in ORG.finditer(h_text)
+        if re.fullmatch(r"[CR]\d+|CODE", m[1])
     }
+
+
+def unfold(h_text):
+    """The .h with each constant byte the .c reads by name (``X_K<offset>``, the byte at
+    ``X_ORG`` + offset) read from ``cgen_k``, the bytes at their original addresses, so that
+    each read is a load from memory."""
+    org = {m[1]: int(m[2], 16) for m in ORG.finditer(h_text)}
+    init = []
+
+    def load(m):
+        if m[1] not in org:
+            return m[0]
+        a = (org[m[1]] + int(m[2], 16)) & 0xFFFF
+        init.append(f"[0x{a:04X}] = {m[3]}")
+        return f"#define {m[1]}_K{m[2]} (cgen_k[0x{a:04X}])"
+
+    text = KONST.sub(load, h_text)
+    if not init:
+        return text
+    head, end, tail = text.rpartition("#endif")
+    decl = f"static unsigned char cgen_k[0x10000] = {{{', '.join(init)}}};\n"
+    return head + decl + end + tail
 
 
 class Player:  # pylint: disable=too-few-public-methods
@@ -80,11 +105,16 @@ class Player:  # pylint: disable=too-few-public-methods
     def __init__(self, c_path, out_dir, song, copies=()):
         c_path = pathlib.Path(c_path).resolve()
         out = pathlib.Path(out_dir).resolve()
-        text = irmodule.lower(c_path, [c_path.parent, DRIVER], ["CGEN_HOST"])
+        h_text = c_path.with_suffix(".h").read_text(encoding="utf-8")
+        src = out / "unfolded" / c_path.name
+        src.parent.mkdir(exist_ok=True)
+        src.write_text(c_path.read_text(encoding="utf-8"), encoding="utf-8")
+        src.with_suffix(".h").write_text(unfold(h_text), encoding="utf-8")
+        text = irmodule.lower(src, [c_path.parent, DRIVER], ["CGEN_HOST"])
         helpers = set(re.findall(r"^define [^@]*@(rd(?:C\d+)?)\(", text, re.M))
-        self.origins = origins(c_path.with_suffix(".h").read_text(encoding="utf-8"))
+        self.origins = origins(h_text)
         text, self.sites = irmodule.instrument(
-            text, self.origins, song, helpers, set(copies)
+            text, {**self.origins, "cgen_k": 0}, song, helpers, set(copies)
         )
         obj, lib = out / "eventlog.o", out / "eventlog.so"
         irmodule.compile_object(text, obj)
@@ -131,15 +161,15 @@ def _observe(mpu, log, on_read, reads):
 def reference(psid, frames, song, mask):
     """``(writes, io, reads)`` of the original over init and `frames` play calls: its SID
     writes per call, its I/O reads ``{call: [(address, value)]}`` and the ``{(call,
-    address)}`` of its reads of the bytes ``mask`` marks."""
-    io, reads = {}, set()
+    address): value}`` of its reads of the bytes ``mask`` marks."""
+    io, reads = {}, {}
 
     def observe(mpu, mem, log):
         def on_read(a):
             if a in IO:
                 io.setdefault(len(log.calls) - 1, []).append((a, mem[a]))
             else:
-                reads.add((len(log.calls) - 1, a))
+                reads[len(log.calls) - 1, a] = mem[a]
 
         _observe(mpu, log, on_read, set(IO) | set(np.flatnonzero(mask).tolist()))
 
@@ -211,7 +241,10 @@ def events(rec, sites, origins_):
     sid = rec["kind"] == SIDW
     same = rec["value"] == rec["old"]
     same[sid] = same_values(rec["addr"][sid], rec["value"][sid])
-    spans = sorted((org, name) for name, org in origins_.items() if name[0] == "C")
+    spans = sorted(
+        ((org, name) for name, org in origins_.items() if name[0] == "C"),
+        key=lambda s: (s[0], s[1] != "CODE"),
+    )
     cut = np.concatenate([[0], reads + 1, [len(rec) + 1]])
     out = []
     for g, (lo, hi) in enumerate(zip(cut[:-1], cut[1:] - 1)):
@@ -233,8 +266,8 @@ def rebuild(evs):
 
 def run_tune(psid, frames, song=None):
     """``(events, summary, reads, mask)`` of a PSID over init and `frames` play calls,
-    translated by tools/transliterate.py: ``reads`` is the ``{(call, address)}`` of the
-    original's reads of the song data ``mask`` marks."""
+    translated by tools/transliterate.py: ``reads`` is the ``{(call, address): value}`` of
+    the original's reads of the song data ``mask`` marks."""
     import transliterate  # pylint: disable=import-outside-toplevel
 
     song = sidtrace.default_song(psid) if song is None else song
