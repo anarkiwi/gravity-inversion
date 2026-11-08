@@ -30,13 +30,57 @@ void cgen_play(void) {
 """
 
 
+GATED = """#include <stdint.h>
+void io_write(uint16_t a, uint8_t v);
+uint8_t gate, n, pos;
+static void hard(void) { io_write(0xD405, 0); }
+void cgen_play(void) {
+  if (gate) {
+    io_write(0xD404, 0x41);
+    hard();
+  }
+  gate = gate ^ 1;
+  for (n = 3; n; n--)
+    io_write(0xD401, n);
+  pos = pos + 1;
+}
+"""
+
+
+def _player(tmp_path, text):
+    c = tmp_path / "gen.c"
+    c.write_text(text, encoding="ascii")
+    c.with_suffix(".h").write_text("", encoding="ascii")
+    return c
+
+
 @pytest.fixture(name="player")
 def fixture_player(tmp_path):
     """The small player's .c with an empty .h beside it."""
-    c = tmp_path / "gen.c"
-    c.write_text(PLAYER, encoding="ascii")
-    c.with_suffix(".h").write_text("", encoding="ascii")
-    return c
+    return _player(tmp_path, PLAYER)
+
+
+def test_control(tmp_path):
+    """A flag's branch gates the write under it and the callee's write; the loop's exit test
+    gates its body and its own decrement (the header is control dependent on itself), a
+    control self-loop that makes no machine; the toggled flag is a machine gating both.
+    """
+    c = _player(tmp_path, GATED)
+    g, _ = flowgraph.graph(c, entries=["cgen_play"], split=True)
+    ctl = {(u, v) for u, v, k in g.edges(data="kind") if k == "control"}
+    assert ctl == {
+        ("gate+0", "SID+$04"),
+        ("gate+0", "SID+$05"),
+        ("n+0", "SID+$01"),
+        ("n+0", "n+0"),
+    }
+    assert '"gate+0" -> "SID+$04" [style=dotted' in flowgraph.dot(g)
+    q = flowsegment.segment(c)
+    r = flowsegment.roles(q)
+    assert r["gate+0"] == ("flag", [], [], ["adsr", "control"], [])
+    assert r["n+0"] == ("modulator", ["freq"], [], ["freq"], [])
+    loop = _g([("c", "c", "control")], {"c": "cell"})
+    assert "c" not in flowsegment.machines(loop)
 
 
 def test_webs(player):
@@ -60,7 +104,9 @@ def test_segment(player):
     q = flowsegment.segment(player)
     assert sorted(n for n, k in q.nodes(data="kind") if k == "cell") == ["pos+0"]
     assert flowsegment.summary(q)["value_cycles"] == []
-    assert flowsegment.roles(q) == {"pos+0": ("program", ["freq", "volume"], ["tab+0"])}
+    assert flowsegment.roles(q) == {
+        "pos+0": ("program", ["freq", "volume"], ["tab+0"], [], [])
+    }
     assert irflow.bases(
         "@K4 = internal constant [2 x ptr] [ptr @C1, ptr getelementptr (i8, ptr @C1, i64 8)]\n"
         "@K5 = internal constant [2 x ptr] [ptr @C1, ptr @C2]\n"
@@ -99,6 +145,13 @@ def test_classes_merge_voice_copies():
     g.add_edge("b", "SID+$01", kind="value", weight=1)
     cls = flowsegment.classes(g)
     assert cls["a"] != cls["b"]
+    g.remove_edge("b", "SID+$01")
+    g.add_edges_from([("b", "SID+$07")], kind="value", weight=1)
+    g.add_edges_from([("a", "SID+$00"), ("b", "SID+$07")], kind="control", weight=1)
+    cls = flowsegment.classes(g)
+    assert cls["a"] == cls["b"]
+    g.remove_edge("b", "SID+$07", key=1)
+    assert flowsegment.classes(g)["a"] != flowsegment.classes(g)["b"]
     xy = _g([], {"x": "cell", "y": "cell"})
     q = flowsegment.quotient(xy, flowsegment.classes(xy))
     assert sorted(q) == ["x, y (x2)"] and q.nodes["x, y (x2)"]["members"] == ["x", "y"]
@@ -106,7 +159,8 @@ def test_classes_merge_voice_copies():
 
 def test_contractions():
     """Register cells and cells outside any cycle pass their sources on; an address through
-    either edge stays an address; machines and song tables stay."""
+    either edge stays an address, through a control edge a control; machines and song tables
+    stay."""
     kinds = {
         "song": "song",
         "rv1+0@9": "cell",
@@ -121,14 +175,17 @@ def test_contractions():
             ("rv1+0@9", "song", "address"),
             ("song", "t", "value"),
             ("t", "SID+$00", "value"),
+            ("m", "t", "control"),
         ],
         kinds,
     )
     r = flowsegment.registers(g)
     assert "rv1+0@9" not in r and r.has_edge("m", "song")
-    assert r.get_edge_data("m", "song")[0]["kind"] == "address"
+    assert flowsegment.edge_kinds(r, "m", "song") == {"address"}
     m = flowsegment.machines(r)
     assert set(m) == {"song", "m", "SID+$00"} and m.has_edge("song", "SID+$00")
+    assert flowsegment.edge_kinds(m, "m", "SID+$00") == {"control"}
+    assert flowsegment.edge_kinds(m, "song", "SID+$00") == {"value"}
     regs = _g([], {"SID+$15": "sid", "SID+$0E": "sid", "IO D418": "sid"})
     assert [flowsegment.role(regs, n) for n in regs] == ["sid+15", "voice+0", "sid"]
 
@@ -159,7 +216,7 @@ def test_main(tmp_path, capsys):
 def test_roles():
     """A sequencer indexes a table and restarts another machine; a program indexes a table
     feeding registers; a modulator feeds registers itself; a timer feeds only machines; a
-    flag feeds neither."""
+    flag feeds neither, gating by control only."""
     kinds = {"seq": "cell", "prog": "cell", "mod": "cell", "tim": "cell", "flg": "cell"}
     kinds.update({"order": "song", "wave": "song", "SID+$04": "sid", "SID+$09": "sid"})
     g = _g(
@@ -171,11 +228,15 @@ def test_roles():
             ("wave", "SID+$04", "value"),
             ("mod", "SID+$09", "value"),
             ("tim", "mod", "value"),
+            ("tim", "SID+$04", "control"),
+            ("flg", "mod", "control"),
+            ("flg", "SID+$09", "control"),
         ],
         kinds,
     )
     r = flowsegment.roles(g)
-    assert r["seq"] == ("sequencer", ["control"], ["order"])
-    assert r["prog"] == ("program", ["control"], ["wave"])
-    assert r["mod"] == ("modulator", ["pulse"], [])
-    assert r["tim"][0] == "timer" and r["flg"][0] == "flag"
+    assert r["seq"] == ("sequencer", ["control"], ["order"], [], [])
+    assert r["prog"] == ("program", ["control"], ["wave"], [], [])
+    assert r["mod"] == ("modulator", ["pulse"], [], [], [])
+    assert r["tim"] == ("timer", [], [], ["control"], [])
+    assert r["flg"] == ("flag", [], [], ["pulse"], ["mod"])
