@@ -1,8 +1,10 @@
 """Song data reads of a translated SID player, each with the state cell and SID writes after it.
 
-Song data is the lift's constant data in the .h: held span bytes in no region and no instruction.
-tools/irmodule.py instruments the generated C's read sites that may read it; the native run
-(tools/eventlog.c) logs each read with the stores and SID writes up to the next (docs/eventlog.md).
+Song data is the loaded bytes of no instruction that the original never writes. tools/irflow.py
+classifies the generated C's reads by what their addresses derive from: an event reads at a
+position the player advances across calls (from the state init left in the .h), a lookup at a
+value an event or lookup read. The native run (tools/eventlog.c) logs each play call's read of
+song data with its kind and the stores and SID writes up to the next (docs/eventlog.md).
 """
 
 import argparse
@@ -19,8 +21,8 @@ import numpy as np
 from deity_informant.cgen.regions import code_bytes
 from pysidtracker.emu import observe_data_access
 from tqdm import tqdm
-from vagrant_moses.c64 import poweron_ram
 
+import irflow
 import irmodule
 import sidtrace
 
@@ -42,30 +44,15 @@ ORG = re.compile(r"^#define (\w+)_ORG 0x([0-9A-F]+)$", re.M)
 KONST = re.compile(r"^#define (\w+)_K([0-9A-F]+) (0x[0-9A-F]+)$", re.M)
 
 
-def loaded_image(psid):
-    """The 64 KiB the lift starts from: power-on RAM with the PSID's image."""
+def song_mask(psid, starts=()):
+    """Per original address, whether the PSID loads it and it is no byte of an instruction
+    at ``starts`` (song data where the program never writes it)."""
     load, _, _, image = sidtrace.psid_parts(psid)
-    ram = bytearray(poweron_ram())
-    ram[load : load + len(image)] = image
-    return ram
-
-
-def song_mask(image, info):
-    """Per original address, whether it is song data: a byte of a held span (``Cj``) in no
-    region (``Rk``) and no instruction, by the lift's ``info``."""
-    init = info.get("init") or {}
-    image = bytearray(image)
-    for a, b in init.get("image", ()):
-        image[a] = b
+    mem = np.zeros(0x10000, np.uint8)
+    mem[load : load + len(image)] = np.frombuffer(image, np.uint8)
     mask = np.zeros(0x10000, bool)
-    for lo, hi in info["code_held"]:
-        mask[lo:hi] = True
-    for org, n in info["regions"]:
-        mask[org : org + n] = False
-    ran = code_bytes(image, info["starts"])
-    for pc, n in init.get("code", ()):
-        ran[(pc + np.arange(n)) & 0xFFFF] = True
-    return mask & ~ran
+    mask[load : load + len(image)] = True
+    return mask & ~code_bytes(mem, starts)
 
 
 def origins(h_text):
@@ -110,11 +97,15 @@ class Player:  # pylint: disable=too-few-public-methods
         src.parent.mkdir(exist_ok=True)
         src.write_text(c_path.read_text(encoding="utf-8"), encoding="utf-8")
         src.with_suffix(".h").write_text(unfold(h_text), encoding="utf-8")
-        text = irmodule.lower(src, [c_path.parent, DRIVER], ["CGEN_HOST"])
-        helpers = set(re.findall(r"^define [^@]*@(rd(?:C\d+)?)\(", text, re.M))
+        text = irmodule.lower(src, [c_path.parent, DRIVER], ["CGEN_HOST"], passes=True)
+        helpers = set(re.findall(rf"^define [^@]*@({irmodule.HELPERS})\(", text, re.M))
         self.origins = origins(h_text)
         text, self.sites = irmodule.instrument(
-            text, {**self.origins, "cgen_k": 0}, song, helpers, set(copies)
+            text,
+            {**self.origins, "cgen_k": 0},
+            irflow.classify(text),
+            helpers,
+            set(copies),
         )
         obj, lib = out / "eventlog.o", out / "eventlog.so"
         irmodule.compile_object(text, obj)
@@ -131,8 +122,9 @@ class Player:  # pylint: disable=too-few-public-methods
         return np.ctypeslib.as_array((ctype * n).in_dll(self.lib, name))
 
     def run(self, song, frames, io=None):
-        """Records (``REC``) of init then `frames` play calls in order; ``io`` gives each
-        call's I/O reads ``[(address, value)]`` to answer from."""
+        """Records (``REC``) of init then `frames` play calls in order, init's reads (its copy
+        of the state the original's init left) dropped; ``io`` gives each call's I/O reads
+        ``[(address, value)]`` to answer from."""
         ne, nio = (ctypes.c_uint32.in_dll(self.lib, n) for n in ("ne", "nio"))
         cols = [(n, self._arr(t, MAXE, c)) for n, c, t in COLS]
         ioa, iov = self._arr("u2", MAXIO, "ioa"), self._arr("u1", MAXIO, "iov")
@@ -147,42 +139,57 @@ class Player:  # pylint: disable=too-few-public-methods
             rec["frame"] = f
             for n, col in cols:
                 rec[n] = col[: ne.value]
-            out.append(rec)
+            out.append(rec[rec["kind"] != READ] if f == 0 else rec)
         return np.concatenate(out)
 
 
-def _observe(mpu, log, on_read, reads):
-    """Route the reads of ``reads`` to ``on_read`` while the SID write ``log`` keeps its
-    writes: the machine has one data access observer."""
-    # pylint: disable-next=protected-access
-    observe_data_access(mpu, on_read, log._write, reads=reads, writes=log.registers)
+def _observe(mpu, log, on_read, reads, *, on_write=None, writes=()):
+    """Route the reads of ``reads`` to ``on_read`` and the writes of ``writes`` to
+    ``on_write`` while the SID write ``log`` keeps its writes: the machine has one data
+    access observer."""
+
+    def write(addr, value):
+        if on_write and addr in writes:
+            on_write(addr, value)
+        if addr in log.registers:
+            log._write(addr, value)  # pylint: disable=protected-access
+
+    regs = set(log.registers) | set(writes)
+    observe_data_access(mpu, on_read, write, reads=reads, writes=regs)
 
 
-def reference(psid, frames, song, mask):
-    """``(writes, io, reads)`` of the original over init and `frames` play calls: its SID
-    writes per call, its I/O reads ``{call: [(address, value)]}`` and the ``{(call,
-    address): value}`` of its reads of the bytes ``mask`` marks."""
-    io, reads = {}, {}
+def reference(psid, frames, song, loaded):
+    """``(writes, io, reads, mask)`` of the original over init and `frames` play calls: SID
+    writes per call, I/O reads ``{call: [(address, value)]}``, the play calls' ``{(call,
+    address): value}`` reads of song data ``mask``, the bytes of ``loaded`` it never writes.
+    """
+    io, reads, written = {}, {}, np.zeros(0x10000, bool)
+    addrs = set(np.flatnonzero(loaded).tolist())
 
     def observe(mpu, mem, log):
         def on_read(a):
+            call = len(log.calls) - 1
             if a in IO:
-                io.setdefault(len(log.calls) - 1, []).append((a, mem[a]))
-            else:
-                reads[len(log.calls) - 1, a] = mem[a]
+                io.setdefault(call, []).append((a, mem[a]))
+            elif call:
+                reads[call, a] = mem[a]
 
-        _observe(mpu, log, on_read, set(IO) | set(np.flatnonzero(mask).tolist()))
+        def on_write(a, _):
+            written[a] = True
+
+        _observe(mpu, log, on_read, set(IO) | addrs, on_write=on_write, writes=addrs)
 
     writes = sidtrace.trace_psid(psid, frames, song=song, observe=observe)
-    return writes, io, reads
+    mask = loaded & ~written
+    return writes, io, {k: v for k, v in reads.items() if mask[k[1]]}, mask
 
 
 def prg_reads(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     prg, frames, song, spans, mask, max_cycles=sidtrace.MAX_CYCLES
 ):
     """``(writes, reads)``: a C64 build's SID writes per call and the ``{(call, original
-    address)}`` of its reads of song data; ``spans`` maps its symbols to the ``(origin,
-    length)`` of the original bytes they hold."""
+    address)}`` of its play calls' reads of song data; ``spans`` maps its symbols to the
+    ``(origin, length)`` of the original bytes they hold."""
     out = set()
 
     def observe(mpu, syms, log):
@@ -194,7 +201,7 @@ def prg_reads(  # pylint: disable=too-many-arguments,too-many-positional-argumen
         }
 
         def on_read(a):
-            if log.calls:
+            if len(log.calls) > 1:
                 out.add((len(log.calls) - 1, where[a]))
 
         _observe(mpu, log, on_read, set(where))
@@ -218,10 +225,11 @@ def same_values(reg, val):
 def _read(r, sites, spans):
     """The fields of read record ``r``: its site, region and offset, address, value, copy."""
     org, name = spans[np.searchsorted([o for o, _ in spans], r["addr"], "right") - 1]
-    fn, line, col = sites[r["site"]]
+    fn, line, col, kind = sites[r["site"]]
     return {
         "frame": int(r["frame"]),
         "site": int(r["site"]),
+        "kind": kind,
         "function": fn,
         "line": line,
         "column": col,
@@ -266,8 +274,8 @@ def rebuild(evs):
 
 def run_tune(psid, frames, song=None):
     """``(events, summary, reads, mask)`` of a PSID over init and `frames` play calls,
-    translated by tools/transliterate.py: ``reads`` is the ``{(call, address): value}`` of
-    the original's reads of the song data ``mask`` marks."""
+    translated by tools/transliterate.py; ``reads`` and the song data ``mask`` are
+    :func:`reference`'s, of the loaded bytes of no instruction the lift translates."""
     import transliterate  # pylint: disable=import-outside-toplevel
 
     song = sidtrace.default_song(psid) if song is None else song
@@ -276,10 +284,11 @@ def run_tune(psid, frames, song=None):
         c_path = pathlib.Path(tmp) / "gen.c"
         c_path.write_text(c, encoding="utf-8")
         c_path.with_suffix(".h").write_text(h, encoding="utf-8")
-        mask = song_mask(loaded_image(psid), info)
+        ref, io, orig, mask = reference(
+            psid, frames, song, song_mask(psid, info["starts"])
+        )
         copies = [f for f, v in info["provenance"]["functions"].items() if v["index"]]
         player = Player(c_path, tmp, mask, copies)
-        ref, io, orig = reference(psid, frames, song, mask)
         rec = player.run(song, frames, io)
     sid = rec[rec["kind"] == SIDW]
     got = list(zip(sid["frame"].tolist(), sid["addr"].tolist(), sid["value"].tolist()))

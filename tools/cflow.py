@@ -640,55 +640,6 @@ def scopes(unit, name):
     return out
 
 
-def loops(unit, fn):
-    """The outermost loop statements of a function, in source order."""
-    out = []
-
-    def visit(node):
-        for c in node.get("inner", ()):
-            if c.get("kind") in LOOPS:
-                out.append(c)
-            else:
-                visit(c)
-
-    visit(unit.body(fn))
-    return out
-
-
-def removable(unit, fn, loop):
-    """Whether removing a loop keeps control flow and locals: it is a statement of a block,
-    does not return, jumps out only to the statement after it, is not jumped into, and no
-    local it assigns is used outside it."""
-    block = unit.parent[loop["id"]]
-    if block.get("kind") != "CompoundStmt":
-        return False
-    inside = [n for n, _ in walk(loop)]
-    labels = {n["declId"] for n in inside if n.get("kind") == "LabelStmt"}
-    stmts = block["inner"]
-    after = stmts[stmts.index(loop) + 1 :][:1]
-    exits = labels | {n["declId"] for n in after if n.get("kind") == "LabelStmt"}
-    inner = {n.get("id") for n in inside}
-    if any(n.get("kind") == "ReturnStmt" for n in inside) or any(
-        n.get("kind") == "GotoStmt"
-        and (
-            n["targetLabelDeclId"] not in exits
-            if n["id"] in inner
-            else n["targetLabelDeclId"] in labels
-        )
-        for n, _ in walk(unit.fns[fn])
-    ):
-        return False
-    declared = {n["id"] for n in inside if n.get("kind") == "VarDecl"}
-    assigned = {target(n) for n in inside} - declared - set(unit.globals) - {None}
-    b, e = unit.extent(loop)
-    return not any(
-        n.get("referencedDecl", {}).get("id") in assigned
-        and not b <= unit.span(n)[0] < e
-        for n, _ in walk(unit.fns[fn])
-        if n.get("kind") == "DeclRefExpr"
-    )
-
-
 def chain(node):
     """[(condition or None, body)] of an if / else if / else chain."""
     out = []

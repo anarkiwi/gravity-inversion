@@ -51,17 +51,23 @@ def psid_parts(data):
 
 
 class _CycleLog(SidWriteLog):
-    """SidWriteLog that also keeps each write's cycle from the start of its call."""
+    """SidWriteLog keeping each write as one shared ``(register, value)``, or with
+    ``detail`` as (register, value, cycle of the storing instruction from the call's start, pc).
+    """
 
-    def __init__(self, mpu):
-        self.starts = []
+    def __init__(self, mpu, detail=False):
+        self.starts, self.detail, self.pairs = [], detail, {}
         super().__init__(mpu)
 
     def _write(self, addr, value):
-        super()._write(addr, value)
-        if self.calls:
-            call = self.calls[-1]
-            call[-1] = (*call[-1], self.mpu.processorCycles - self.starts[-1])
+        if not self.calls:
+            return
+        if self.detail:
+            cycle = self.mpu.processorCycles - self.starts[-1]
+            self.calls[-1].append((self.registers[addr], value, cycle, self.mpu.pc))
+        else:
+            w = (self.registers[addr], value)
+            self.calls[-1].append(self.pairs.setdefault(w, w))
 
     def start(self):
         self.starts.append(self.mpu.processorCycles)
@@ -69,12 +75,9 @@ class _CycleLog(SidWriteLog):
 
 
 def _log(mpu, detail=False):
-    """pysidtracker's per-call SID write log, kept as (register, value), with `detail`
-    as (register, value, cycle of the storing instruction from the call's start, its pc).
-    """
-    log = _CycleLog(mpu)
-    keep = (lambda w: (w[0], w[3], w[4], w[2])) if detail else (lambda w: (w[0], w[3]))
-    return log, lambda: [[keep(w) for w in call] for call in log.calls]
+    """pysidtracker's per-call SID write log and a function giving its writes per call."""
+    log = _CycleLog(mpu, detail)
+    return log, lambda: log.calls
 
 
 def trace_psid(  # pylint: disable=too-many-arguments

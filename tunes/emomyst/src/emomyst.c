@@ -530,9 +530,11 @@ store: /* $15CE */
 
 /* filter table, run by the filter-controller voice */
 static void filter_prg(void) {
-  uint8_t y = flt_pos, a = rd(y), carry;
+  uint8_t y, a, carry;
   if (x != flt_ctrl)
     return;
+  y = flt_pos;
+  a = rd(y);
   if (!NEG(a)) { /* sweep */
     y++;
     if (a == flt_sweep)

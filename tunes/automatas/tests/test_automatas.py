@@ -63,8 +63,18 @@ VARIANTS = {
 }
 
 
-@pytest.mark.parametrize("kind", BUILDERS)
-@pytest.mark.parametrize("name", sorted(VARIANTS))
+def _variant_cases():
+    """(name, kind): the generated C's SID model is init's on transliterate's C64, so the
+    8580 variant is the hand C's alone (test_generated_model_settled)."""
+    return [
+        (n, k)
+        for n in sorted(VARIANTS)
+        for k in BUILDERS
+        if not (k == "generated" and VARIANTS[n][1])
+    ]
+
+
+@pytest.mark.parametrize("name,kind", _variant_cases())
 def test_variant_identical(name, kind, psid, tmp_path):
     """Patched songs and an 8580 exercise paths the tune does not use."""
     patches, machine = VARIANTS[name]
@@ -73,6 +83,19 @@ def test_variant_identical(name, kind, psid, tmp_path):
     ref = sidtrace.trace_psid(variant, VARIANT_CALLS, **machine)
     assert sidtrace.diff(ref, sidtrace.trace_psid(psid, VARIANT_CALLS)) is not None
     got = sidtrace.trace_prg(prg, VARIANT_CALLS, **machine)
+    assert sidtrace.diff(ref, got) is None
+
+
+def test_generated_model_settled(psid):
+    """Init's SID model probe runs on transliterate's C64 (a 6581) and its result is .h
+    state: on an 8580 the generated C plays as the original does on a 6581."""
+    machine = VARIANTS["sid8580"][1]
+    ref = sidtrace.trace_psid(psid, VARIANT_CALLS)
+    assert (
+        sidtrace.diff(ref, sidtrace.trace_psid(psid, VARIANT_CALLS, **machine))
+        is not None
+    )
+    got = sidtrace.trace_prg(PRGS["generated"], VARIANT_CALLS, **machine)
     assert sidtrace.diff(ref, got) is None
 
 

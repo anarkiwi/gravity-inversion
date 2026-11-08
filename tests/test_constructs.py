@@ -1,8 +1,6 @@
-"""The construct maps (tunes/*/constructs.json) against the originals and the generated C.
-
-Each map entry is valid in jennings' listing and covered by the original's run as the map says;
-the generated C translates it as the hand C does, read from cgen's info["provenance"].
-"""
+"""The construct maps (tunes/*/constructs.json) against the originals and the generated C:
+each entry valid and covered as the map says, translated as the hand C does (cgen's provenance),
+or, run only by init (on the host), not in the generated C."""
 
 import functools
 
@@ -13,21 +11,47 @@ import constructs
 
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
 UNCHECKED = {"region", "inline_repeat", "unrolled_stores", "per_voice_paths"}
-MISSED = {
-    "emomyst:wf_arp.end": "$16D9 → $16EE is threaded into the JMP's goto $16EE → $1776, and "
-    "$1721 → $1776 prints structured with the fall-through $1773 → $1776 as a goto",
-    "emomyst:vib_slide.vibrato": "$1579/$158B/$158D → $1590 print structured",
-}
+MISSED = {}
+#: The keys of an entry naming its instructions.
+PCS = (
+    "head",
+    "back",
+    "writer",
+    "reader",
+    "dispatch",
+    "target",
+    "sites",
+    "falls",
+    "jumps",
+    "edges",
+    "branches",
+    "copies",
+    "pcs",
+)
+
+
+@functools.cache
+def checked(tune):
+    """constructs.check of the tune's map."""
+    return constructs.check(tune, 4)
+
+
+def pcs(c):
+    """The instructions entry ``c`` names."""
+
+    def flat(v):
+        return [x for y in v for x in flat(y)] if isinstance(v, list) else [v]
+
+    return set(flat([c[k] for k in PCS if k in c]))
 
 
 @functools.cache
 def provenance(tune):
-    """cgen's provenance of the tune's generated C, with the instructions its folded init
-    ran at lift time (`folded`) and those the C translates (`starts`)."""
+    """cgen's provenance of the tune's generated C, with the instructions the C translates
+    (`starts`)."""
     m = constructs.load(tune)
     _, _, info = transliterate((constructs.ROOT / m["psid"]).read_bytes(), "t.h")
-    folded = [pc for pc, _ in (info["init"] or {}).get("code", ())]
-    return {**info["provenance"], "folded": folded, "starts": set(info["starts"])}
+    return {**info["provenance"], "starts": set(info["starts"])}
 
 
 def _entries():
@@ -64,7 +88,7 @@ def lifted(c, prov):  # pylint: disable=too-many-return-statements
     """True if the generated C has the construct in the form the hand C gives it."""
     k, gotos = c["kind"], {tuple(e) for e in prov["gotos"]}
     if k == "loop":
-        return c["head"] in prov["loops"] or c["head"] in prov["folded"]
+        return c["head"] in prov["loops"]
     if k == "multi_entry_loop":
         return c["head"] in prov["loops"] and not {tuple(e) for e in c["edges"]} & gotos
     if k in ("call", "fall_call", "tail_call"):
@@ -79,10 +103,8 @@ def lifted(c, prov):  # pylint: disable=too-many-return-statements
     if k == "smc":
         return c["cell"] in prov["cells"]
     if k == "goto":
-        # Init folded at lift time ran or decided against each edge: no goto is left.
-        gone = all(
-            e[0] in prov["folded"] or e[0] not in prov["starts"] for e in c["edges"]
-        )
+        # An edge from code the C does not translate leaves no goto.
+        gone = all(e[0] not in prov["starts"] for e in c["edges"])
         return gone or {tuple(e) for e in c["edges"]} <= gotos
     if k == "join":
         return not {tuple(e) for e in c["edges"]} & gotos
@@ -99,7 +121,7 @@ def lifted(c, prov):  # pylint: disable=too-many-return-statements
 def test_map(tune):
     """Every entry is valid in the original's listing and covered as the map says."""
     m = {c["id"]: c for c in constructs.load(tune)["constructs"]}
-    for cid, (errors, covered) in constructs.check(tune, 4).items():
+    for cid, (errors, covered, _) in checked(tune).items():
         assert not errors, (cid, errors)
         assert covered == m[cid].get("covered", True), cid
 
@@ -107,12 +129,20 @@ def test_map(tune):
 @pytest.mark.slow
 @pytest.mark.parametrize("tune,cid", _entries())
 def test_lifted(tune, cid):
-    """The generated C has the construct in the hand C's form."""
+    """The generated C has the construct in the hand C's form; one only init runs has none
+    of its instructions there."""
     c = next(c for c in constructs.load(tune)["constructs"] if c["id"] == cid)
-    assert lifted(c, provenance(tune)), c["hand"]
+    _, covered, played = checked(tune)[cid]
+    if covered and not played:
+        assert not pcs(c) & provenance(tune)["starts"], c["hand"]
+    else:
+        assert lifted(c, provenance(tune)), c["hand"]
 
 
 def test_main(capsys):
-    """The CLI validates a map and prints each entry."""
-    assert constructs.main(["incoherent", "--jobs", "2"]) == 0
-    assert "incoherent:read_row.next: ok (covered)" in capsys.readouterr().out
+    """The CLI validates a map and prints each entry, with what the original's run covers."""
+    assert constructs.main(["commando", "--jobs", "2"]) == 0
+    out = capsys.readouterr().out
+    assert "commando:drum-condition: ok (covered)" in out
+    assert "commando:init-copy: ok (init only)" in out
+    assert "commando:skydive-condition: ok (not covered)" in out

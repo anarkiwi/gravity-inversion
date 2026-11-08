@@ -20,6 +20,9 @@ GEP = re.compile(
     r"\s*(%[\w.]+) = (alloca|getelementptr (?:inbounds |nuw |nusw )*[^,]+, ptr (.*))"
 )
 LOCAL = "local"
+#: The generated C's read helpers: ``rdCj`` (a span's bounds-checked reader), ``rd``,
+#: ``cgen_rd`` and ``oob_rd``.
+HELPERS = r"(?:oob_|cgen_)?rd(?:C\d+)?"
 DBG = re.compile(r"!dbg !(\d+)")
 LOC = re.compile(r"!(\d+) = !DILocation\(line: (\d+), column: (\d+)")
 HOOKS = """declare void @cgen_ld(i32, ptr, i8)
@@ -111,9 +114,13 @@ def _operand(text):
     return text
 
 
-def lower(c_path, includes=(), defines=()):
-    """The LLVM IR text of a C file at -O0 with line tables."""
-    flags = ["-O0", "-gline-tables-only", "-fno-builtin", "-S", "-emit-llvm", "-o", "-"]
+def lower(c_path, includes=(), defines=(), passes=False):
+    """The LLVM IR text of a C file at -O0 with line tables; with ``passes`` open to
+    function passes, its values named."""
+    flags = ["-O0", "-gline-tables-only", "-fno-builtin"]
+    if passes:
+        flags += ["-Xclang", "-disable-O0-optnone", "-fno-discard-value-names"]
+    flags += ["-S", "-emit-llvm", "-o", "-"]
     flags += [f"-I{i}" for i in includes] + [f"-D{d}" for d in defines]
     return subprocess.run(
         [os.environ.get("CLANG", "clang"), *flags, str(c_path)],
@@ -123,7 +130,8 @@ def lower(c_path, includes=(), defines=()):
     ).stdout
 
 
-def _target():
+def target():
+    """The native target machine, position-independent."""
     llvm.initialize_native_target()
     llvm.initialize_native_asmprinter()
     return llvm.Target.from_default_triple().create_target_machine(reloc="pic")
@@ -134,7 +142,7 @@ def compile_object(text, path):
     mod = llvm.parse_assembly(text)
     mod.verify()
     with open(path, "wb") as f:
-        f.write(_target().emit_object(mod))
+        f.write(target().emit_object(mod))
 
 
 def globals_of(text):
@@ -148,43 +156,32 @@ def globals_of(text):
 
 
 def instrument(
-    text, regions, song, helpers=(), copies=()
-):  # pylint: disable=too-many-locals
-    """``(IR text, sites)``: ``text`` reporting each site's reads (``cgen_ld(site, pointer,
-    value)``) and each store to a global or through a pointer (``cgen_st``), and
-    ``cgen_regions()`` registering ``regions`` (``{global: origin}``) for tools/eventlog.c.
-
-    A site is a load from a global of ``regions`` holding a byte of ``song`` (a mask of
-    original addresses), at it when its offset is constant, or through a pointer value; a
-    load in one of the read ``helpers`` reports the site of the call that entered it. Each
-    function of ``copies`` takes its first argument, an instance index, as the copy its
-    sites report. ``sites`` is ``[(function, line, column)]``."""
+    text, regions, kinds, helpers=(), copies=()
+):  # pylint: disable=too-many-locals,too-many-branches
+    """``(IR text, [(function, line, column, kind)])``: ``text`` reporting each site's reads
+    (``cgen_ld``), stores (``cgen_st``), ``regions`` (``{global: origin}``) and copies for
+    tools/eventlog.c; kinds from ``kinds`` (:func:`irflow.classify`), else ``table``."""
     lines, locs = text.split("\n"), {
         int(a): (int(b), int(c)) for a, b, c in LOC.findall(text)
     }
     sizes, sites, out = globals_of(text), [], []
-    holds = {
-        g
-        for g, org in regions.items()
-        if g in sizes and song[org : org + sizes[g]].any()
-    }
-    fn, bases, arg = None, {}, None
+    fn, bases, arg, pending = None, {}, None, False
 
     def base(ptr):
         """``(global, offset or None)``, LOCAL, or None for a pointer from memory."""
         return bases.get(ptr) if ptr.startswith("%") else pointer(ptr)
 
-    def may_read(ptr):
-        b = base(ptr)
-        if b is None or b == LOCAL or b[0] not in regions:
-            return b is None
-        g, off = b
-        return g in holds and (off is None or bool(song[regions[g] + off]))
+    def loc(line):
+        m = DBG.search(line)
+        return (fn, *(locs[int(m.group(1))] if m else (0, 0)))
 
     def site(line):
-        loc = DBG.search(line)
-        sites.append((fn, *(locs[int(loc.group(1))] if loc else (0, 0))))
+        sites.append((*loc(line), kinds.get(loc(line), "table")))
         return len(sites) - 1
+
+    def held(ptr):
+        b = base(ptr)
+        return b is None or (b != LOCAL and b[0] in regions)
 
     for line in lines:
         d = DEFINE.match(line)
@@ -204,12 +201,20 @@ def instrument(
             out.append("  store i8 %cg.old, ptr @cgen_copy, align 1")
         out.append(line)
         if d and fn in copies:
-            out += [
+            pending = True
+            continue
+        if pending:
+            pending = False
+            enter = [
                 "  %cg.old = load i8, ptr @cgen_copy, align 1",
                 f"  %cg.copy = add i8 {arg}, 1",
                 "  store i8 %cg.copy, ptr @cgen_copy, align 1",
             ]
-        if ld and may_read(ld.group(2)):
+            if re.match(r"[\w.]+:", line):
+                out += enter
+            else:
+                out[-1:-1] = enter
+        if ld and held(ld.group(2)):
             s = f"%cg.s{len(out)}"
             if fn in helpers:
                 out.append(f"  {s} = load i32, ptr @cgen_site, align 4")

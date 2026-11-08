@@ -16,6 +16,21 @@ DRIVER = ROOT / "c64"
 CFLAGS = {"automatas": ["-DFRAME_CIA"]}
 MISSED = {
     (
+        "generated",
+        "emomyst",
+        "code",
+    ): "init's relocator is lifted as code (its loop over the patch-site table, its 16-bit "
+    "stores into the held span), and play's reads through the operands it patches, pointers "
+    "into the song, are bounds-checked calls into that span where the hand C indexes its "
+    "song array",
+    (
+        "generated",
+        "emomyst",
+        "data",
+    ): "init's relocator patches 30 operands scattered through the player ($1256-$1B4F) "
+    "through one store, so one held span from the first patch site to the song's end holds "
+    "the player code between them",
+    (
         "hand",
         "ghouls",
         "data",
@@ -36,23 +51,16 @@ MISSED = {
         "generated",
         "ghouls",
         "data",
-    ): "the music init's block copy ($29C6) writes each song's data to $730E and "
-    "$914F-$9614: RAM regions spanning every song's copy, and the copy writes code init "
-    "then runs, so init's runs are not decided",
+    ): "the music init's block copy ($29C6) writes each song's data to $730E and past the "
+    "image to $914F-$9F14, RAM spanning every song's copy; the voices' song pointers read "
+    "one span from the image's song data through that copy, holding the bytes between the "
+    "image and it too",
     (
         "generated",
         "automatas",
         "data",
     ): "held spans keep the instruction bytes between the operand cells the band copies "
     "keep their state in, and those between the tables interleaved with code",
-    (
-        "generated",
-        "emomyst",
-        "data",
-    ): "the voice index comes back from routines that save it in an operand ($17AF) and "
-    "reload it, so the voice functions take any byte: their accesses ($1028,X ...) reach "
-    "instruction bytes, which held spans keep, as they keep those inside the span a pointer "
-    "left by init may address",
 }
 
 
