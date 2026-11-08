@@ -165,12 +165,12 @@ def summary(g):
 
 
 def roles(q):
-    """``{machine: (role, register groups, tables)}`` of a state machine graph: a
-    ``sequencer`` indexes song tables and feeds other machines, a ``program`` indexes song
-    tables and feeds only registers, a ``modulator`` indexes none and feeds registers, a
-    ``timer`` indexes none and feeds only machines, a ``flag`` feeds neither (control only).
-    A program's groups are those its tables feed, a sequencer's those of all it feeds.
-    """
+    """``{machine: (role, register groups, tables)}`` of a state machine graph. A machine
+    indexing song tables is a ``sequencer`` when it or its tables' rows set another such
+    machine (a score row restarting a program), else a ``program``; one indexing none is a
+    ``modulator`` when it feeds registers, a ``timer`` when it feeds only machines, else a
+    ``flag`` (control only). A program's groups are those its tables feed, a sequencer's
+    those of all it feeds."""
 
     def groups(nodes):
         return sorted(
@@ -182,29 +182,35 @@ def roles(q):
             }
         )
 
-    out = {}
-    for n, kind in q.nodes(data="kind"):
-        if kind != "cell":
-            continue
-        succ = {v for v in q.successors(n) if v != n}
-        tables = sorted(
+    cells = [n for n, k in q.nodes(data="kind") if k == "cell"]
+    tables = {
+        n: sorted(
             v
-            for v in succ
-            if q.nodes[v]["kind"] == "song" and "address" in kinds(q, n, v)
+            for v in q.successors(n)
+            if v != n
+            and q.nodes[v]["kind"] == "song"
+            and "address" in edge_kinds(q, n, v)
         )
-        feeds = any(q.nodes[v]["kind"] == "cell" for v in succ)
-        if tables:
-            name = "sequencer" if feeds else "program"
-            reach = set().union(*(nx.descendants(q, t) | {t} for t in tables))
-            regs = groups(nx.descendants(q, n) if feeds else reach)
+        for n in cells
+    }
+    out = {}
+    for n in cells:
+        succ = {v for v in q.successors(n) if v != n}
+        if tables[n]:
+            sets = succ.union(*(q.successors(t) for t in tables[n]))
+            seq = any(v != n and tables.get(v) for v in sets)
+            reach = set().union(*(nx.descendants(q, t) | {t} for t in tables[n]))
+            name = "sequencer" if seq else "program"
+            regs = groups(nx.descendants(q, n) if seq else reach)
         else:
             regs = groups(succ)
+            feeds = any(q.nodes[v]["kind"] == "cell" for v in succ)
             name = "modulator" if regs else "timer" if feeds else "flag"
-        out[n] = (name, regs, tables)
+        out[n] = (name, regs, tables[n])
     return out
 
 
-def kinds(q, u, v):
+def edge_kinds(q, u, v):
     """The edge kinds from ``u`` to ``v``."""
     return {d["kind"] for d in q.get_edge_data(u, v, default={}).values()}
 

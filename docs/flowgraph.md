@@ -22,6 +22,8 @@ store and call the loads, arguments and returns its value and address derive fro
 
 - **cell**: a global plus constant offset, its index dropped, named by original address
   (`$1063`) or symbol (`cgen_ptr+4`); a cell some store writes.
+  A pointer loaded from a constant pointer table into one span (a per-voice table, `K4 =
+  {C1, C1 + 0x88, ...}`) is that span, its element dropped like an index.
 - **song**: a cell no store writes; a read through a pointer is `Cj[...]` of its address
   cells.
 - **sid**: the register of an `io_write` (`SID+$05`), its voice index dropped.
@@ -52,7 +54,7 @@ Edges: **value** (solid) from what a stored or written value derives from, **add
    address), then forward from the sources. Nodes with equal signatures are one node
    (`a, b (x2)`): per-voice code copies, pointer table halves, patch sites of one pointer.
 6. **Roles** (`roles`): each machine by its edges: a `sequencer` indexes song tables and
-   feeds other machines, a `program` indexes song tables feeding only registers, a
+   it or its rows set another table machine, a `program` indexes song tables otherwise, a
    `modulator` feeds registers from its own value, a `timer` feeds only machines, a `flag`
    feeds neither (it acts through control flow, which the graph has no edges for). With
    the register groups it drives (`freq`, `pulse`, `control`, `adsr`, `cutoff`,
@@ -100,21 +102,22 @@ Roles per family (`build/flow/<family>/row.json`, `roles`), all traces exact ove
 | Family | sequencer | program | modulator | timer | flag |
 |---|---|---|---|---|---|
 | GoatTracker V2 | 1 | 2 | 3 | 0 | 4 |
-| defMON | 0 | 4 | 7 | 1 | 4 |
-| DMC | 1 | 5 | 9 | 3 | 3 |
+| defMON | 3 | 1 | 7 | 2 | 4 |
+| DMC | 2 | 4 | 9 | 3 | 3 |
 | JCH NewPlayer | 1 | 5 | 4 | 2 | 4 |
-| Future Composer | 2 | 3 | 7 | 1 | 6 |
-| SID-Wizard | 6 | 2 | 7 | 4 | 4 |
-| Music Assembler | 4 | 0 | 6 | 0 | 2 |
-| Soundmonitor | 2 | 2 | 6 | 3 | 4 |
+| Future Composer | 1 | 4 | 7 | 1 | 6 |
+| SID-Wizard | 4 | 4 | 7 | 4 | 4 |
+| Music Assembler | 3 | 1 | 6 | 0 | 2 |
+| Soundmonitor | 3 | 1 | 6 | 3 | 4 |
 
 The trackers' own terms, by the tables a machine indexes and the registers it drives:
 
 - **Score** (sequencer, all groups): the orderlist and pattern positions per voice; a row
   restarts the instrument's programs and modulators. GoatTracker's is one component of 22
   cells (orderlist, pattern, instrument and wavetable positions restart each other within
-  a voice); SID-Wizard's 17. defMON has none: its patterns index its programs' tables
-  directly, so its score is a program over all groups.
+  a voice); SID-Wizard's 17. defMON's is its orderlist (`$10EB/$1C00`) and pattern
+  position (`$1186/$1187`, reached through its per-voice pointer table), whose rows
+  restart the sidtab programs.
 - **Wave/arpeggio program** (freq, control): GoatTracker's wavetable (inside the score
   component), SID-Wizard's WF-ARP table position (`$103D`), JCH's and DMC's wave tables.
 - **Pulse program** (pulse): GoatTracker's pulsetable (`$1293`), SID-Wizard's PW table
@@ -130,10 +133,9 @@ The trackers' own terms, by the tables a machine indexes and the registers it dr
 - **Flags**: state read only by branches (gate, hard restart, new-note, tempo phase); the
   graph has no control edges, so it cannot say what they gate.
 
-SID-Wizard's six sequencers are the score plus its WF-ARP, PW and filter positions and the
-tempo program, which read the song through pointers (`$02/$03`, the relocated pointers)
-and so feed other machines' addresses; GoatTracker indexes its tables by
-per-voice registers.
+SID-Wizard's further sequencers (`$103C`, `$103D`, `$107D`) read the song through
+pointers (`$02/$03`, the relocated pointers) whose rows set other table positions;
+GoatTracker indexes its tables by per-voice registers.
 
 ## Common definition
 
@@ -155,10 +157,9 @@ derives from its own. It has:
 - **outputs**: the register groups (`freq`, `pulse`, `control`, `adsr`, `cutoff`,
   `resonance`, `volume`) and machines it feeds.
 
-Its role follows from whether it indexes a table, feeds other machines and feeds registers
-(`flowsegment.roles`). All eight families fit; they differ in how many machines share a
-component (GoatTracker's score holds its wavetable), whether the score is a sequencer or a
-program (defMON), and whether tables are reached by index or pointer (SID-Wizard).
+Its role follows from whether it indexes a table, whether it or its rows set another
+table machine, and whether it feeds registers (`flowsegment.roles`). All eight families fit; they differ in how many machines share a
+component (GoatTracker's score holds its wavetable), and whether tables are reached by index or pointer (SID-Wizard).
 
 ## Next
 

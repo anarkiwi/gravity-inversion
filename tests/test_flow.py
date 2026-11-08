@@ -8,6 +8,7 @@ import networkx as nx
 import pytest
 
 import condition
+import irflow
 import flowgraph
 import flowsegment
 
@@ -60,6 +61,10 @@ def test_segment(player):
     assert sorted(n for n, k in q.nodes(data="kind") if k == "cell") == ["pos+0"]
     assert flowsegment.summary(q)["value_cycles"] == []
     assert flowsegment.roles(q) == {"pos+0": ("program", ["freq", "volume"], ["tab+0"])}
+    assert irflow.bases(
+        "@K4 = internal constant [2 x ptr] [ptr @C1, ptr getelementptr (i8, ptr @C1, i64 8)]\n"
+        "@K5 = internal constant [2 x ptr] [ptr @C1, ptr @C2]\n"
+    ) == {"K4": "C1"}
     dot = flowgraph.dot(q)
     assert '"pos+0" -> "tab+0" [style=dashed' in dot
 

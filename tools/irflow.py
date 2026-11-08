@@ -40,12 +40,28 @@ def _locations(printed):
     return out
 
 
+#: A constant array of pointers: its name and its elements.
+POINTERS = re.compile(r"^@([\w.]+) = [\w ]*constant \[\d+ x ptr\] \[(.*)\]", re.M)
+
+
+def bases(printed):
+    """``{array: global}`` of the constant pointer arrays whose elements all point into one
+    global (a per-voice pointer table)."""
+    out = {}
+    for name, elems in POINTERS.findall(printed):
+        into = set(re.findall(r"ptr (?:getelementptr \([^,]+, ptr )?@([\w.]+)", elems))
+        if len(into) == 1:
+            out[name] = into.pop()
+    return out
+
+
 class Flow:  # pylint: disable=too-many-instance-attributes
     """Value sources of one module: what each load's address, each stored value, each call
     argument and each return derives from, as loads, arguments and returns."""
 
     def __init__(self, mod, helpers):
         self.helpers, self.loc = helpers, _locations(str(mod))
+        self.bases = bases(str(mod))
         self.reads, self.stores, self.args, self.rets, self.cfg = {}, [], {}, {}, {}
         self.where, self.calls = {}, []
         for fn in mod.functions:
@@ -87,9 +103,11 @@ class Flow:  # pylint: disable=too-many-instance-attributes
             if ins is None:
                 p = irmodule.pointer(s[4:] if s.startswith("ptr ") else s)
                 return (p[0], p[1] or 0) if p else (None, 0)
+            ops = list(ins.operands)
+            if ins.opcode == "load" and cell(ops[0])[0] in self.bases:
+                return self.bases[cell(ops[0])[0]], 0
             if ins.opcode != "getelementptr":
                 return None, 0
-            ops = list(ins.operands)
             g, c = cell(ops[0])
             return g, c + sum(constant(o) for o in ops[1:])
 
