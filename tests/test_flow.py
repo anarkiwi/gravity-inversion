@@ -1,6 +1,6 @@
 """Tests for tools/irflow.py, tools/flowgraph.py, tools/flowsegment.py and tools/condition.py:
 value flow and def-use webs of a small C player, the segmentation's contractions and classes,
-and the hand conditioning of generated C."""
+and the per-family runs."""
 
 import json
 
@@ -131,32 +131,6 @@ def test_contractions():
     assert set(m) == {"song", "m", "SID+$00"} and m.has_edge("song", "SID+$00")
     regs = _g([], {"SID+$15": "sid", "SID+$0E": "sid", "IO D418": "sid"})
     assert [flowsegment.role(regs, n) for n in regs] == ["sid+15", "voice+0", "sid"]
-
-
-HEADER = """#define C0_ORG 0x1000
-#define C0_LEN 256
-#define C1_ORG 0x2000
-#define C1_LEN 16
-#define R5_ORG 0x1F01
-#define R5_LEN 2
-"""
-
-
-def test_base_calls_direct():
-    """``wr`` into code becomes a store into the span holding its address, ``codechk`` 0;
-    the address of an expression takes span origins and every variable 0."""
-    org = condition.origins(HEADER)
-    assert condition.base("(uint16_t)(C1_ORG + 3 + v7)", org) == 0x2003
-    assert condition.base("C0_ORG | (v2 << 8)", org) == 0x1000
-    with pytest.raises(ValueError):
-        condition.base("f(v1)", org)
-    c = "static void wr(uint16_t a, uint8_t v);\nvoid cgen_init(void) {\n"
-    c += "  wr(C1_ORG + 1 + v3, f(v2, v4));\n  if (codechk(v1 + (v2)) != 0) {}\n}\n"
-    out, n, k = condition.direct(c, HEADER)
-    assert (n, k) == (1, 1)
-    assert "C1[(uint16_t)(C1_ORG + 1 + v3) - C1_ORG] = f(v2, v4)" in out
-    assert "if (0 != 0)" in out and out.startswith("static void wr(")
-    assert list(condition.calls("g(a, (b, c))", "g")) == [(0, 12, ["a", "(b, c)"])]
 
 
 def test_tune_path():

@@ -63,9 +63,8 @@ Edges: **value** (solid) from what a stored or written value derives from, **add
 ## Input conditioning
 
 The graphs need a lift with no residual `rd`/`wr`/`codechk` on play's path and play's song
-pointers as variables. Where the lift (deity-informant 0.27.1) falls short,
-`condition.py` edits the generated C by hand; each edit keeps the trace exact over the whole
-song.
+pointers as variables. With deity-informant 0.27.3 no family's generated C is edited by
+hand; Soundmonitor's input is a PSID tune and Blackbird is not done.
 
 | Family | Tune | Conditioning | Lift issue |
 |---|---|---|---|
@@ -75,14 +74,10 @@ song.
 | JCH NewPlayer | `DEMOS/0-9/1st_Chaff.sid` | none | |
 | Future Composer | `MUSICIANS/A/A-Man/Future_Composer_4-Demo_07.sid` | none | |
 | SID-Wizard 1.x | `fixtures/Emomyst.sid` | none | |
-| Music Assembler | `DEMOS/0-9/7_Years.sid` | `direct` | voice index lost (deity #455) |
+| Music Assembler | `DEMOS/0-9/7_Years.sid` | none | |
 | Soundmonitor | `DEMOS/0-9/1988_Carat_tune_1.sid` | PSID tune | RSID rejected (gravity-inversion #46) |
 | Blackbird | `MUSICIANS/F/Freqvibez/Arhymetriarchy.sid` | not done | SMC jump target set in play (deity #456) |
 
-- **`direct`**: play calls its voice routine with X = 0, 7, 14 through return addresses it
-  pushes, so the lift loses X's range and every per-voice store into code goes through
-  `wr`/`codechk`. Each `wr(a, v)` becomes a store into the span holding `a` with every
-  variable 0, each `codechk(...)` 0.
 - **Soundmonitor**: RSID files do not lift; a PSID tune of the same player is used.
 - **Blackbird**: its `JMP`/`RTS` at `$12EB` and its target are written by the decompressor
   during play; only target `$1018` is lifted, `$1043` traps. Conditioning would translate
@@ -100,7 +95,7 @@ Roles per family (`build/flow/<family>/row.json`, `roles`), all traces exact ove
 | JCH NewPlayer | 1 | 5 | 4 | 2 | 4 |
 | Future Composer | 1 | 4 | 7 | 1 | 7 |
 | SID-Wizard | 4 | 4 | 7 | 4 | 4 |
-| Music Assembler | 3 | 2 | 7 | 1 | 2 |
+| Music Assembler | 2 | 3 | 8 | 2 | 5 |
 | Soundmonitor | 3 | 1 | 6 | 3 | 4 |
 
 The trackers' own terms, by the tables a machine indexes and the registers it drives:
