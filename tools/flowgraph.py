@@ -1,7 +1,8 @@
 """Value flow of a translated SID player: how song bytes and state cells become SID writes.
 
 Nodes are cells (by original address, voice index dropped), song spans read through a pointer
-and SID registers; solid edges carry values, dashed ones addresses (docs/flowgraph.md).
+and SID registers; solid edges carry values, dashed ones addresses, dotted ones the branch
+conditions a store or write runs under (docs/flowgraph.md).
 """
 
 import argparse
@@ -28,6 +29,7 @@ STYLE = {
     "cell": ("ellipse", None),
     "sid": ("box", "lightblue"),
 }
+LINE = {"address": "dashed", "control": "dotted", "value": "solid"}
 
 
 def _name(key, origins, labels):
@@ -60,7 +62,8 @@ def graph(
     c_path, labels=None, entries=None, split=False
 ):  # pylint: disable=too-many-locals
     """``(networkx.MultiDiGraph, summary)`` of the generated C at ``c_path`` (its .h beside):
-    every store, read and ``io_write`` traced to the loads its value and address derive from;
+    every store, read and ``io_write`` traced to the loads its value, address and branch
+    conditions derive from;
     with ``entries`` only those of the functions they reach; ``split`` names a cell's def-use
     webs apart, all but the one the first entry's calls keep by ``cell@line``.
     """
@@ -98,6 +101,11 @@ def graph(
             if d in flow.reads:
                 edges[read(d), dst, kind] += 1
 
+    def gate(target, dst):
+        for fn, deps in flow.control.get(target, {}).items():
+            if kept(fn):
+                link(deps, dst, "control")
+
     for ident, (fn, _, key, addr) in flow.reads.items():
         if not kept(fn):
             continue
@@ -110,7 +118,8 @@ def graph(
         g.add_node(dst, kind="cell")
         link(val, dst, "value")
         link(flow.where[i][2], dst, "address")
-    for fn, _, callee, deps, base in flow.calls:
+        gate(("st", i), dst)
+    for j, (fn, _, callee, deps, base) in enumerate(flow.calls):
         if not kept(fn):
             continue
         if callee == "io_write" and deps:
@@ -118,6 +127,7 @@ def graph(
             g.add_node(reg, kind="sid")
             link(deps[1], reg, "value")
             link(deps[0], reg, "address")
+            gate(("io", j), reg)
         elif RESIDUAL.fullmatch(callee or ""):
             residual[callee] += 1
     for (src, dst, kind), w in edges.items():
@@ -142,9 +152,8 @@ def dot(g):
         style = f', style=filled, fillcolor="{fill}"' if fill else ""
         out.append(f'"{n}" [shape={shape}{style}];')
     for u, v, d in g.edges(data=True):
-        line = "dashed" if d["kind"] == "address" else "solid"
         width = min(1 + d["weight"] / 4, 4)
-        out.append(f'"{u}" -> "{v}" [style={line}, penwidth={width:.1f}];')
+        out.append(f'"{u}" -> "{v}" [style={LINE[d["kind"]]}, penwidth={width:.1f}];')
     return "\n".join(out + ["}"]) + "\n"
 
 

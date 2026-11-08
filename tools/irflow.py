@@ -4,6 +4,7 @@ the def-use webs of its cells (docs/flowgraph.md)."""
 import re
 
 import llvmlite.binding as llvm
+import networkx as nx
 
 import irmodule
 
@@ -55,18 +56,36 @@ def bases(printed):
     return out
 
 
+#: The virtual exit every returning block joins, for post-dominators.
+EXIT = ("exit",)
+
+
+def gating(blocks, exits):
+    """``{block: branch blocks}`` it is transitively control dependent on: the iterated
+    post-dominance frontier of ``{block: (acc, succ)}`` returning at ``exits``."""
+    rev = nx.DiGraph((s, b) for b, (_, succ) in blocks.items() for s in succ)
+    rev.add_edges_from((EXIT, b) for b in exits)
+    cd = nx.DiGraph(
+        (a, b) for b, fr in nx.dominance_frontiers(rev, EXIT).items() for a in fr
+    )
+    tc = nx.transitive_closure(cd, reflexive=False)
+    return {b: set(tc.predecessors(b)) for b in tc}
+
+
 class Flow:  # pylint: disable=too-many-instance-attributes
     """Value sources of one module: what each load's address, each stored value, each call
-    argument and each return derives from, as loads, arguments and returns."""
+    argument, each return and each branch condition derives from, as loads, arguments and
+    returns; ``control`` the branches each store and ``io_write`` runs under."""
 
     def __init__(self, mod, helpers):
         self.helpers, self.loc = helpers, _locations(str(mod))
         self.bases = bases(str(mod))
         self.reads, self.stores, self.args, self.rets, self.cfg = {}, [], {}, {}, {}
-        self.where, self.calls = {}, []
+        self.where, self.calls, self.conds, self.exits = {}, [], {}, {}
         for fn in mod.functions:
             if not fn.is_declaration and not helpers.fullmatch(fn.name):
                 self._function(fn)
+        self.control = self._control()
 
     def _function(self, fn):  # pylint: disable=too-many-locals,too-many-statements
         defs = {str(i).strip(): i for b in fn.blocks for i in b.instructions}
@@ -138,19 +157,57 @@ class Flow:  # pylint: disable=too-many-instance-attributes
                         self.args.setdefault((ops[-1].name, k), set()).update(d)
                     base = constant(ops[0]) & 0xFFFF if len(ops) > 1 else 0
                     self.calls.append((fn.name, loc, ops[-1].name, deps, base))
-                    acc.append(("call", ops[-1].name, None))
+                    acc.append(("call", ops[-1].name, len(self.calls) - 1))
                 elif i.opcode == "store":
                     key = cell(ops[1])
                     self.stores.append((key, node(ops[0])))
                     self.where[len(self.stores) - 1] = (fn.name, loc, node(ops[1]))
                     acc.append(("store", key, len(self.stores) - 1))
-                elif i.opcode == "ret" and ops:
-                    self.rets.setdefault(fn.name, set()).update(node(ops[0]))
+                elif i.opcode == "ret":
+                    self.exits.setdefault(fn.name, set()).add(b.name)
+                    self.rets.setdefault(fn.name, set()).update(
+                        node(ops[0]) if ops else ()
+                    )
+                elif i.opcode == "switch" or i.opcode == "br" and len(ops) == 3:
+                    self.conds[fn.name, b.name] = node(ops[0])
             blocks[b.name] = (
                 acc,
                 re.findall(r"label %([\w.]+)", str(list(b.instructions)[-1])),
             )
         self.cfg[fn.name] = (next(iter(fn.blocks)).name, blocks)
+
+    def _control(self):
+        """``{target: {function: deps}}``: the condition sources, by the function branching,
+        of the branches each store (``("st", i)``) and ``io_write`` (``("io", j)``) runs
+        under, a call's callee's targets (transitively) under the call's branches."""
+        memo, out = {}, {}
+
+        def effects(fn):
+            if fn not in memo:
+                memo[fn] = set()
+                memo[fn] = set().union(
+                    *(here(acc) for acc, _ in self.cfg[fn][1].values())
+                )
+            return memo[fn]
+
+        def here(acc):
+            hit = set()
+            for kind, k, ident in acc:
+                if kind == "store":
+                    hit.add(("st", ident))
+                elif k == "io_write":
+                    hit.add(("io", ident))
+                elif kind == "call" and k in self.cfg:
+                    hit |= effects(k)
+            return hit
+
+        for fn, (_, blocks) in self.cfg.items():
+            for b, under in gating(blocks, self.exits.get(fn, ())).items():
+                deps = frozenset().union(*(self.conds.get((fn, a), ()) for a in under))
+                for t in here(blocks[b][0]) if deps else ():
+                    f = out.setdefault(t, {})
+                    f[fn] = f.get(fn, frozenset()) | deps
+        return out
 
     def _helper(self, ins):
         ops = list(ins.operands)

@@ -64,19 +64,32 @@ def _inner(g, members):
     return _h(sorted(role(g, n) for n in members), sorted(inside))
 
 
+def _through(a, b):
+    """The kind of a path of an ``a`` then a ``b`` edge: control when either is, else an
+    address when either is, else a value."""
+    return next(k for k in ("control", "address", "value") if k in (a, b))
+
+
 def contract(g, nodes):
-    """``g`` without ``nodes``, each source of one feeding each of its targets: an address
-    when either edge is one, else a value."""
-    h = nx.MultiDiGraph(g)
+    """``g`` without ``nodes``, each source of one feeding each of its targets by the kind of
+    the path through it (``_through``); edges of distinct kinds stay apart."""
+    h = _simple(g)
     for n in nodes:
-        ins = [(u, d) for u, _, d in h.in_edges(n, data=True) if u != n]
-        outs = [(v, d) for _, v, d in h.out_edges(n, data=True) if v != n]
+        ins = [(u, k, w) for u, _, k, w in h.in_edges(n, keys=True, data="weight")]
+        outs = [(v, k, w) for _, v, k, w in h.out_edges(n, keys=True, data="weight")]
         h.remove_node(n)
-        for u, du in ins:
-            for v, dv in outs:
-                kind = "address" if "address" in (du["kind"], dv["kind"]) else "value"
-                h.add_edge(u, v, kind=kind, weight=min(du["weight"], dv["weight"]))
-    return _simple(h)
+        for u, ku, wu in ins:
+            for v, kv, wv in outs:
+                if n not in (u, v):
+                    _add(h, u, v, _through(ku, kv), min(wu, wv))
+    return h
+
+
+def _add(h, u, v, kind, weight):
+    if h.has_edge(u, v, kind):
+        h[u][v][kind]["weight"] += weight
+    else:
+        h.add_edge(u, v, key=kind, kind=kind, weight=weight)
 
 
 def registers(g):
@@ -84,13 +97,22 @@ def registers(g):
     return contract(g, [n for n in g if REGISTER.fullmatch(n)])
 
 
+def flows(g):
+    """``g`` with its value and address edges only."""
+    h = nx.MultiDiGraph()
+    h.add_nodes_from(g.nodes(data=True))
+    h.add_edges_from(e for e in g.edges(data=True) if e[2]["kind"] != "control")
+    return h
+
+
 def machines(g):
-    """``g`` with only the cells that are state machines: those in a cycle, holding a value
-    derived from their own."""
-    loops = {u for u, v in g.edges() if u == v}
+    """``g`` with only the cells that are state machines: those in a value or address cycle,
+    holding a value derived from their own."""
+    v = flows(g)
+    loops = {a for a, b in v.edges() if a == b}
     loops.update(
         n
-        for c in nx.strongly_connected_components(nx.DiGraph(g))
+        for c in nx.strongly_connected_components(nx.DiGraph(v))
         if len(c) > 1
         for n in c
     )
@@ -99,38 +121,39 @@ def machines(g):
     )
 
 
-def _merge(h):
-    out = Counter()
-    for u, v, d in h.edges(data=True):
-        out[u, v, d["kind"]] += d["weight"]
-    return out
-
-
 def _simple(h):
+    """``h`` with its parallel edges of one kind merged, keyed by kind."""
     s = nx.MultiDiGraph()
     s.add_nodes_from(h.nodes(data=True))
-    for (u, v, k), w in _merge(h).items():
-        s.add_edge(u, v, kind=k, weight=w)
+    for u, v, d in h.edges(data=True):
+        _add(s, u, v, d["kind"], d["weight"])
     return s
 
 
 def classes(g):
-    """``{node: class}``: equal classes feed and are fed by equal classes the same way."""
-    dag = nx.condensation(nx.DiGraph(g))
+    """``{node: class}``: equal classes feed and are fed by equal classes the same way, by
+    value and address over the condensation, then by control between those classes."""
+    v = flows(g)
+    dag = nx.condensation(nx.DiGraph(v))
     comp, members = dag.graph["mapping"], nx.get_node_attributes(dag, "members")
     kinds = {}
-    for u, v, k in g.edges(data="kind"):
-        if comp[u] != comp[v]:
-            kinds.setdefault((comp[u], comp[v]), set()).add(k)
+    for a, b, k in v.edges(data="kind"):
+        if comp[a] != comp[b]:
+            kinds.setdefault((comp[a], comp[b]), set()).add(k)
     order = list(nx.topological_sort(dag))
     back, fwd = {}, {}
     for c in reversed(order):
         out = {(k, back[d]) for d in dag.successors(c) for k in kinds[c, d]}
-        back[c] = _h(_inner(g, members[c]), sorted(out))
+        back[c] = _h(_inner(v, members[c]), sorted(out))
     for c in order:
         into = {(k, fwd[p]) for p in dag.predecessors(c) for k in kinds[p, c]}
         fwd[c] = _h(back[c], sorted(into))
-    return {n: fwd[comp[n]] for n in g}
+    ctl = {c: set() for c in order}
+    for a, b, k in g.edges(data="kind"):
+        if k == "control":
+            ctl[comp[a]].add(("to", back[comp[b]] if comp[a] != comp[b] else "self"))
+            ctl[comp[b]].add(("from", fwd[comp[a]] if comp[a] != comp[b] else "self"))
+    return {n: _h(fwd[comp[n]], sorted(ctl[comp[n]])) for n in g}
 
 
 def quotient(g, cls):
@@ -164,13 +187,11 @@ def summary(g):
     }
 
 
-def roles(q):
-    """``{machine: (role, register groups, tables)}`` of a state machine graph. A machine
-    indexing song tables is a ``sequencer`` when it or its tables' rows set another such
-    machine (a score row restarting a program), else a ``program``; one indexing none is a
-    ``modulator`` when it feeds registers, a ``timer`` when it feeds only machines, else a
-    ``flag`` (control only). A program's groups are those its tables feed, a sequencer's
-    those of all it feeds."""
+def roles(g):  # pylint: disable=too-many-locals
+    """``{machine: (role, register groups, tables, gated groups, gated machines)}`` of a state
+    machine graph, roles by value and address edges (docs/flowgraph.md, *Roles*), gates by
+    control edges."""
+    q = flows(g)
 
     def groups(nodes):
         return sorted(
@@ -206,7 +227,11 @@ def roles(q):
             regs = groups(succ)
             feeds = any(q.nodes[v]["kind"] == "cell" for v in succ)
             name = "modulator" if regs else "timer" if feeds else "flag"
-        out[n] = (name, regs, tables[n])
+        ctl = {
+            w for _, w, k in g.out_edges(n, data="kind") if k == "control" and w != n
+        }
+        gated = sorted(w for w in ctl if q.nodes[w]["kind"] == "cell")
+        out[n] = (name, regs, tables[n], groups(ctl), gated)
     return out
 
 
