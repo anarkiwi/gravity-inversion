@@ -12,14 +12,7 @@ import costs
 
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
 DRIVER = ROOT / "c64"
-MISSED = {
-    (
-        "emomyst",
-        "K5",
-    ): "init's relocator stores each operand byte through its patch-site table: the 30 "
-    "operands it patches lie scattered through the player ($1256-$1B4F), so the store's "
-    "address set is one held span's, indexed by 16 bits",
-}
+MISSED = {}
 
 SEEDS = range(3)
 FUZZ_MISSED = {}

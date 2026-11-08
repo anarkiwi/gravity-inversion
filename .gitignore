@@ -1,4 +1,5 @@
 build/
-fixtures/
+/fixtures
 __pycache__/
 .coverage
+/out/

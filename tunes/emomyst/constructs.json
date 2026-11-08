@@ -30,7 +30,7 @@
     "form": "for (x = 14;; x -= 7)"
    },
    "why": "A real loop: TXA / SEC / SBC #7 / TAX / BPL.",
-   "lift": "loop",
+   "lift": "init: run on the host, not lifted; the state it leaves is in the .h",
    "transform": "T4"
   },
   {
@@ -43,7 +43,7 @@
     "form": "for (r < CLEARED)"
    },
    "why": "DEY/BPL clear.",
-   "lift": "evaluated at lift time: the init run folds into the starting memory",
+   "lift": "init: run on the host, not lifted; the state it leaves is in the .h",
    "transform": "T4"
   },
   {
@@ -56,7 +56,7 @@
     "form": "do SIDREG(--r) = 0; while (r)"
    },
    "why": "DEY/BPL clear.",
-   "lift": "evaluated at lift time: the init run folds into the starting memory",
+   "lift": "init: run on the host, not lifted; the state it leaves is in the .h",
    "transform": "T4"
   },
   {

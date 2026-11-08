@@ -2,6 +2,7 @@
 against their originals, and the five tunes against their hand C's reads of the same data.
 """
 
+import bisect
 import json
 import pathlib
 import re
@@ -45,6 +46,9 @@ DISPATCH = {
     "ghouls": [(0x6CB7, 0x6D35)],
     "incoherent": [(0x0C4F, 0x0C64)],
 }
+#: Song bytes the original reads into a cell its build never reads ``[lo, hi)``: Emomyst's
+#: chord rows' detune column, which the hand C skips.
+UNUSED = {"emomyst": [(0x21CC, 0x21CD), (0x223B, 0x223C)]}
 HAND_CYCLES = 20_000_000
 
 
@@ -54,18 +58,21 @@ def test_same_values():
     assert got.tolist() == [False, False, True, False, True]
 
 
-def test_song_mask():
-    """Song data: held span bytes outside the regions and the instructions."""
-    image = bytearray(0x10000)
-    image[0x1000:0x1004] = b"\x4c\x00\x10\xea"
-    info = {
-        "code_held": [(0x1000, 0x1010)],
-        "regions": [(0x1008, 2)],
-        "starts": [0x1000, 0x1003],
-    }
-    mask = eventlog.song_mask(image, info)
-    want = [0x1004, 0x1005, 0x1006, 0x1007] + list(range(0x100A, 0x1010))
-    assert np.flatnonzero(mask).tolist() == want
+def test_reference_song_data(tmp_path):
+    """Song data: the loaded bytes of no instruction the original never writes (not the
+    operands play patches); its reads are the play calls'."""
+    sid = _fuzz("smc", 4, tmp_path, "direct")
+    at = {k: a for a, k in reversed(_labels(sid))}
+    psid = sid.read_bytes()
+    load, _, _, image = sidtrace.psid_parts(psid)
+    assert np.flatnonzero(eventlog.song_mask(psid)).tolist() == list(
+        range(load, load + len(image))
+    )
+    loaded = eventlog.song_mask(psid, [at["init"], at["sf"]])
+    assert not loaded[at["sf"] + 1] and loaded[at["sf"] + 2]
+    _, _, reads, mask = eventlog.reference(psid, 20, 0, eventlog.song_mask(psid))
+    assert mask[at["song"]] and mask[at["freqlo"]] and not mask[at["sf"] + 1]
+    assert reads and all(f > 0 and mask[a] for f, a in reads)
 
 
 def test_origins():
@@ -147,11 +154,9 @@ HEADER = """#define C0_ORG 0x1000
 
 
 def test_synthetic_player(tmp_path):
-    """Sites are the loads that may read song data (a region slice at a variable offset
-    too, a song byte the .c reads by name, not K0 or a constant state offset); each song
-    byte read is logged with its copy, in rdC0 at the call's site, followed by its stores
-    and SID writes; I/O reads replayed.
-    """
+    """Sites (a byte read by name too, not K0) and kinds: event at the position play
+    advances, lookup at its value, else table; each song byte read logged with its copy
+    and site, then its stores and SID writes; I/O replayed; init's reads not logged."""
     path = tmp_path / "player.c"
     path.write_text(PLAYER, encoding="ascii")
     path.with_suffix(".h").write_text(HEADER, encoding="ascii")
@@ -159,12 +164,13 @@ def test_synthetic_player(tmp_path):
     song[0x1000:0x1008] = True
     player = eventlog.Player(path, tmp_path, song, ["f1"])
     lines = PLAYER.split("\n")
-    assert {(lines[l - 1].strip()[:20], fn) for fn, l, _ in player.sites} == {
-        ("uint8_t n = rdC0(C0_", "f1"),
-        ("R1[v1] = (R1[v1] + 1", "f1"),
-        ("io_write(0xD400 + K0", "f1"),
-        ("io_write(0xD418, C0[", "cgen_play"),
-        ("io_write(0xD417, COD", "cgen_play"),
+    assert {(lines[l - 1].strip()[:20], fn, k) for fn, l, _, k in player.sites} == {
+        ("uint8_t n = rdC0(C0_", "f1", "event"),
+        ("uint8_t n = rdC0(C0_", "f1", "table"),
+        ("R1[v1] = (R1[v1] + 1", "f1", "table"),
+        ("io_write(0xD400 + K0", "f1", "lookup"),
+        ("io_write(0xD418, C0[", "cgen_play", "table"),
+        ("io_write(0xD417, COD", "cgen_play", "table"),
     }
     rec = player.run(0, 4, {0: [(0xD012, 1), (0xD012, 9)]})
     evs = eventlog.events(rec, player.sites, player.origins)
@@ -178,6 +184,7 @@ def test_synthetic_player(tmp_path):
             ]
         want += [(f, None, 0x1003, 0x44), (f, None, 0x1006, 2)]
     assert [(e["frame"], e["copy"], e["addr"], e["value"]) for e in evs[1:]] == want
+    assert [e["kind"] for e in evs[1:7]] == ["event", "lookup"] * 2 + ["table"] * 2
     assert evs[0]["site"] is None and evs[0]["cells"][0] == [0, 2, 1, 0]
     assert evs[1]["region"] == "C0" and evs[1]["offset"] == 4
     assert evs[1]["cells"] == [[0, 0x1008, 1, 0]] and evs[1]["sid"] == []
@@ -199,6 +206,18 @@ def _fuzz(style, seed, tmp_path, seq=None):
     return sid
 
 
+def _labels(sid):
+    """``[(address, label)]`` of a fuzz player, sorted, its digits dropped."""
+    src = sid.with_suffix(".asm")
+    lbl = sid.with_suffix(".lbl")
+    subprocess.run(["acme", "--symbollist", lbl, "-o", sid, src], check=True)
+    text = lbl.read_text(encoding="ascii")
+    return sorted(
+        (int(a, 16), re.sub(r"\d", "", k))
+        for k, a in re.findall(r"^\s*(\w+)\s*=\s*\$([0-9a-f]+)", text, re.M)
+    )
+
+
 FUZZ_FRAMES = 200
 
 
@@ -206,11 +225,18 @@ FUZZ_FRAMES = 200
 @pytest.mark.parametrize("style", ["loop", "jsr3", "fallthrough", "unrolled", "smc"])
 @pytest.mark.parametrize("seed", [4, 13])
 def test_fuzz(style, seed, seq, tmp_path):
-    """Sequencer players, SID writes direct or through a shadow buffer copied after the
-    voices or at the next call: the generated C reads exactly the song bytes the original
-    reads, call by call, with their values; the log rebuilds the writes."""
-    psid = _fuzz(style, seed, tmp_path, seq).read_bytes()
+    """Sequencer players (SID writes direct or shadowed): the generated C reads exactly the
+    original's song bytes, call by call with values, score as events, frequency table as
+    lookups, others (an unpatched operand) as tables; the log rebuilds the writes."""
+    sid = _fuzz(style, seed, tmp_path, seq)
+    psid, labels = sid.read_bytes(), _labels(sid)
     evs, summary, orig, _ = eventlog.run_tune(psid, FUZZ_FRAMES)
+    want = {"song": "event", "freqlo": "lookup", "freqhi": "lookup"}
+    at = [a for a, _ in labels]
+    assert all(
+        want.get(labels[bisect.bisect(at, e["addr"]) - 1][1], "table") == e["kind"]
+        for e in evs[1:]
+    )
     got = {((e["frame"], e["addr"]), e["value"]) for e in evs[1:]}
     assert got == orig.items() and summary["reads"] >= len(got) > 0
     trace = sidtrace.trace_psid(psid, FUZZ_FRAMES)
@@ -237,10 +263,10 @@ def _spans(tune):
 @pytest.mark.slow
 @pytest.mark.parametrize("tune", sorted(PSIDS))
 def test_hand(tune):
-    """Over the song (Commando 6000 calls) the generated C's song data reads (call, address)
-    are the original's, with its values; those of bytes in the -O0 hand C's data arrays
-    equal the hand C's, whose SID writes equal the original's, but for the DISPATCH tables
-    (each read's value stored to a lift code cell, none read by the hand C)."""
+    """Over the song the generated C's song data reads are the original's; those in the
+    -O0 hand C's arrays (its SID writes the original's) are the hand C's play reads, but for
+    the DISPATCH (value stored to a code cell) and UNUSED (to a cell) bytes it never reads.
+    """
     prg = ROOT / "tunes" / tune / "build" / "hand-O0.prg"
     if not (PSIDS[tune].exists() and prg.exists()):
         pytest.skip("needs `make` builds")
@@ -256,14 +282,23 @@ def test_hand(tune):
     assert eventlog.rebuild(evs) == [
         (f, r, v) for f, ws in enumerate(trace) for r, v in ws
     ]
-    table = np.zeros(0x10000, bool)
+    table, unused = np.zeros(0x10000, bool), np.zeros(0x10000, bool)
     for lo, hi in DISPATCH.get(tune, ()):
         table[lo:hi] = True
-    dispatch = [e for e in evs[1:] if table[e["addr"]]]
+    for lo, hi in UNUSED.get(tune, ()):
+        unused[lo:hi] = True
     code = set(summary["code_cells"])
     assert all(
-        any(c[1] in code and c[2] == e["value"] for c in e["cells"]) for e in dispatch
+        any(c[1] in code and c[2] == e["value"] for c in e["cells"])
+        for e in evs[1:]
+        if table[e["addr"]]
     )
+    assert all(
+        any(c[2] == e["value"] for c in e["cells"])
+        for e in evs[1:]
+        if unused[e["addr"]]
+    )
+    table |= unused
     gen = {((e["frame"], e["addr"]), e["value"]) for e in evs[1:]}
     assert gen <= orig.items()
     held = np.zeros(0x10000, bool)

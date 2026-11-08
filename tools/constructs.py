@@ -144,15 +144,18 @@ def run(tune, jobs=1):
 
 
 def check(tune, jobs=1):
-    """{construct id: (errors, covered)} of a tune's map: static errors, and whether the
-    original's run (init and play) executed it."""
+    """{construct id: (errors, covered, played)} of a tune's map: static errors, and whether
+    the original's run (init and play), and its play calls alone, executed it."""
     m, data, cov, starts = run(tune, jobs)
+    songs = m.get("songs", [0])
+    play = coverage(data, [m["frames"]] * len(songs), songs, jobs)
     mem = memory(data)
     out = {}
     for c in m["constructs"]:
-        checker = Checker(mem, cov, starts)
+        checker, player = Checker(mem, cov, starts), Checker(mem, play, starts)
         errors = checker.check(c)
-        out[c["id"]] = (errors, checker.covered)
+        player.check(c)
+        out[c["id"]] = (errors, checker.covered, player.covered)
     return out
 
 
@@ -164,9 +167,13 @@ def main(argv=None):
     args = ap.parse_args(argv)
     bad = 0
     for t in args.tunes:
-        for cid, (errors, covered) in check(t, args.jobs).items():
+        for cid, (errors, covered, played) in check(t, args.jobs).items():
             bad += bool(errors)
-            seen = "covered" if covered else "not covered"
+            seen = (
+                "init only"
+                if covered > played
+                else "covered" if covered else "not covered"
+            )
             print(f"{t}:{cid}: {'; '.join(errors) or 'ok'} ({seen})")
     return 1 if bad else 0
 

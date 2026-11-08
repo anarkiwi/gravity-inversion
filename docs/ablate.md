@@ -23,7 +23,6 @@ addressing cost without its semantics; it is measured, never run.
 | cells stored once with a constant | exact | reads of a cell the run writes once, by a top-level constant store in an init-only function, after the store and in play-only functions, are the constant; then `rd()`/`wr()` of a constant, or a constant plus a byte, index the region array holding every address it can reach (`wr()` where the bitmap marks each as data) | PSID run: init write counts, play writes and values after init of every region cell |
 | cells play never writes | exact | reads in functions play reaches of a cell play never writes are its value after init; in a function init also runs, only where that function's reads of it in init follow init's last write to it; then as above | PSID run; init of a `-fno-inline` baseline build, each region read attributed to its function by PC |
 | byte switch | exact | a switch on an expression of one byte switches on the byte, each case labelled with the bytes that select it (the self-modified branch offset's sign-extended 16-bit target) | the condition evaluated for all 256 bytes |
-| dead init loops | exact | a loop of an init-only function is removed when, once reads after it of cells only it writes are folded to their values, the run never reads its stores and it touches no I/O; it must not return, jump other than to the statement after it, or assign locals used outside it | run of a C build with each candidate loop storing its number in a marker while it runs, observing every data load and store of the file's objects |
 | alike branches merged | exact | an if / else if / else chain whose arms differ only in integer literals and their own locals' names becomes one body selecting each literal by the conditions; a function the build kept out of line is kept so | structural match of the arms' ASTs |
 
 ## Data accounting
@@ -38,9 +37,8 @@ hand-equivalent needs the accessed bytes: operands accessed plus data accessed.
 
 `.text` bytes after each step, cumulative, with its delta; every exact step verified on every
 tune (`--verify`, default song over its HVSC length). deity-informant 0.19.0, llvm-mos SDK
-v23.4.0, `-Os`. The lift folds each init's decided run into the starting data
-(`init=0`, [transliterate.py](../tools/transliterate.py)): Emomyst's relocator and state clear
-are evaluated there, so no dead init loop is left for the step to remove.
+v23.4.0, `-Os`. Init runs on the host and play is lifted from the state it leaves
+([transliterate.py](../tools/transliterate.py)), so no init loop is in the generated C.
 
 | Step | Kind | Commando | Incoherent | Automatas | Ghouls | Emomyst |
 |---|---|---|---|---|---|---|
@@ -52,7 +50,6 @@ are evaluated there, so no dead init loop is left for the step to remove.
 | cells stored once with a constant | exact | 2326 (+0) | 2784 (+0) | 3403 (+0) | 5574 (+0) | 5619 (+0) |
 | cells play never writes | exact | 2316 (-10) | 2784 (+0) | 3364 (-39) | 5574 (+0) | 5359 (-260) |
 | byte switch | exact | 2316 (+0) | 2780 (-4) | 3364 (+0) | 5574 (+0) | 5249 (-110) |
-| dead init loops | exact | 2316 (+0) | 2780 (+0) | 3364 (+0) | 5574 (+0) | 5249 (+0) |
 | alike branches merged | exact | 2316 (+0) | 2780 (+0) | 3364 (+0) | 5574 (+0) | 5175 (-74) |
 | hand | | 1534 | 2721 | 2773 | 3670 | 4608 |
 | residual | | +782 | +59 | +591 | +1904 | +567 |

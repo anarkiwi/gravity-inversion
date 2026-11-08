@@ -57,7 +57,9 @@ far past the table, a large detune whose carry is dropped, and an 8580 SID model
 
 `make` also builds `build/gen.prg` from `build/gen/automatas.c` and `.h`, generated from the PSID by
 `tools/transliterate.py`; `make check` compares it over the HVSC length (built with `FRAME_CIA`), and
-the tests through the arranger loop twice, on the patched songs and on an 8580.
+the tests through the arranger loop twice and on the patched songs. Init, with its SID model probe,
+runs on `tools/transliterate.py`'s C64 (a 6581): the model is `.h` state, so on an 8580 the generated
+C plays as the original does on a 6581.
 
 ## Size
 

@@ -357,8 +357,8 @@ def test_absent(tiny):
 @pytest.fixture(scope="module", name="player")
 def fixture_player(tmp_path_factory):
     """(PSID, report) of the test player: zero-page and self-modified pointers, a branch
-    offset dispatch, a dead init loop (after a store of a byte read from the SID, which the
-    lift does not fold past), a code byte read as data."""
+    offset dispatch, an init loop (run on the host, its state in the .h), a code byte read
+    as data."""
     out = tmp_path_factory.mktemp("player")
     psid = _psid(fuzzplayer.HEADER + PLAYER, out)
     return psid, ablate.ablate(
@@ -368,10 +368,10 @@ def fixture_player(tmp_path_factory):
 
 @pytest.mark.slow
 def test_player_exact(player):
-    """Every exact step keeps the player's SID writes; the dispatch and dead loop shrink."""
+    """Every exact step keeps the player's SID writes; the dispatch shrinks."""
     rows = {r["step"]: r for r in player[1]["steps"]}
     assert all(r["verified"] for r in rows.values() if r["kind"] == "exact")
-    assert rows["byte switch"]["delta"] < 0 and rows["dead init loops"]["delta"] < 0
+    assert rows["byte switch"]["delta"] < 0
 
 
 @pytest.mark.slow

@@ -92,7 +92,7 @@
     "form": "while (!((v = peek(p + y)) & 0x80))"
    },
    "why": "Walks the effect's voice list.",
-   "lift": "loop",
+   "lift": "init: run on the host, not lifted; the state it leaves is in the .h",
    "transform": "T4"
   },
   {
@@ -106,7 +106,7 @@
     "form": "zp/operand state per voice v"
    },
    "why": "Patches the operand of STA $640F to address the selected voice copy's operand, through the table $622E/$6231.",
-   "lift": "per-copy state indexed by voice",
+   "lift": "init: run on the host, not lifted; the state it leaves is in the .h",
    "transform": "T1"
   },
   {
@@ -119,7 +119,7 @@
     "form": "for (k = 0; k != len; ++k)"
    },
    "why": "A rotated loop over pages: entered at its test by JMP $29D1 from $29C3, the back edge is the fall-through from INC $FD.",
-   "lift": "loop",
+   "lift": "init: run on the host, not lifted; the state it leaves is in the .h",
    "hand_differs": "the hand C copies with one for (k = 0; k != len; ++k); the original copies whole pages in nested loops, then the remainder, the count kept in an operand",
    "transform": "T4"
   },
@@ -133,7 +133,7 @@
     "form": "for (k = 0; k != len; ++k)"
    },
    "why": "The byte loop inside each page (INY / BNE).",
-   "lift": "loop nested in copy-pages",
+   "lift": "init: run on the host, not lifted; the state it leaves is in the .h",
    "hand_differs": "the hand C copies with one for (k = 0; k != len; ++k); the original copies whole pages in nested loops, then the remainder, the count kept in an operand",
    "transform": "T4"
   },
@@ -147,7 +147,7 @@
     "form": "for (k = 0; k != len; ++k)"
    },
    "why": "The remainder loop, CPY # against the count.",
-   "lift": "loop",
+   "lift": "init: run on the host, not lifted; the state it leaves is in the .h",
    "hand_differs": "the hand C copies with one for (k = 0; k != len; ++k); the original copies whole pages in nested loops, then the remainder, the count kept in an operand",
    "transform": "T4"
   },
@@ -162,7 +162,7 @@
     "form": "len"
    },
    "why": "The remainder count is stored into the CPY # operand.",
-   "lift": "variable",
+   "lift": "init: run on the host, not lifted; the state it leaves is in the .h",
    "hand_differs": "the hand C copies with one for (k = 0; k != len; ++k); the original copies whole pages in nested loops, then the remainder, the count kept in an operand",
    "transform": "T1"
   },
@@ -176,7 +176,7 @@
     "form": "while (r--)"
    },
    "why": "DEY/BPL writing 8 then 0 to each SID register.",
-   "lift": "loop",
+   "lift": "init: run on the host, not lifted; the state it leaves is in the .h",
    "transform": "T4"
   },
   {
@@ -189,7 +189,7 @@
     "form": "for (r < sizeof zp)"
    },
    "why": "Clears the zero-page state.",
-   "lift": "loop",
+   "lift": "init: run on the host, not lifted; the state it leaves is in the .h",
    "transform": "T4"
   },
   {
@@ -202,7 +202,7 @@
     "form": "for (i <= offsetof(gate_off))"
    },
    "why": "Clears zero page $21-$90.",
-   "lift": "loop",
+   "lift": "init: run on the host, not lifted; the state it leaves is in the .h",
    "transform": "T4"
   },
   {
@@ -218,7 +218,7 @@
     "form": "for (v < 3)"
    },
    "why": "Per-voice stores unrolled (STY $7b/$7c/$7d).",
-   "lift": "unrolled stores or a loop",
+   "lift": "init: run on the host, not lifted; the state it leaves is in the .h",
    "transform": "T3"
   },
   {

@@ -24,7 +24,6 @@ from tqdm import tqdm
 
 from cflow import (
     Flow,
-    IO,
     RET,
     Unit,
     alike,
@@ -34,10 +33,8 @@ from cflow import (
     effects,
     evaluate,
     is_byte,
-    loops,
     parse_header,
     regions,
-    removable,
     rewrite,
     scopes,
     strip,
@@ -62,7 +59,6 @@ from transliterate import trap_source
 
 DRIVER = ROOT / "c64"
 GUARD = frozenset({1, *range(0xD0, 0xE0)})
-MARK = "ablate_mark"
 
 
 class Facts(NamedTuple):
@@ -419,116 +415,6 @@ def array_map(syms, regs, arrays):
     return {b + i: regs[n][0] + i for n, b in base.items() for i in range(regs[n][1])}
 
 
-def dead_stores(prg, frames, song, names):
-    """(loops run, {loop: I/O addresses it touches and its stores read later}, {address:
-    loops storing it}) of a build whose loops store their number in MARK while they run,
-    over init and `frames` play calls, for the ELF data objects `names`; 0 is no loop.
-    """
-    tracked = {
-        s["st_value"] + i
-        for s in symbols(f"{prg}.elf")
-        if s.name in names and s["st_info"]["type"] == "STT_OBJECT"
-        for i in range(s["st_size"])
-    }
-    last, ran, live, writers, mark = {}, set(), defaultdict(set), defaultdict(set), [0]
-
-    def observe(mpu, syms, log):
-        at = syms[MARK]
-
-        def on_write(addr, value):
-            if addr == at:
-                mark[0] = value
-                ran.add(value)
-            elif addr in IO:
-                live[mark[0]].add(addr)
-            elif log.calls:
-                last[addr] = mark[0]
-                writers[addr].add(mark[0])
-
-        def on_read(addr):
-            if addr in IO:
-                live[mark[0]].add(addr)
-            elif last.get(addr, mark[0]) != mark[0]:
-                live[last[addr]].add(addr)
-
-        span = tracked | set(IO)
-        observe_data_access(mpu, on_read, on_write, reads=span, writes=span | {at})
-
-    trace_prg(prg, frames, song, observe=observe)
-    live.pop(0, None)
-    return ran - {0}, dict(live), dict(writers)
-
-
-def _marked(unit, loops_):
-    """C text with each loop storing its 1-based number in MARK while it runs, up to the
-    statement after it or into the label after it."""
-    first = min(unit.span(d)[0] for d in unit.fns.values())
-    edits = [(first, first, f"volatile uint8_t {MARK};\n")]
-    for i, lp in enumerate(loops_, 1):
-        b, e = unit.extent(lp)
-        stmts = unit.parent[lp["id"]]["inner"]
-        after = stmts[stmts.index(lp) + 1 :][:1]
-        if after and after[0].get("kind") == "LabelStmt":
-            e = unit.span(after[0]["inner"][0])[0]
-        edits += [(b, b, f"{MARK} = {i};\n"), (e, e, f"\n{MARK} = 0;")]
-    return rewrite(unit.text, edits)
-
-
-def _after(unit, fn, loop, cells, post):
-    """Edits folding reads of `cells` after `loop` in its function to their values."""
-    end = unit.extent(loop)[1]
-    return [
-        e
-        for e in _fold(
-            unit, lambda f, a, at: post.get(a) if f == fn and a in cells else None
-        )
-        if e[0] >= end
-    ]
-
-
-def _dead(unit, ctx, keys, cands):
-    """{loop key: cells folded after it} of the candidate loops dead once the cells they
-    alone write and later reads see are folded, from two runs of the marked build."""
-    names = {d["name"] for d in unit.globals.values()}
-    prg = ctx.build(_marked(unit, [keys[k] for k in cands]), "dead loops marked")
-    ran, live, writers = dead_stores(prg, ctx.frames, ctx.song, names)
-    where = array_map(symbols(f"{prg}.elf"), unit.regs, unit.arrays)
-    folds, edits = {}, []
-    for i, k in enumerate(cands, 1):
-        addrs = live.get(i, set())
-        if addrs and all(writers.get(a) == {i} and a in where for a in addrs):
-            folds[k] = {where[a] for a in addrs} - ctx.facts.play
-            edits += _after(unit, k[0], keys[k], folds[k], ctx.facts.post)
-    if edits:
-        unit = ctx.unit(rewrite(unit.text, edits))
-        keys = {k: loops(unit, k[0])[k[1]] for k in cands}
-        prg = ctx.build(_marked(unit, [keys[k] for k in cands]), "dead loops folded")
-        ran, live, _ = dead_stores(prg, ctx.frames, ctx.song, names)
-    return {
-        k: folds.get(k, set()) for i, k in enumerate(cands, 1) if i in ran - set(live)
-    }
-
-
-def dead_loops(unit, ctx):
-    """Init-only loops are removed whose stores, once reads of the cells only they write
-    are folded after them, the run never reads, that touch no I/O and whose locals are
-    unused outside them; decided on the exact chain."""
-    keys = {
-        (f, i): lp
-        for f in sorted(unit.only("tune_init", "tune_play"))
-        for i, lp in enumerate(loops(unit, f))
-    }
-    if ctx.dead is None:
-        cands = [k for k, lp in keys.items() if removable(unit, k[0], lp)]
-        ctx.dead = _dead(unit, ctx, keys, cands) if cands else {}
-    edits = []
-    for k, cells in ctx.dead.items():
-        if k in keys:
-            edits += _after(unit, k[0], keys[k], cells, ctx.facts.post)
-            edits.append((*unit.extent(keys[k]), ";"))
-    return edits
-
-
 def alike_branches(unit, ctx):
     """An if / else if / else chain whose bodies differ only in integer literals and the
     names of their own locals becomes one body selecting each literal by the conditions;
@@ -600,7 +486,6 @@ STEPS = (
     ),
     Step("cells play never writes", True, (fold_play_constants, constant_addresses)),
     Step("byte switch", True, (byte_switch,)),
-    Step("dead init loops", True, (dead_loops,)),
     Step("alike branches merged", True, (alike_branches,)),
 )
 
@@ -617,7 +502,7 @@ class Ablation:  # pylint: disable=too-many-instance-attributes
         htext = header.read_text(encoding="utf-8")
         (self.work / header.name).write_text(htext, encoding="utf-8")
         defs, self.inits = parse_header(htext)
-        self.regs, self.dead = regions(defs), None
+        self.regs = regions(defs)
         self.psid, self.frames, self.song = None, 0, 0
         self.facts, self.early = Facts(Counter(), set(), {}), {"functions": set()}
 
@@ -673,8 +558,8 @@ class Ablation:  # pylint: disable=too-many-instance-attributes
 
     def run(self, verify=False):
         """[{step, kind, text, delta, verified}] of the cumulative chain, and its last PRG.
-        The exact chain runs first: it decides the dead loops, and `verify` compares each
-        of its steps' builds with the PSID over the run."""
+        With `verify` each exact step's build of the exact chain is compared with the PSID
+        over the run."""
         base = self.c.read_text(encoding="utf-8")
         checked, text = {}, base
         exact = [BASELINE] + [s for s in STEPS if s.exact]

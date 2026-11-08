@@ -310,3 +310,54 @@ class Webs:  # pylint: disable=too-few-public-methods
             r = kept[0] if kept else stores[0] if stores else members[0]
             rep.update(dict.fromkeys(members, r))
         return rep
+
+
+def classify(text, play="cgen_play"):
+    """``{(function, line, column): "event" | "lookup" | "machine"}`` of the reads in IR
+    ``text`` by what their addresses derive from: positions ``play`` advances, machine
+    positions, or the values read at them (docs/eventlog.md, *Kinds*)."""
+    flow = Flow(sroa(text), re.compile(irmodule.HELPERS))
+    memo = {}
+    positions = {
+        key
+        for key, deps in flow.stores
+        if key[0]
+        and any(flow.reads[n][2] == key for n in flow.loads(deps) if n in flow.reads)
+        and flow.first(play, key, memo) == "load"
+    }
+    roots = {n: flow.loads(r[3]) for n, r in flow.reads.items()}
+    at = {
+        n: {flow.reads[d][2] for d in ds if d in flow.reads} for n, ds in roots.items()
+    }
+    kept, of = [(key, flow.loads(deps)) for key, deps in flow.stores], {}
+    for n, r in flow.reads.items():
+        of.setdefault(r[2], set()).add(n)
+
+    def carried(src):
+        """``src`` with the loads of the cells a store writes a value of ``src`` to."""
+        return set(src).union(*(of.get(key, ()) for key, deps in kept if deps & src))
+
+    def spread(kind, src, to):
+        grew = True
+        while grew:
+            new = {
+                n for n, d in roots.items() if n not in kind and d & carried(src(kind))
+            }
+            kind.update(dict.fromkeys(new, to))
+            grew = bool(new)
+        return kind
+
+    score = spread(
+        {n: "event" for n in at if at[n] & positions}, lambda k: k.keys(), "lookup"
+    )
+    machines = {
+        key
+        for key, deps in flow.stores
+        if key in positions
+        and any(n in score and key not in at[n] for n in flow.loads(deps))
+    }
+    kind = {n: "event" for n in at if at[n] & (positions - machines)}
+    kind.update({n: "machine" for n in at if n not in kind and at[n] & machines})
+    spread(kind, lambda k: {n for n, v in k.items() if v != "machine"}, "lookup")
+    spread(kind, lambda k: {n for n, v in k.items() if v == "machine"}, "machine")
+    return {(flow.reads[n][0], *flow.reads[n][1]): k for n, k in kind.items()}

@@ -1,5 +1,6 @@
-"""The .c of every tune is the same whatever song count its PSID header declares: the lift
-takes any song, and init checks the song against the .h's CGEN_SONG0 and CGEN_SONGS."""
+"""The .c of every tune is the same whatever song count its PSID header declares: init runs
+per song, its state goes in the .h, and the .c checks the song against CGEN_SONG0/CGEN_SONGS.
+"""
 
 import functools
 import re
@@ -33,4 +34,4 @@ def test_song_count_c_identical(tune, songs):
     c = transliterate(_psid(tune), "gen.h")[0]
     other = _translated(tune, songs)
     assert other[0] == c and "CGEN_SONGS" in c
-    assert re.search(rf"#define CGEN_SONGS 0x{songs:02X}\b", other[1])
+    assert int(re.search(r"^#define CGEN_SONGS (\w+)$", other[1], re.M)[1], 0) == songs

@@ -1,8 +1,8 @@
 """Translate a PSID's playroutine to C with deity-informant's cgen and vagrant-moses' C64 model.
 
 Writes the player and C64 host (`tune_init`/`tune_play` for c64/driver.c) to OUT.c and
-the song data to the header. Init is called once, before any play call, as c64/driver.c
-does, with A each song the PSID header counts: it is lifted as code like play."""
+the song data to the header. Init runs on sidtrace's C64 (`c64_init`) with A each song the
+PSID header counts; play is lifted from the state it leaves, which the header holds."""
 
 import argparse
 import os
