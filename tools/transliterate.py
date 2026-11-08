@@ -47,12 +47,18 @@ def trap_source(out_dir):
 
 def build(psid, out_dir, name="gen", flags=()):
     """(PRG path, c, h) of the C generated from `psid` as out_dir/name.c and .h, built for
-    the C64 with cgen_trap.c and c64/driver.c by $CC (default mos-c64-clang); symbols in
-    PRG.elf."""
+    the C64 by `compile_prg`."""
     out = pathlib.Path(out_dir)
     c, h, _ = transliterate(psid, f"{name}.h")
     (out / f"{name}.c").write_text(c, encoding="utf-8")
     (out / f"{name}.h").write_text(h, encoding="utf-8")
+    return compile_prg(out, name, flags), c, h
+
+
+def compile_prg(out_dir, name="gen", flags=()):
+    """out_dir/name.prg built from out_dir/name.c with cgen_trap.c and c64/driver.c by $CC
+    (default mos-c64-clang); symbols in PRG.elf."""
+    out = pathlib.Path(out_dir)
     prg = out / f"{name}.prg"
     subprocess.run(
         [
@@ -65,7 +71,7 @@ def build(psid, out_dir, name="gen", flags=()):
         + ["-o", prg, out / f"{name}.c", trap_source(out), DRIVER / "driver.c"],
         check=True,
     )
-    return prg, c, h
+    return prg
 
 
 def main(argv=None):

@@ -20,6 +20,9 @@ GEP = re.compile(
     r"\s*(%[\w.]+) = (alloca|getelementptr (?:inbounds |nuw |nusw )*[^,]+, ptr (.*))"
 )
 LOCAL = "local"
+#: The generated C's read helpers: ``rdCj`` (a span's bounds-checked reader), ``rd``,
+#: ``cgen_rd`` and ``oob_rd``.
+HELPERS = r"(?:oob_|cgen_)?rd(?:C\d+)?"
 DBG = re.compile(r"!dbg !(\d+)")
 LOC = re.compile(r"!(\d+) = !DILocation\(line: (\d+), column: (\d+)")
 HOOKS = """declare void @cgen_ld(i32, ptr, i8)
@@ -111,9 +114,13 @@ def _operand(text):
     return text
 
 
-def lower(c_path, includes=(), defines=()):
-    """The LLVM IR text of a C file at -O0 with line tables."""
-    flags = ["-O0", "-gline-tables-only", "-fno-builtin", "-S", "-emit-llvm", "-o", "-"]
+def lower(c_path, includes=(), defines=(), passes=False):
+    """The LLVM IR text of a C file at -O0 with line tables; with ``passes`` open to
+    function passes, its values named."""
+    flags = ["-O0", "-gline-tables-only", "-fno-builtin"]
+    if passes:
+        flags += ["-Xclang", "-disable-O0-optnone", "-fno-discard-value-names"]
+    flags += ["-S", "-emit-llvm", "-o", "-"]
     flags += [f"-I{i}" for i in includes] + [f"-D{d}" for d in defines]
     return subprocess.run(
         [os.environ.get("CLANG", "clang"), *flags, str(c_path)],
@@ -123,7 +130,8 @@ def lower(c_path, includes=(), defines=()):
     ).stdout
 
 
-def _target():
+def target():
+    """The native target machine, position-independent."""
     llvm.initialize_native_target()
     llvm.initialize_native_asmprinter()
     return llvm.Target.from_default_triple().create_target_machine(reloc="pic")
@@ -134,7 +142,7 @@ def compile_object(text, path):
     mod = llvm.parse_assembly(text)
     mod.verify()
     with open(path, "wb") as f:
-        f.write(_target().emit_object(mod))
+        f.write(target().emit_object(mod))
 
 
 def globals_of(text):
