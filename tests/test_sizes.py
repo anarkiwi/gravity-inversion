@@ -18,14 +18,6 @@ MISSED = {
     (
         "generated",
         "emomyst",
-        "code",
-    ): "init's relocator is lifted as code (its loop over the patch-site table, its 16-bit "
-    "stores into the held span), and play's reads through the operands it patches, pointers "
-    "into the song, are bounds-checked calls into that span where the hand C indexes its "
-    "song array",
-    (
-        "generated",
-        "emomyst",
         "data",
     ): "init's relocator patches 30 operands scattered through the player ($1256-$1B4F) "
     "through one store, so one held span from the first patch site to the song's end holds "

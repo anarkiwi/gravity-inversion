@@ -85,7 +85,7 @@ Only branches in the functions the entries reach count.
 ## Input conditioning
 
 The graphs need a lift with no residual `rd`/`wr`/`codechk` on play's path and play's song
-pointers as variables. With deity-informant 0.27.3 no family's generated C is edited by
+pointers as variables. With deity-informant 0.28.1 no family's generated C is edited by
 hand; Soundmonitor's input is a PSID tune and Blackbird is not done.
 
 | Family | Tune | Conditioning | Lift issue |
