@@ -8,6 +8,7 @@ song data with its kind and the stores and SID writes up to the next (docs/event
 """
 
 import argparse
+import array
 import ctypes
 import json
 import os
@@ -40,6 +41,8 @@ COLS = (
     ("copy", "ec", "u1"),
 )
 REC = [("frame", "i4")] + [(n, t) for n, _, t in COLS]
+#: A read: its call, original address and value.
+READS = np.dtype([("frame", "u4"), ("addr", "u2"), ("value", "u1")])
 ORG = re.compile(r"^#define (\w+)_ORG 0x([0-9A-F]+)$", re.M)
 KONST = re.compile(r"^#define (\w+)_K([0-9A-F]+) (0x[0-9A-F]+)$", re.M)
 
@@ -158,13 +161,26 @@ def _observe(mpu, log, on_read, reads, *, on_write=None, writes=()):
     observe_data_access(mpu, on_read, write, reads=reads, writes=regs)
 
 
+def _reads(calls, addrs, values=None):
+    """``READS`` of the reads ``(call, address[, value])``, one per call and address, sorted."""
+    key = np.frombuffer(calls, np.uint32).astype(np.uint64) << 16 | np.frombuffer(
+        addrs, np.uint16
+    )
+    key, first = np.unique(key, return_index=True)
+    out = np.zeros(len(key), READS)
+    out["frame"], out["addr"] = key >> 16, key & 0xFFFF
+    if values is not None:
+        out["value"] = np.frombuffer(values, np.uint8)[first]
+    return out
+
+
 def reference(psid, frames, song, loaded):
     """``(writes, io, reads, mask)`` of the original over init and `frames` play calls: SID
-    writes per call, I/O reads ``{call: [(address, value)]}``, the play calls' ``{(call,
-    address): value}`` reads of song data ``mask``, the bytes of ``loaded`` it never writes.
-    """
-    io, reads, written = {}, {}, np.zeros(0x10000, bool)
-    addrs = set(np.flatnonzero(loaded).tolist())
+    writes per call, I/O reads ``{call: [(address, value)]}``, the play calls' ``READS`` of
+    song data ``mask``, the bytes of ``loaded`` it never writes."""
+    io, written = {}, np.zeros(0x10000, bool)
+    calls, addrs, values = array.array("I"), array.array("H"), array.array("B")
+    watched = set(np.flatnonzero(loaded).tolist())
 
     def observe(mpu, mem, log):
         def on_read(a):
@@ -172,25 +188,30 @@ def reference(psid, frames, song, loaded):
             if a in IO:
                 io.setdefault(call, []).append((a, mem[a]))
             elif call:
-                reads[call, a] = mem[a]
+                calls.append(call)
+                addrs.append(a)
+                values.append(mem[a])
 
         def on_write(a, _):
             written[a] = True
 
-        _observe(mpu, log, on_read, set(IO) | addrs, on_write=on_write, writes=addrs)
+        _observe(
+            mpu, log, on_read, set(IO) | watched, on_write=on_write, writes=watched
+        )
 
     writes = sidtrace.trace_psid(psid, frames, song=song, observe=observe)
     mask = loaded & ~written
-    return writes, io, {k: v for k, v in reads.items() if mask[k[1]]}, mask
+    reads = _reads(calls, addrs, values)
+    return writes, io, reads[mask[reads["addr"]]], mask
 
 
 def prg_reads(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     prg, frames, song, spans, mask, max_cycles=sidtrace.MAX_CYCLES
 ):
-    """``(writes, reads)``: a C64 build's SID writes per call and the ``{(call, original
-    address)}`` of its play calls' reads of song data; ``spans`` maps its symbols to the
-    ``(origin, length)`` of the original bytes they hold."""
-    out = set()
+    """``(writes, reads)``: a C64 build's SID writes per call and the ``READS`` (values 0) of
+    its play calls' reads of song data; ``spans`` maps its symbols to the ``(origin,
+    length)`` of the original bytes they hold."""
+    calls, addrs = array.array("I"), array.array("H")
 
     def observe(mpu, syms, log):
         where = {
@@ -202,14 +223,30 @@ def prg_reads(  # pylint: disable=too-many-arguments,too-many-positional-argumen
 
         def on_read(a):
             if len(log.calls) > 1:
-                out.add((len(log.calls) - 1, where[a]))
+                calls.append(len(log.calls) - 1)
+                addrs.append(where[a])
 
         _observe(mpu, log, on_read, set(where))
 
     writes = sidtrace.trace_prg(
         prg, frames, song, observe=observe, max_cycles=max_cycles
     )
-    return writes, out
+    return writes, _reads(calls, addrs)
+
+
+def keys(reads, value=True):
+    """Per ``READS`` row one integer: its call, address and (with ``value``) value."""
+    k = reads["frame"].astype(np.uint64) << 16 | reads["addr"]
+    return k << 8 | reads["value"] if value else k
+
+
+def flat(writes):
+    """``(frame, register, value)`` rows of SID writes per call."""
+    n = np.fromiter(map(len, writes), np.int64, len(writes))
+    out = np.zeros((int(n.sum()), 3), np.int64)
+    out[:, 0] = np.repeat(np.arange(len(writes)), n)
+    out[:, 1:] = np.array([w for ws in writes for w in ws], np.int64).reshape(-1, 2)
+    return out
 
 
 def same_values(reg, val):
@@ -222,58 +259,89 @@ def same_values(reg, val):
     return out
 
 
-def _read(r, sites, spans):
-    """The fields of read record ``r``: its site, region and offset, address, value, copy."""
-    org, name = spans[np.searchsorted([o for o, _ in spans], r["addr"], "right") - 1]
-    fn, line, col, kind = sites[r["site"]]
-    return {
-        "frame": int(r["frame"]),
-        "site": int(r["site"]),
-        "kind": kind,
-        "function": fn,
-        "line": line,
-        "column": col,
-        "region": name,
-        "offset": int(r["addr"]) - org,
-        "addr": int(r["addr"]),
-        "value": int(r["value"]),
-        "copy": int(r["copy"]) - 1 if r["copy"] else None,
-    }
+class Log:
+    """A run's records (``REC``) as song data reads, each with the state cell stores and SID
+    writes up to the next; entry 0 holds those before the first read."""
 
+    def __init__(self, rec, sites, origins_):
+        self.rec, self.sites = rec, sites
+        read = rec["kind"] == READ
+        self.at = np.flatnonzero(read)
+        self.reads = rec[self.at]
+        sid = rec["kind"] == SIDW
+        self.same = rec["value"] == rec["old"]
+        self.same[sid] = same_values(rec["addr"][sid], rec["value"][sid])
+        self.spans = sorted(
+            ((org, name) for name, org in origins_.items() if name[0] == "C"),
+            key=lambda s: (s[0], s[1] != "CODE"),
+        )
+        self.kinds = np.array([k for *_, k in sites] or [""])[self.reads["site"]]
 
-def events(rec, sites, origins_):
-    """Per song data read, a record of its site, address, value and copy with the state cell
-    stores and SID writes up to the next read, after a record of those before the first.
-    """
-    reads = np.flatnonzero(rec["kind"] == READ)
-    sid = rec["kind"] == SIDW
-    same = rec["value"] == rec["old"]
-    same[sid] = same_values(rec["addr"][sid], rec["value"][sid])
-    spans = sorted(
-        ((org, name) for name, org in origins_.items() if name[0] == "C"),
-        key=lambda s: (s[0], s[1] != "CODE"),
-    )
-    cut = np.concatenate([[0], reads + 1, [len(rec) + 1]])
-    out = []
-    for g, (lo, hi) in enumerate(zip(cut[:-1], cut[1:] - 1)):
-        ev = _read(rec[reads[g - 1]], sites, spans) if g else {"frame": 0, "site": None}
-        sel = rec[lo:hi]
+    def __len__(self):
+        return len(self.at) + 1
+
+    def __iter__(self):
+        return (self[g] for g in range(len(self)))
+
+    def __getitem__(self, g):
+        """Entry ``g`` as a record of its read's site, address, value and copy, ``cells``
+        and ``sid`` ``[frame, address, value, same]`` with frames from the read's call.
+        """
+        ev = self._read(self.rec[self.at[g - 1]]) if g else {"frame": 0, "site": None}
+        lo = self.at[g - 1] + 1 if g else 0
+        hi = self.at[g] if g < len(self.at) else len(self.rec)
+        sel = self.rec[lo:hi]
         rows = np.stack(
-            [sel["frame"] - ev["frame"], sel["addr"], sel["value"], same[lo:hi]], 1
+            [sel["frame"] - ev["frame"], sel["addr"], sel["value"], self.same[lo:hi]], 1
         )
         ev["cells"] = rows[sel["kind"] == CELL].tolist()
         ev["sid"] = rows[sel["kind"] == SIDW].tolist()
-        out.append(ev)
-    return out
+        return ev
 
+    def _read(self, r):
+        org, name = self.spans[
+            np.searchsorted([o for o, _ in self.spans], r["addr"], "right") - 1
+        ]
+        fn, line, col, kind = self.sites[r["site"]]
+        return {
+            "frame": int(r["frame"]),
+            "site": int(r["site"]),
+            "kind": kind,
+            "function": fn,
+            "line": line,
+            "column": col,
+            "region": name,
+            "offset": int(r["addr"]) - org,
+            "addr": int(r["addr"]),
+            "value": int(r["value"]),
+            "copy": int(r["copy"]) - 1 if r["copy"] else None,
+        }
 
-def rebuild(evs):
-    """[(frame, register, value)] of the log's SID writes in order."""
-    return [(e["frame"] + f, r, v) for e in evs for f, r, v, _ in e["sid"]]
+    def sid(self):
+        """``(frame, register, value)`` rows of the SID writes in order."""
+        w = self.rec[self.rec["kind"] == SIDW]
+        return np.stack([w["frame"], w["addr"], w["value"]], 1).astype(np.int64)
+
+    def read_set(self):
+        """The ``READS`` of the logged reads, one per call and address."""
+        key, first = np.unique(keys(self.reads, False), return_index=True)
+        out = np.zeros(len(key), READS)
+        out["frame"], out["addr"] = key >> 16, key & 0xFFFF
+        out["value"] = self.reads["value"][first]
+        return out
+
+    def stored(self, cells):
+        """Per read, whether a state cell store up to the next read writes its value to an
+        address ``cells`` marks."""
+        c = (self.rec["kind"] == CELL) & cells[self.rec["addr"]]
+        group = np.cumsum(self.rec["kind"] == READ)
+        done = group[c].astype(np.int64) << 8 | self.rec["value"][c]
+        want = np.arange(1, len(self.at) + 1, dtype=np.int64) << 8 | self.reads["value"]
+        return np.isin(want, done)
 
 
 def run_tune(psid, frames, song=None):
-    """``(events, summary, reads, mask)`` of a PSID over init and `frames` play calls,
+    """``(log, summary, reads, mask)`` of a PSID over init and `frames` play calls,
     translated by tools/transliterate.py; ``reads`` and the song data ``mask`` are
     :func:`reference`'s, of the loaded bytes of no instruction the lift translates."""
     import transliterate  # pylint: disable=import-outside-toplevel
@@ -290,11 +358,10 @@ def run_tune(psid, frames, song=None):
         copies = [f for f, v in info["provenance"]["functions"].items() if v["index"]]
         player = Player(c_path, tmp, mask, copies)
         rec = player.run(song, frames, io)
-    sid = rec[rec["kind"] == SIDW]
-    got = list(zip(sid["frame"].tolist(), sid["addr"].tolist(), sid["value"].tolist()))
-    assert got == [
-        (f, r, v) for f, ws in enumerate(ref) for r, v in ws
-    ], "native writes differ from the reference"
+    log = Log(rec, player.sites, player.origins)
+    assert np.array_equal(
+        log.sid(), flat(ref)
+    ), "native writes differ from the reference"
     kinds = np.bincount(rec["kind"], minlength=3)
     summary = {
         "frames": frames + 1,
@@ -305,7 +372,7 @@ def run_tune(psid, frames, song=None):
         "code_cells": info["provenance"]["cells"],
         "sites": [list(s) for s in player.sites],
     }
-    return events(rec, player.sites, player.origins), summary, orig, mask
+    return log, summary, orig, mask
 
 
 def main(argv=None):
