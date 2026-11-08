@@ -2,7 +2,6 @@
 against their originals, and the five tunes against their hand C's reads of the same data.
 """
 
-import bisect
 import json
 import pathlib
 import re
@@ -72,7 +71,7 @@ def test_reference_song_data(tmp_path):
     assert not loaded[at["sf"] + 1] and loaded[at["sf"] + 2]
     _, _, reads, mask = eventlog.reference(psid, 20, 0, eventlog.song_mask(psid))
     assert mask[at["song"]] and mask[at["freqlo"]] and not mask[at["sf"] + 1]
-    assert reads and all(f > 0 and mask[a] for f, a in reads)
+    assert len(reads) and (reads["frame"] > 0).all() and mask[reads["addr"]].all()
 
 
 def test_origins():
@@ -173,7 +172,7 @@ def test_synthetic_player(tmp_path):
         ("io_write(0xD417, COD", "cgen_play", "table"),
     }
     rec = player.run(0, 4, {0: [(0xD012, 1), (0xD012, 9)]})
-    evs = eventlog.events(rec, player.sites, player.origins)
+    evs = list(eventlog.Log(rec, player.sites, player.origins))
     want = []
     for f in range(1, 5):
         n = [1, 0, 2, 1][(f - 1) % 4]
@@ -230,18 +229,16 @@ def test_fuzz(style, seed, seq, tmp_path):
     lookups, others (an unpatched operand) as tables; the log rebuilds the writes."""
     sid = _fuzz(style, seed, tmp_path, seq)
     psid, labels = sid.read_bytes(), _labels(sid)
-    evs, summary, orig, _ = eventlog.run_tune(psid, FUZZ_FRAMES)
+    log, summary, orig, _ = eventlog.run_tune(psid, FUZZ_FRAMES)
     want = {"song": "event", "freqlo": "lookup", "freqhi": "lookup"}
-    at = [a for a, _ in labels]
-    assert all(
-        want.get(labels[bisect.bisect(at, e["addr"]) - 1][1], "table") == e["kind"]
-        for e in evs[1:]
-    )
-    got = {((e["frame"], e["addr"]), e["value"]) for e in evs[1:]}
-    assert got == orig.items() and summary["reads"] >= len(got) > 0
+    at = np.array([a for a, _ in labels])
+    names = [want.get(k, "table") for _, k in labels]
+    label = np.searchsorted(at, log.reads["addr"], "right") - 1
+    assert [names[i] for i in label] == log.kinds.tolist()
+    got = log.read_set()
+    assert np.array_equal(got, orig) and summary["reads"] >= len(got) > 0
     trace = sidtrace.trace_psid(psid, FUZZ_FRAMES)
-    want = [(f, r, v) for f, ws in enumerate(trace) for r, v in ws]
-    assert eventlog.rebuild(evs) == want
+    assert np.array_equal(log.sid(), eventlog.flat(trace))
 
 
 def _spans(tune):
@@ -273,40 +270,31 @@ def test_hand(tune):
     psid = PSIDS[tune].read_bytes()
     song = sidtrace.default_song(psid)
     frames = 6000 if tune == "commando" else sidtrace.song_calls(psid, song, FIX)
-    evs, summary, orig, mask = eventlog.run_tune(psid, frames)
+    log, summary, orig, mask = eventlog.run_tune(psid, frames)
     writes, hand = eventlog.prg_reads(
         prg, frames, song, _spans(tune), mask, HAND_CYCLES
     )
     trace = sidtrace.trace_psid(psid, frames, song=song)
     assert writes == trace
-    assert eventlog.rebuild(evs) == [
-        (f, r, v) for f, ws in enumerate(trace) for r, v in ws
-    ]
+    assert np.array_equal(log.sid(), eventlog.flat(trace))
     table, unused = np.zeros(0x10000, bool), np.zeros(0x10000, bool)
     for lo, hi in DISPATCH.get(tune, ()):
         table[lo:hi] = True
     for lo, hi in UNUSED.get(tune, ()):
         unused[lo:hi] = True
-    code = set(summary["code_cells"])
-    assert all(
-        any(c[1] in code and c[2] == e["value"] for c in e["cells"])
-        for e in evs[1:]
-        if table[e["addr"]]
-    )
-    assert all(
-        any(c[2] == e["value"] for c in e["cells"])
-        for e in evs[1:]
-        if unused[e["addr"]]
-    )
+    code = np.zeros(0x10000, bool)
+    code[summary["code_cells"]] = True
+    assert log.stored(code)[table[log.reads["addr"]]].all()
+    assert log.stored(np.ones(0x10000, bool))[unused[log.reads["addr"]]].all()
     table |= unused
-    gen = {((e["frame"], e["addr"]), e["value"]) for e in evs[1:]}
-    assert gen <= orig.items()
+    gen = log.read_set()
+    assert np.isin(eventlog.keys(gen), eventlog.keys(orig)).all()
     held = np.zeros(0x10000, bool)
     for lo, n in _spans(tune).values():
         held[lo : lo + n] = True
-    gen = {k for k, _ in gen if held[k[1]] and not table[k[1]]}
-    assert not any(table[a] for _, a in hand)
-    assert gen == hand
+    gen = gen[held[gen["addr"]] & ~table[gen["addr"]]]
+    assert not table[hand["addr"]].any()
+    assert np.array_equal(eventlog.keys(gen, False), eventlog.keys(hand, False))
 
 
 def test_main(tmp_path):

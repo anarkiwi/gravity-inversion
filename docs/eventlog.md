@@ -60,7 +60,11 @@ holds the writes before the first read.
 
 `frame` in `cells` and `sid` counts from the read's call. `same` is 1 when the store or write
 leaves its byte or register unchanged, as a shadow buffer refresh does. Concatenating `sid`
-over the records rebuilds the reference write stream (`eventlog.rebuild`).
+over the records rebuilds the reference write stream (`Log.sid`).
+
+In Python, `eventlog.run_tune` gives an `eventlog.Log`: the native records as numpy arrays,
+`reads` (one row per read), `kinds`, `sid()` and `read_set()` as arrays, and each record above
+built on demand (`log[g]`, iteration), so a long song never holds per-read objects.
 
 `summary.json` gives `frames`, the counts of `reads`, `cell_writes` and `sid_writes`,
 `song_bytes`, the lift's self-modified code cells (`code_cells`) and the `sites`.
