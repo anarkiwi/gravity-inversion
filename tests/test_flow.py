@@ -159,38 +159,6 @@ def test_base_calls_direct():
     assert list(condition.calls("g(a, (b, c))", "g")) == [(0, 12, ["a", "(b, c)"])]
 
 
-def test_sidwizard():
-    """Relocated operand pairs read through one pointer per header word, set where the
-    relocator ends."""
-    load = 0x1000
-    image = bytearray(0x1000)
-    for i, (site, index, off) in enumerate(
-        [
-            (0x1F00, 0, 0),
-            (0x1F00, 0, 0),
-            (0x1F00, 0, 0),
-            (0x1F00, 0, 0),
-            (0x1F00, 6, 0xFE),
-        ]
-    ):
-        image[condition.SW_SITE + 2 * i - load] = site & 0xFF
-        image[condition.SW_SITE + 2 * i + 1 - load] = site >> 8
-        image[condition.SW_INDEX + 2 * i - load] = index
-        image[condition.SW_OFFSET + 2 * i - load] = off
-    c = "#include <stdint.h>\nvoid cgen_init(void) {\n  x = R5[0] | ((uint16_t)R5[1] << 8);\n"
-    c += "  if ((uint16_t)(a - R63_ORG) < R63_LEN) {}\n}\n"
-    out, pointers, reads = condition.sidwizard(c, HEADER, image, load)
-    assert (pointers, reads) == (5, 1)
-    assert "x = (uint16_t)(cgen_ptr[P_PTN_LO] + (-2));" in out
-    assert (
-        "cgen_ptr[P_PTN_LO] = (uint16_t)((((uint16_t)R5[1] << 8) | R5[0]) - (-2));"
-        in out
-    )
-    assert out.index("cgen_ptr[P_PTN_LO] = ") < out.index("R63_ORG")
-    with pytest.raises(ValueError):
-        condition.sidwizard("#include <stdint.h>\n", HEADER, image, load)
-
-
 def test_tune_path():
     """A fixture name resolves under fixtures/, anything else under HVSC."""
     assert condition.tune_path("Emomyst.sid").parent.name == "fixtures"
@@ -198,11 +166,11 @@ def test_tune_path():
 
 
 def test_main(tmp_path, capsys):
-    """The SID-Wizard fixture lifted, conditioned and traced exactly; its graphs written by
-    each tool's CLI."""
+    """The SID-Wizard fixture lifted and traced exactly; its graphs written by each tool's
+    CLI."""
     assert condition.main(["sidwizard", "--out", str(tmp_path), "--frames", "50"]) == 0
     row = json.loads((tmp_path / "sidwizard" / "row.json").read_text(encoding="utf-8"))
-    assert row["trace"] == "exact 50" and row["pointers"] == len(condition.SW_WORDS) + 3
+    assert row["trace"] == "exact 50" and not {"wr", "codechk"} & set(row["residual"])
     assert (tmp_path / "sidwizard" / "machines.png").stat().st_size
     with pytest.raises(SystemExit):
         condition.main(["nosuch"])

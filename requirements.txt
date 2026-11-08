@@ -1,6 +1,6 @@
 jennings[coverage]==0.10.0
 llvmlite==0.50.0
 pysidtracker==0.61.0
-deity-informant==0.25.0
+deity-informant==0.27.1
 vagrant-moses[cpu,cgen]==0.17.0
 tqdm==4.70.1

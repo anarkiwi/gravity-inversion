@@ -28,24 +28,9 @@ FAMILIES = {
     "dmc": ("DEMOS/0-9/2Pac_Intro.sid", ()),
     "jch": ("DEMOS/0-9/1st_Chaff.sid", ()),
     "futurecomposer": ("MUSICIANS/A/A-Man/Future_Composer_4-Demo_07.sid", ()),
-    "sidwizard": ("Emomyst.sid", ("sidwizard",)),
+    "sidwizard": ("Emomyst.sid", ()),
     "musicassembler": ("DEMOS/0-9/7_Years.sid", ("direct",)),
     "soundmonitor": ("DEMOS/0-9/1988_Carat_tune_1.sid", ()),
-}
-#: SID-Wizard 1.x relocator table, one entry per 2 bytes: header word index, offset, site.
-SW_INDEX, SW_OFFSET, SW_SITE = 0x1B55, 0x1B56, 0x1B92
-#: Its first four sites: the three sequence pointers and the subtune tempo, offset 0.
-SW_FIRST = ("seq_ptr0", "seq_ptr1", "seq_ptr2", "subtune_tempo")
-SW_WORDS = {
-    4: "subtunes",
-    6: "ptn_lo",
-    8: "ptn_hi",
-    10: "ins_lo",
-    12: "ins_hi",
-    14: "chords",
-    16: "chord_ptr",
-    18: "tempo",
-    20: "tempo_prg",
 }
 ORG = re.compile(r"#define (\w+)_ORG 0x([0-9A-F]+)")
 OPS = {
@@ -111,42 +96,6 @@ def direct(c, h):
     return head + body, n, k
 
 
-def sidwizard(c, h, image, load):
-    """``(c, pointers, reads)``: SID-Wizard's relocated operand pairs as one pointer per header
-    word, set after the relocator runs, each pair read as its pointer plus its offset (the
-    hand C's ``seq_ptr``, ``ptn_lo``, ...; deity #454)."""
-    regs = {o: k for k, o in origins(h).items() if k.startswith("R")}
-    groups, uses, i = {}, {}, 0
-    while image[SW_SITE + 1 + i - load]:
-        site = image[SW_SITE + 1 + i - load] << 8 | image[SW_SITE + i - load]
-        off = image[SW_OFFSET + i - load]
-        off = off - 256 if off & 0x80 else off
-        if i < 2 * len(SW_FIRST):
-            name, off = SW_FIRST[i // 2], 0
-        else:
-            name = SW_WORDS[image[SW_INDEX + i - load]]
-        groups.setdefault(name, (regs[site + 1], off))
-        uses[regs[site + 1]] = (name, off)
-        i += 2
-    names, n = sorted(groups), 0
-    for r, (name, off) in uses.items():
-        pat = re.compile(rf"{r}\[0\] \| \(\(uint16_t\){r}\[1\] << 8\)")
-        c, k = pat.subn(f"(uint16_t)(cgen_ptr[P_{name.upper()}] + ({off}))", c)
-        n += k
-    enum = ", ".join(f"P_{x.upper()}" for x in names)
-    decl = f"enum {{ {enum}, P_N }};\nstatic uint16_t cgen_ptr[P_N];\n"
-    c = c.replace("#include <stdint.h>\n", "#include <stdint.h>\n" + decl, 1)
-    sets = "".join(
-        f"\n  cgen_ptr[P_{x.upper()}] = (uint16_t)((((uint16_t){r}[1] << 8) | {r}[0])"
-        f" - ({off}));"
-        for x, (r, off) in ((x, groups[x]) for x in names)
-    )
-    end = re.search(r"\n  if [^\n]*R63_ORG\) < R63_LEN\)", c)
-    if end is None:
-        raise ValueError("no relocator end in this lift")
-    return c[: end.start()] + sets + c[end.start() :], len(names), n
-
-
 def tune_path(tune):
     """The file of a FAMILIES tune."""
     fix = ROOT / "fixtures" / tune
@@ -165,9 +114,6 @@ def run(family, out, frames=None):
     row = {"family": family, "tune": tune}
     if "direct" in steps:
         c, row["wr"], row["codechk"] = direct(c, h)
-    if "sidwizard" in steps:
-        load, _, _, image = sidtrace.psid_parts(psid)
-        c, row["pointers"], row["reads"] = sidwizard(c, h, image, load)
     (d / "gen.c").write_text(c, encoding="utf-8")
     (d / "gen.h").write_text(h, encoding="utf-8")
     prg = transliterate.compile_prg(d)

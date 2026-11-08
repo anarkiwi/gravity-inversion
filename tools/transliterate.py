@@ -11,13 +11,32 @@ import subprocess
 import sys
 
 from deity_informant import cgen
+from pysidtracker.emu import observe_data_access, run_to_rts, sync_ram, wire_mpu
 from pysidtracker.header import parse_sid_header
 from vagrant_moses.c64 import poweron_ram
 from vagrant_moses.cgen import ENTRIES, HOST, SENSITIVE, TRAP, VOLATILE
 
-from sidtrace import psid_parts
+from sidtrace import MAX_CYCLES, psid_parts
 
 DRIVER = pathlib.Path(__file__).resolve().parent.parent / "c64"
+
+
+def c64_init(mem, pc, a):
+    """``postinit`` machine: init at ``pc`` with ``A = a`` on sidtrace's C64 (its SID answers
+    hardware probes), ``mem`` left as init leaves it; (volatile writes, addresses stored).
+    """
+    io, stored = [], set()
+    mpu, bus = wire_mpu(mem)
+
+    def on_write(addr, value):
+        stored.add(addr)
+        if any(lo <= addr < hi for lo, hi in VOLATILE):
+            io.append((addr, value))
+
+    observe_data_access(mpu, on_write=on_write)
+    run_to_rts(mpu, bus, pc, a, MAX_CYCLES)
+    sync_ram(mpu)
+    return io, stored
 
 
 def transliterate(psid, header):
@@ -34,6 +53,7 @@ def transliterate(psid, header):
         header=header,
         init=0,
         songs=range(parse_sid_header(psid).songs),
+        machine=c64_init,
     )
     return c + HOST, h, info
 

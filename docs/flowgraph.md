@@ -63,7 +63,7 @@ Edges: **value** (solid) from what a stored or written value derives from, **add
 ## Input conditioning
 
 The graphs need a lift with no residual `rd`/`wr`/`codechk` on play's path and play's song
-pointers as variables. Where the lift (deity-informant 0.25.0 at 0af67f3) falls short,
+pointers as variables. Where the lift (deity-informant 0.27.1) falls short,
 `condition.py` edits the generated C by hand; each edit keeps the trace exact over the whole
 song.
 
@@ -73,19 +73,12 @@ song.
 | defMON | `DEMOS/A-F/Fading_Lights.sid` | none | |
 | DMC | `DEMOS/0-9/2Pac_Intro.sid` | none | |
 | JCH NewPlayer | `DEMOS/0-9/1st_Chaff.sid` | none | |
-| Future Composer | `MUSICIANS/A/A-Man/Future_Composer_4-Demo_07.sid` | none | lift 43 s (deity #457) |
-| SID-Wizard 1.x | `fixtures/Emomyst.sid` | `sidwizard` | relocated operands (deity #454) |
+| Future Composer | `MUSICIANS/A/A-Man/Future_Composer_4-Demo_07.sid` | none | |
+| SID-Wizard 1.x | `fixtures/Emomyst.sid` | none | |
 | Music Assembler | `DEMOS/0-9/7_Years.sid` | `direct` | voice index lost (deity #455) |
 | Soundmonitor | `DEMOS/0-9/1988_Carat_tune_1.sid` | PSID tune | RSID rejected (gravity-inversion #46) |
 | Blackbird | `MUSICIANS/F/Freqvibez/Arhymetriarchy.sid` | not done | SMC jump target set in play (deity #456) |
 
-- **`sidwizard`**: the relocator patches about 30 instruction operands from header words
-  through its table (`SW_INDEX`, `SW_OFFSET`, `SW_SITE`: per site the header word index, a
-  signed offset and the operand address). Each operand pair read becomes
-  `cgen_ptr[P_<word>] + offset`; the 12 pointers (`seq_ptr0-2`, `subtune_tempo`, `ptn_lo/hi`,
-  `ins_lo/hi`, `chords`, `chord_ptr`, `tempo`, `tempo_prg`, the hand C's) are set where the
-  relocator ends. deity-informant 0.26.0 (#459) merges these pairs in the lift; with it the
-  step should be dropped.
 - **`direct`**: play calls its voice routine with X = 0, 7, 14 through return addresses it
   pushes, so the lift loses X's range and every per-voice store into code goes through
   `wr`/`codechk`. Each `wr(a, v)` becomes a store into the span holding `a` with every
@@ -105,9 +98,9 @@ Roles per family (`build/flow/<family>/row.json`, `roles`), all traces exact ove
 | defMON | 3 | 1 | 7 | 2 | 4 |
 | DMC | 2 | 4 | 9 | 3 | 3 |
 | JCH NewPlayer | 1 | 5 | 4 | 2 | 4 |
-| Future Composer | 1 | 4 | 7 | 1 | 6 |
+| Future Composer | 1 | 4 | 7 | 1 | 7 |
 | SID-Wizard | 4 | 4 | 7 | 4 | 4 |
-| Music Assembler | 3 | 1 | 6 | 0 | 2 |
+| Music Assembler | 3 | 2 | 7 | 1 | 2 |
 | Soundmonitor | 3 | 1 | 6 | 3 | 4 |
 
 The trackers' own terms, by the tables a machine indexes and the registers it drives:
@@ -163,7 +156,7 @@ component (GoatTracker's score holds its wavetable), and whether tables are reac
 
 ## Next
 
-- Rerun on deity-informant 0.26.0 and drop `sidwizard`; drop each step as its issue closes.
+- Drop each conditioning step as its issue closes.
 - Control-dependence edges (a load in a branch condition to the stores and writes it
   guards), so flags and timers say what they gate.
 - Restart edges from the score explicitly, so each program and modulator names the score
