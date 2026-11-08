@@ -93,8 +93,77 @@ song.
   during play; only target `$1018` is lifted, `$1043` traps. Conditioning would translate
   that path by hand and bound the decompressor's `wr` stores to its unpack buffers.
 
+## Machines by family
+
+Roles per family (`build/flow/<family>/row.json`, `roles`), all traces exact over the song:
+
+| Family | sequencer | program | modulator | timer | flag |
+|---|---|---|---|---|---|
+| GoatTracker V2 | 1 | 2 | 3 | 0 | 4 |
+| defMON | 0 | 4 | 7 | 1 | 4 |
+| DMC | 1 | 5 | 9 | 3 | 3 |
+| JCH NewPlayer | 1 | 5 | 4 | 2 | 4 |
+| Future Composer | 2 | 3 | 7 | 1 | 6 |
+| SID-Wizard | 6 | 2 | 7 | 4 | 4 |
+| Music Assembler | 4 | 0 | 6 | 0 | 2 |
+| Soundmonitor | 2 | 2 | 6 | 3 | 4 |
+
+The trackers' own terms, by the tables a machine indexes and the registers it drives:
+
+- **Score** (sequencer, all groups): the orderlist and pattern positions per voice; a row
+  restarts the instrument's programs and modulators. GoatTracker's is one component of 22
+  cells (orderlist, pattern, instrument and wavetable positions restart each other within
+  a voice); SID-Wizard's 17. defMON has none: its patterns index its programs' tables
+  directly, so its score is a program over all groups.
+- **Wave/arpeggio program** (freq, control): GoatTracker's wavetable (inside the score
+  component), SID-Wizard's WF-ARP table position (`$103D`), JCH's and DMC's wave tables.
+- **Pulse program** (pulse): GoatTracker's pulsetable (`$1293`), SID-Wizard's PW table
+  (`$103E`), DMC `$1762`.
+- **Filter program** (cutoff, resonance, volume): GoatTracker's filtertable (`$104E`),
+  SID-Wizard's filter table (`$15D6`), DMC `$1719`.
+- **Modulators**: the frequency (vibrato, slide, portamento), pulse width (pulse sweep),
+  cutoff (filter sweep), resonance/routing and volume registers each program or score row
+  sets and steps. Every family has freq, pulse and cutoff modulators except GoatTracker,
+  whose frequency steps inside the score component.
+- **Timers**: tempo and duration counters gating the score (SID-Wizard `$1064-$1068` per
+  voice, Soundmonitor `$00AB`).
+- **Flags**: state read only by branches (gate, hard restart, new-note, tempo phase); the
+  graph has no control edges, so it cannot say what they gate.
+
+SID-Wizard's six sequencers are the score plus its WF-ARP, PW and filter positions and the
+tempo program, which read the song through pointers (`$02/$03`, the relocated pointers)
+and so feed other machines' addresses; GoatTracker indexes its tables by
+per-voice registers.
+
+## Common definition
+
+A player is per-voice instances of one pipeline plus global machines:
+
+    score --row--> programs (wave/arp, pulse, filter) --> modulators --> SID
+      ^                                                      ^
+    timers (tempo, duration)                         flags (control only)
+
+A **machine** is a cell (or component of cells) kept between play calls whose next value
+derives from its own. It has:
+
+- **state**: its cells, one per voice where the player indexes by voice;
+- **table**: the song table its state indexes, if any (score and programs);
+- **step**: how it derives its next value from its own (advance a position, count, add a
+  delta);
+- **restart**: the machines and song reads that overwrite its state (a score row restarts
+  programs and modulators; a program row restarts modulators);
+- **outputs**: the register groups (`freq`, `pulse`, `control`, `adsr`, `cutoff`,
+  `resonance`, `volume`) and machines it feeds.
+
+Its role follows from whether it indexes a table, feeds other machines and feeds registers
+(`flowsegment.roles`). All eight families fit; they differ in how many machines share a
+component (GoatTracker's score holds its wavetable), whether the score is a sequencer or a
+program (defMON), and whether tables are reached by index or pointer (SID-Wizard).
+
 ## Next
 
 - Rerun on deity-informant 0.26.0 and drop `sidwizard`; drop each step as its issue closes.
-- Map each family's machines to its tracker's definitions and find one state machine
-  definition all the graphs fit.
+- Control-dependence edges (a load in a branch condition to the stores and writes it
+  guards), so flags and timers say what they gate.
+- Restart edges from the score explicitly, so each program and modulator names the score
+  row field that restarts it.
