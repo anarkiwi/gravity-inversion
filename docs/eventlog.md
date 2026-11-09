@@ -34,8 +34,10 @@ This writes `OUT/events.jsonl` and `OUT/summary.json`.
    stored to. Any other site is a `table` (a player table indexed by a loop counter, or state).
 4. **Native run.** The instrumented IR, linked with `tools/eventlog.c`, runs init and the play
    calls. It logs each site's read of a song data byte (the original address from the array and
-   the `.h` origin) and each store to a region or span (the cell's original address, value and
-   old value), each with the copy index. Init's reads (its copy of the `.h` state) are dropped.
+   the `.h` origin) and each store to a region, span or promoted variable (the cell's original
+   address, value and old value), each with the copy index. A promoted variable (`S_<offset>`,
+   an element of a field array `V<s>_f<offset>[copy]`) maps to its original address by the
+   lift's `info["state"]["vars"]`. Init's reads (its copy of the `.h` state) are dropped.
    A copy index is the first argument of a function the lift lists as `index`
    (`info["provenance"]["functions"]`): one instance of code the original repeats per voice or
    channel. SID writes are logged too.
@@ -88,6 +90,7 @@ built on demand (`log[g]`, iteration), so a long song never holds per-read objec
   equal the generated C's reads of those bytes, but for reads the hand C does not make:
   - Emomyst ($19F1–$19FF, $1A6E–$1AAD), Ghouls ($6CB7–$6D34) and Incoherent ($0C4F–$0C63)
     dispatch commands through tables of branch offsets or jump vectors. The original stores
-    each value into its own code (a lift code cell), while the hand C uses a `switch`.
+    each value into its own code (a lift code cell) before its next read of one, while the
+    hand C uses a `switch` (as does the generated C where the lift folds the patched jump).
   - Emomyst's chord rows' detune column ($21CC, $223B), which the original stores to a cell
     the build never reads; the hand C skips it.

@@ -1,9 +1,10 @@
 /* Host harness for a cgen translation instrumented by tools/irmodule.py and
  * compiled with -DCGEN_HOST. step() runs one entry call and logs, in order,
  * its song data reads (cgen_ld at a site, of a byte song[] marks), its stores
- * to the regions cgen_regions() registers (cgen_st, with the byte's old
- * value) and its SID writes. io_read() answers the I/O reads of the call from
- * the reference's, in order per address, else the last value written. */
+ * to the regions cgen_regions() registers, sorted by host address (cgen_st,
+ * with the byte's old value) and its SID writes. io_read() answers the I/O
+ * reads of the call from the reference's, in order per address, else the last
+ * value written. */
 #include <setjmp.h>
 #include <stdint.h>
 
@@ -12,7 +13,7 @@ void cgen_play(uint8_t a);
 void cgen_regions(void);
 
 #define MAXE (1 << 18)
-#define MAXR 256
+#define MAXR (1 << 14)
 #define MAXIO 65536
 
 enum { READ, CELL, SIDW };
@@ -29,15 +30,28 @@ static jmp_buf env;
 static int trapped;
 
 void cgen_region(uint8_t *p, uint32_t n, uint32_t org) {
-  rbase[nr] = p;
-  rlen[nr] = n;
-  rorg[nr++] = org;
+  uint32_t i = nr++;
+  for (; i && rbase[i - 1] > p; i--) {
+    rbase[i] = rbase[i - 1];
+    rlen[i] = rlen[i - 1];
+    rorg[i] = rorg[i - 1];
+  }
+  rbase[i] = p;
+  rlen[i] = n;
+  rorg[i] = org;
 }
 
 static int32_t addr_of(const uint8_t *p) {
-  for (uint32_t i = 0; i < nr; i++)
-    if (p >= rbase[i] && p < rbase[i] + rlen[i])
-      return (int32_t)((rorg[i] + (uint32_t)(p - rbase[i])) & 0xffff);
+  uint32_t lo = 0, hi = nr;
+  while (lo < hi) {
+    uint32_t mid = (lo + hi) / 2;
+    if (rbase[mid] <= p)
+      lo = mid + 1;
+    else
+      hi = mid;
+  }
+  if (lo && p < rbase[lo - 1] + rlen[lo - 1])
+    return (int32_t)((rorg[lo - 1] + (uint32_t)(p - rbase[lo - 1])) & 0xffff);
   return -1;
 }
 
