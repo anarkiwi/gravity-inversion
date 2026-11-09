@@ -245,6 +245,224 @@
    "why": "The filter step time lives in LDA #'s operand.",
    "lift": "variable",
    "transform": "T1"
+  },
+  {
+   "id": "effect.down",
+   "kind": "goto",
+   "edges": [
+    [
+     "$089F",
+     "$08DE"
+    ],
+    [
+     "$08AA",
+     "$08DE"
+    ],
+    [
+     "$08DC",
+     "$08DE"
+    ]
+   ],
+   "hand": {
+    "fn": "effect",
+    "form": "written without this goto"
+   },
+   "why": "The SBC step $08DE is joined by $089F (BCS after BCC, always taken), $08AA BEQ and $08DC's fall-through from three depths of the vibrato, porta and tone-porta arms; their branches meet only past it, at $0B1B. The hand C repeats the subtraction per effect.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "effect.note",
+   "kind": "goto",
+   "edges": [
+    [
+     "$08A2",
+     "$08EE"
+    ],
+    [
+     "$08C5",
+     "$08EE"
+    ],
+    [
+     "$08DC",
+     "$08EE"
+    ]
+   ],
+   "hand": {
+    "fn": "effect",
+    "form": "written without this goto"
+   },
+   "why": "The note reload $08EE (JMP $0B09) is joined by $08A2 BEQ, $08C5 BPL and $08DC BMI from different arms, none of whose branches rejoins there. The hand C calls set_note in two places.",
+   "lift": "goto",
+   "covered": false,
+   "uncovered": "the song does not take every one of these edges",
+   "transform": "T7"
+  },
+  {
+   "id": "effect.store",
+   "kind": "goto",
+   "edges": [
+    [
+     "$08D4",
+     "$0B1B"
+    ],
+    [
+     "$08EB",
+     "$0B1B"
+    ]
+   ],
+   "hand": {
+    "fn": "effect",
+    "form": "written without this goto"
+   },
+   "why": "The ADC and SBC steps jump into voice_play's frequency store at $0B1B, which $0B18 falls into past the note set $0B09: an entry part-way into a shared sequence.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "voice_play.note",
+   "kind": "goto",
+   "edges": [
+    [
+     "$0B02",
+     "$0B09"
+    ]
+   ],
+   "hand": {
+    "fn": "voice_play",
+    "form": "written without this goto"
+   },
+   "why": "$0B02 BPL enters the note set $0B09, which the note effect's $08F1 JMP and $0B07's fall-through also reach.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "voice_play.store",
+   "kind": "goto",
+   "edges": [
+    [
+     "$0871",
+     "$0B1E"
+    ],
+    [
+     "$0C4C",
+     "$0B1E"
+    ],
+    [
+     "$0AB6",
+     "$0B21"
+    ]
+   ],
+   "hand": {
+    "fn": "voice_play",
+    "form": "written without this goto"
+   },
+   "why": "Entries part-way into the store sequence $0B1B-$0B23: $0871 and $0C4C jump past its first store to $0B1E, $0AB6 BEQ past its second to $0B21.",
+   "lift": "goto",
+   "covered": false,
+   "uncovered": "the song does not take every one of these edges",
+   "transform": "T7"
+  },
+  {
+   "id": "filter_step.step",
+   "kind": "goto",
+   "edges": [
+    [
+     "$095A",
+     "$095D"
+    ],
+    [
+     "$096A",
+     "$097D"
+    ]
+   ],
+   "hand": {
+    "fn": "filter_step",
+    "form": "written without this goto"
+   },
+   "why": "$095A falls into the step $095D, which $0938 BNE also enters, past the joined block $0951 the other arms of the time test take; $096A BNE skips $097B, which $0934 BEQ and $0978 join, into $097D.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "command.joins",
+   "kind": "goto",
+   "edges": [
+    [
+     "$0A83",
+     "$0A93"
+    ],
+    [
+     "$0A88",
+     "$0AB3"
+    ]
+   ],
+   "hand": {
+    "fn": "command",
+    "form": "written without this goto"
+   },
+   "why": "$0A93 is joined by $0A83 BEQ, $0A8E BCS and $0A90's fall-through, $0AB3 by $0A77 BEQ, $0A88 BNE and $0AB1's fall-through, from arms whose branches meet past them.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "command.reenter",
+   "kind": "goto",
+   "edges": [
+    [
+     "$0C3E",
+     "$0AC7"
+    ]
+   ],
+   "hand": {
+    "fn": "command",
+    "form": "written without this goto"
+   },
+   "why": "$0C3E jumps back into $0AC7, which $0AC4 falls into: an entry part-way into a shared sequence.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "read_row.join",
+   "kind": "goto",
+   "edges": [
+    [
+     "$0B90",
+     "$0BC0"
+    ],
+    [
+     "$0BAA",
+     "$0BC0"
+    ]
+   ],
+   "hand": {
+    "fn": "read_row",
+    "form": "written without this goto"
+   },
+   "why": "$0BC0 is joined by $0B90 BCC, $0BAA BCS and $0BBE's fall-through from two depths of the row decode.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "voice_play.regs2",
+   "kind": "goto",
+   "edges": [
+    [
+     "$0B71",
+     "$0BF6"
+    ],
+    [
+     "$0BA0",
+     "$0BF6"
+    ]
+   ],
+   "hand": {
+    "fn": "voice_play",
+    "form": "written without this goto"
+   },
+   "why": "Like $0A68, the pulse and row blocks jump past the joined blocks to the register writes $0BF6, which $0BF3 falls into.",
+   "lift": "goto",
+   "transform": "T7"
   }
  ]
 }

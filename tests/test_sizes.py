@@ -16,43 +16,43 @@ DRIVER = ROOT / "c64"
 CFLAGS = {"automatas": ["-DFRAME_CIA"]}
 MISSED = {
     (
-        "generated",
-        "emomyst",
-        "data",
-    ): "init's relocator patches 30 operands scattered through the player ($1256-$1B4F) "
-    "through one store, so one held span from the first patch site to the song's end holds "
-    "the player code between them",
-    (
         "hand",
         "ghouls",
         "data",
-    ): "ram[] reserves the image up to $A000, more than the original writes",
+    ): "ram[] is RAM $2980-$9FFF as one array: the image's 2665 instruction bytes, the 3750 "
+    "bytes $86E9-$958E between the songs' copies and the 766 bytes $9D02-$9FFF past them, "
+    "which nothing writes",
     (
         "hand",
         "automatas",
         "data",
-    ): "voice state is copied out of the code image as well as kept in DATA",
+    ): "data[] is the image $1554-$2FAF with play's 243 instruction bytes between its tables, "
+    "and voice[] holds 75 bytes of state the original keeps in its instructions' operands, "
+    "which the bound counts as code",
     (
         "generated",
         "commando",
         "data",
-    ): "the instrument table's rows past the image ($1B57-$1BF0) are written by the "
-    "pulse-width store at 8 times a song byte below $80 (rows 0-31, the image holding 13), "
-    "so they stay data",
+    ): "span C0 holds init's code $1368-$139D, which the post-init lift does not see as "
+    "instructions, so the song pointers' data run starts where play's code ends, and the "
+    "instrument rows $1B57-$1BEF past the image, which the pulse-width store at 8 times a song "
+    "byte below $80 may write and the song never does",
     (
         "generated",
         "ghouls",
         "data",
-    ): "the music init's block copy ($29C6) writes each song's data to $730E and past the "
-    "image to $914F-$9F14, RAM spanning every song's copy; the voices' song pointers read "
-    "one span from the image's song data through that copy, holding the bytes between the "
-    "image and it too",
+    ): "span C3 $6CB7-$9E06, the song pointers' one array from the image's song data through "
+    "the songs' copies past it, holds $86E9-$958E between the copies and $9D02-$9E06 past them, "
+    "which nothing writes, and init's per-song state is replayed by copy tables (CP_*, LIT) "
+    "where the original's init computes it",
     (
         "generated",
         "automatas",
         "data",
-    ): "held spans keep the instruction bytes between the operand cells the band copies "
-    "keep their state in, and those between the tables interleaved with code",
+    ): "span C0 $14D4-$1713 holds init's code $14D4-$1553 (the frequency reads at $13F4 index "
+    "by Y = 2A after a BPL that leaves Y >= $80, which the lift's interval does not narrow) "
+    "and play's code $168C-$1713 (reads at $1426/$143F indexed by a note byte), with the "
+    "promoted cells and init's SID writes, which the original keeps in its code",
 }
 
 

@@ -581,6 +581,159 @@
    "why": "The arpeggio value is kept in LDA #'s operand.",
    "lift": "variable",
    "transform": "T1"
+  },
+  {
+   "id": "tune_play.skip",
+   "kind": "goto",
+   "edges": [
+    [
+     "$11DB",
+     "$11F4"
+    ]
+   ],
+   "hand": {
+    "fn": "tune_play",
+    "form": "written without this goto"
+   },
+   "why": "$11DB BMI skips the counter step $11F1, which $11E0 BNE, $11E5 JMP and $11EE's fall-through join, into the voice calls $11F4.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "do_track.skip",
+   "kind": "goto",
+   "edges": [
+    [
+     "$125A",
+     "$1268"
+    ]
+   ],
+   "hand": {
+    "fn": "do_track",
+    "form": "written without this goto"
+   },
+   "why": "$125A BVC skips the store $1261, which $1258 BEQ and $125F join, into $1268.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "tick1.joins",
+   "kind": "goto",
+   "edges": [
+    [
+     "$130B",
+     "$1378"
+    ],
+    [
+     "$1332",
+     "$1337"
+    ],
+    [
+     "$13CB",
+     "$13E0"
+    ],
+    [
+     "$13E2",
+     "$13E3"
+    ]
+   ],
+   "hand": {
+    "fn": "tick1",
+    "form": "written without this goto"
+   },
+   "why": "Branches past joined blocks: $1378 is joined by $130B JMP, $134E BEQ and $136D BEQ; $1332 BMI skips $1334, which $132C BEQ joins; $13CB BNE skips $13D9-$13DD; $13E2, which $13AD BNE and $13B4 BNE enter, falls into $13E3 past the code the C places between.",
+   "lift": "goto",
+   "covered": false,
+   "uncovered": "the song does not take every one of these edges",
+   "transform": "T7"
+  },
+  {
+   "id": "tick1.end",
+   "kind": "goto",
+   "edges": [
+    [
+     "$1319",
+     "$1520"
+    ],
+    [
+     "$13C6",
+     "$1520"
+    ],
+    [
+     "$13ED",
+     "$1520"
+    ]
+   ],
+   "hand": {
+    "fn": "tick1",
+    "form": "written without this goto"
+   },
+   "why": "Three jumps from different depths of the row decode to the shared epilogue $1520, not the procedure exit.",
+   "lift": "goto",
+   "covered": false,
+   "uncovered": "the song does not take every one of these edges",
+   "transform": "T7"
+  },
+  {
+   "id": "ins_ptn_fx.gate",
+   "kind": "goto",
+   "edges": [
+    [
+     "$14C1",
+     "$14D1"
+    ],
+    [
+     "$14CF",
+     "$14D7"
+    ]
+   ],
+   "hand": {
+    "fn": "ins_ptn_fx",
+    "form": "written without this goto"
+   },
+   "why": "Overlapping joins: $14C1 BEQ enters the AND step $14D1 that $14CF falls into, $14CF BNE skips it to the store $14D7.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "wf_arp.relative2",
+   "kind": "goto",
+   "edges": [
+    [
+     "$1727",
+     "$1760"
+    ]
+   ],
+   "hand": {
+    "fn": "wf_arp",
+    "form": "written without this goto"
+   },
+   "why": "$1727 (BCS after BCC, always taken) enters the shared sequence $1760, as $171D does.",
+   "lift": "goto",
+   "transform": "T7"
+  },
+  {
+   "id": "vibrato_fx.joins",
+   "kind": "goto",
+   "edges": [
+    [
+     "$1817",
+     "$181A"
+    ],
+    [
+     "$1829",
+     "$182C"
+    ]
+   ],
+   "hand": {
+    "fn": "vibrato_fx",
+    "form": "written without this goto"
+   },
+   "why": "$1817 falls into the store $181A, which $1802 BEQ also enters, and $1829 into $182C, which $181F BEQ enters, past the blocks the C places between.",
+   "lift": "goto",
+   "covered": false,
+   "uncovered": "the song does not take every one of these edges",
+   "transform": "T7"
   }
  ]
 }
