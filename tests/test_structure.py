@@ -26,14 +26,8 @@ VOICE_REGS = {
 MISSED_VOICES = {}
 FRAGMENTED = {}
 OTHER_GOTOS = {
-    "incoherent": "gotos beyond the map: $089F/$08AA/$08DC → $08DE, $08A2/$08C5/$08DC → $08EE, "
-    "$095A → $095D, $096A → $097D, $0A83 → $0A93, $0A88 → $0AB3, $0C3E → $0AC7, "
-    "$0B02 → $0B09, $08D4/$08EB → $0B1B, $0871/$0C4C → $0B1E, $0AB6 → $0B21, "
-    "$0B90/$0BAA → $0BC0, $0B71/$0BA0 → $0BF6",
-    "emomyst": "gotos beyond the map: $11DB → $11F4, $125A → $1268, $130B → $1378, "
-    "$1319/$13C6/$13ED → $1520, $1332 → $1337, $13CB → $13E0, $13E2 → $13E3, $14C1 → $14D1, "
-    "$14CF → $14D7, $1727 → $1760, $1817 → $181A, $1829 → $182C, $1B25 → $1AFD; map gotos "
-    "not printed: $1151 → $115B (init's, folded at lift time)",
+    "emomyst": "$1B25 → $1AFD, a jump back into $1AFD from command code the song never runs, "
+    "which the run's listing decodes as data, so the map cannot name the edge",
 }
 
 
@@ -86,12 +80,15 @@ def test_procedures_not_fragmented(name):
 @pytest.mark.slow
 @pytest.mark.parametrize("name", _cases(OTHER_GOTOS))
 def test_unstructured_edges(name):
-    """The generated C has a goto exactly at each edge of the map's goto entries."""
-    gotos = {tuple(e) for e in generated(name)[1]["provenance"]["gotos"]}
+    """The generated C has a goto exactly at each edge of the map's goto entries from the code
+    it translates (init's run on the host)."""
+    info = generated(name)[1]
+    gotos, starts = {tuple(e) for e in info["provenance"]["gotos"]}, set(info["starts"])
     mapped = {
         tuple(e)
         for c in constructs.load(name)["constructs"]
         if c["kind"] == "goto"
         for e in c["edges"]
+        if e[0] in starts
     }
     assert gotos == mapped, (sorted(gotos - mapped), sorted(mapped - gotos))

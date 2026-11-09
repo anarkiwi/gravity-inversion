@@ -159,8 +159,9 @@ def instrument(
     text, regions, kinds, helpers=(), copies=()
 ):  # pylint: disable=too-many-locals,too-many-branches
     """``(IR text, [(function, line, column, kind)])``: ``text`` reporting each site's reads
-    (``cgen_ld``), stores (``cgen_st``), ``regions`` (``{global: origin}``) and copies for
-    tools/eventlog.c; kinds from ``kinds`` (:func:`irflow.classify`), else ``table``."""
+    (``cgen_ld``), stores (``cgen_st``), ``regions`` (``{global: {byte offset: origin}}``, each
+    run to the next) and copies for tools/eventlog.c; kinds from ``kinds``, else ``table``.
+    """
     lines, locs = text.split("\n"), {
         int(a): (int(b), int(c)) for a, b, c in LOC.findall(text)
     }
@@ -223,10 +224,14 @@ def instrument(
             out.append(
                 f"  call void @cgen_ld(i32 {s}, ptr {ld.group(2)}, i8 {ld.group(1)})"
             )
-    reg = [
-        f"  call void @cgen_region(ptr @{g}, i32 {sizes[g]}, i32 {org})"
-        for g, org in regions.items()
-        if g in sizes
-    ]
+    reg = []
+    for g, runs in regions.items():
+        ends = sorted(runs)[1:] + [sizes.get(g)]
+        for o, end in zip(sorted(runs), ends):
+            if end is not None:
+                ptr = f"getelementptr (i8, ptr @{g}, i64 {o})"
+                reg.append(
+                    f"  call void @cgen_region(ptr {ptr}, i32 {end - o}, i32 {runs[o]})"
+                )
     out += [HOOKS, "define void @cgen_regions() {", *reg, "  ret void", "}"]
     return "\n".join(out) + "\n", sites

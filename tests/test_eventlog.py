@@ -197,6 +197,48 @@ def test_synthetic_player(tmp_path):
     )
 
 
+PROMOTED = """#include <stdint.h>
+#include "promoted.h"
+void io_write(uint16_t a, uint8_t v);
+uint8_t C0[2] = {5, 6};
+uint8_t S_3 = 1;
+uint8_t V0_f01[2] = {2, 3};
+void cgen_init(uint8_t a) { (void)a; }
+void cgen_play(uint8_t a) {
+  (void)a;
+  S_3 = C0[S_3 & 1];
+  V0_f01[S_3 & 1] = S_3 + V0_f01[1];
+  io_write(0xD400, S_3);
+}
+"""
+
+
+def test_promoted_cells(tmp_path):
+    """Stores to a promoted scalar and to the elements of a field array log the cells'
+    original addresses; the bytes the original never writes read from them are reads."""
+    path = tmp_path / "promoted.c"
+    path.write_text(PROMOTED, encoding="ascii")
+    path.with_suffix(".h").write_text("#define C0_ORG 0x2000\n", encoding="ascii")
+    song = np.zeros(0x10000, bool)
+    song[[0x2000, 0x2001, 0x1031]] = True
+    cells = {"S_3": 0x1003, "V0_f01[0]": 0x1011, "V0_f01[1]": 0x1031}
+    player = eventlog.Player(path, tmp_path, song, (), cells)
+    rec = player.run(0, 2)
+    got = [(r["frame"], r["kind"], r["addr"], r["value"]) for r in rec]
+    assert got == [
+        (1, eventlog.READ, 0x2001, 6),
+        (1, eventlog.CELL, 0x1003, 6),
+        (1, eventlog.READ, 0x1031, 3),
+        (1, eventlog.CELL, 0x1011, 9),
+        (1, eventlog.SIDW, 0, 6),
+        (2, eventlog.READ, 0x2000, 5),
+        (2, eventlog.CELL, 0x1003, 5),
+        (2, eventlog.READ, 0x1031, 3),
+        (2, eventlog.CELL, 0x1031, 8),
+        (2, eventlog.SIDW, 0, 5),
+    ]
+
+
 def _fuzz(style, seed, tmp_path, seq=None):
     src = tmp_path / f"{style}{seed}.asm"
     src.write_text(fuzzplayer.player(style, seed, seq=seq), encoding="ascii")
@@ -257,13 +299,38 @@ def _spans(tune):
     }
 
 
+def _dispatched(psid, frames, song, table, code):
+    """Whether each play call read of a ``table`` byte in the original is followed, before
+    the next, by a store of its value to a ``code`` cell."""
+    pending, missed = [], []
+
+    def observe(mpu, mem, log):
+        def on_read(a):
+            if len(log.calls) > 1:
+                missed.extend(pending)
+                pending[:] = [mem[a]]
+
+        def on_write(_, v):
+            if v in pending:
+                pending.clear()
+
+        cells = set(np.flatnonzero(code).tolist())
+        reads = set(np.flatnonzero(table).tolist())
+        eventlog._observe(  # pylint: disable=protected-access
+            mpu, log, on_read, reads, on_write=on_write, writes=cells
+        )
+
+    sidtrace.trace_psid(psid, frames, song=song, observe=observe)
+    return not missed + pending
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("tune", sorted(PSIDS))
 def test_hand(tune):
     """Over the song the generated C's song data reads are the original's; those in the
     -O0 hand C's arrays (its SID writes the original's) are the hand C's play reads, but for
-    the DISPATCH (value stored to a code cell) and UNUSED (to a cell) bytes it never reads.
-    """
+    the DISPATCH (the original stores the value to a code cell) and UNUSED (the C to a cell)
+    bytes it never reads."""
     prg = ROOT / "tunes" / tune / "build" / "hand-O0.prg"
     if not (PSIDS[tune].exists() and prg.exists()):
         pytest.skip("needs `make` builds")
@@ -284,7 +351,7 @@ def test_hand(tune):
         unused[lo:hi] = True
     code = np.zeros(0x10000, bool)
     code[summary["code_cells"]] = True
-    assert log.stored(code)[table[log.reads["addr"]]].all()
+    assert _dispatched(psid, frames, song, table, code)
     assert log.stored(np.ones(0x10000, bool))[unused[log.reads["addr"]]].all()
     table |= unused
     gen = log.read_set()

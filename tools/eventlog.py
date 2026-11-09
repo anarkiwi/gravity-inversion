@@ -90,9 +90,12 @@ def unfold(h_text):
 
 
 class Player:  # pylint: disable=too-few-public-methods
-    """The generated C built natively with its song data read sites instrumented."""
+    """The generated C built natively with its song data read sites instrumented; ``cells``
+    maps its promoted variables (``S_8``, ``V0_f00[1]``) to their original addresses."""
 
-    def __init__(self, c_path, out_dir, song, copies=()):
+    def __init__(
+        self, c_path, out_dir, song, copies=(), cells=None
+    ):  # pylint: disable=too-many-arguments,too-many-positional-arguments
         c_path = pathlib.Path(c_path).resolve()
         out = pathlib.Path(out_dir).resolve()
         h_text = c_path.with_suffix(".h").read_text(encoding="utf-8")
@@ -103,9 +106,13 @@ class Player:  # pylint: disable=too-few-public-methods
         text = irmodule.lower(src, [c_path.parent, DRIVER], ["CGEN_HOST"], passes=True)
         helpers = set(re.findall(rf"^define [^@]*@({irmodule.HELPERS})\(", text, re.M))
         self.origins = origins(h_text)
+        regions = {g: {0: org} for g, org in {**self.origins, "cgen_k": 0}.items()}
+        for ref, addr in (cells or {}).items():
+            m = re.fullmatch(r"(\w+)(?:\[(\d+)\])?", ref)
+            regions.setdefault(m[1], {})[int(m[2] or 0)] = addr
         text, self.sites = irmodule.instrument(
             text,
-            {**self.origins, "cgen_k": 0},
+            regions,
             irflow.classify(text),
             helpers,
             set(copies),
@@ -356,7 +363,7 @@ def run_tune(psid, frames, song=None):
             psid, frames, song, song_mask(psid, info["starts"])
         )
         copies = [f for f, v in info["provenance"]["functions"].items() if v["index"]]
-        player = Player(c_path, tmp, mask, copies)
+        player = Player(c_path, tmp, mask, copies, info["state"].get("vars"))
         rec = player.run(song, frames, io)
     log = Log(rec, player.sites, player.origins)
     assert np.array_equal(
