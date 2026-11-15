@@ -86,8 +86,7 @@ against `make check` and the variant tests) leaves only equivalent mutants.
 
 `make` also builds `build/gen.prg` from `build/gen/emomyst.c` and `.h`, generated from the PSID by
 `tools/transliterate.py`; `make check` compares it over twice the HVSC length, and the tests on each
-patched variant; `gate_off_pointers` is a strict xfail (the generated C steps a filter cutoff the
-original holds).
+patched variant.
 
 ## Size
 
