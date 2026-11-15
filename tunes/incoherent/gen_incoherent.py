@@ -48,6 +48,28 @@ FUNKTEMPO = 0x0C64
 SCALARS = {"INIT_SONG": 0x08FF, "INIT_TEMPO": 0x0923, "HR_LIMIT": 0x0BDB}
 
 
+def held(psid):
+    """{array: original addresses}: the image from DATA_ORG to its end."""
+    load, _, _, image = psid_parts(psid)
+    return {"data": range(DATA_ORG, load + len(image))}
+
+
+def named(_psid):
+    """{state: original addresses} the C keeps as variables or in its code."""
+    voice = {
+        a + VOICE_STRIDE * v + k
+        for v in range(3)
+        for a, n in [(a, 1) for a in BYTE_FIELDS.values()]
+        + [(a, 2) for a in WORD_FIELDS.values()]
+        for k in range(n)
+    }
+    return {
+        "command switch": range(0x0C4F, FUNKTEMPO),
+        "funktempo": range(FUNKTEMPO, FUNKTEMPO + 2),
+        "voices": tuple(sorted(voice)),
+    }
+
+
 def c_bytes(data):
     """Format bytes as a C initializer list."""
     return ",".join(f"0x{b:02x}" for b in data)

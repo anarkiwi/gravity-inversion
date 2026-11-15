@@ -12,13 +12,25 @@ def _define(header, name):
     return re.search(rf"#define {name} (.*)", header)[1]
 
 
+def _bytes(header, name):
+    return bytes(int(b, 16) for b in _define(header, name).split(","))
+
+
 def test_data_is_byte_identical(psid):
-    """DATA is the original image from DATA_ORG to its end."""
+    """Each held array is the image's bytes at its addresses: the word table, the code
+    bytes read past it, and TABLES_ORG to the image's end."""
     header = gen_automatas.generate(psid)
     load, _, _, image = sidtrace.psid_parts(psid)
-    data = bytes(int(b, 16) for b in _define(header, "DATA").split(","))
-    assert int(_define(header, "DATA_ORG"), 16) == 0x1554
-    assert data == image[0x1554 - load :]
+    held = gen_automatas.held(psid)
+    assert held["words"] == range(0x1554, 0x168C)
+    assert held["tables"] == range(0x177F, load + len(image))
+    assert int(_define(header, "WORDS_ORG"), 16) == 0x1554
+    assert int(_define(header, "TABLES_ORG"), 16) == 0x177F
+    addrs = [int(a, 16) for a in _define(header, "CODE_READ_ADDRS").split(",")]
+    assert addrs == list(held["code_read"])
+    for name, macro in (("words", "WORDS"), ("code_read", "CODE_READ")):
+        assert _bytes(header, macro) == bytes(image[a - load] for a in held[name])
+    assert _bytes(header, "TABLES") == image[0x177F - load :]
 
 
 def test_voice_init(psid):

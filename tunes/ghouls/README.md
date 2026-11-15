@@ -2,16 +2,26 @@
 
 ## Data
 
-`gen_ghouls.py` emits the PSID payload as `IMAGE` with its load address
-`IMAGE_ORG`. The C keeps it in `ram[]`, spanning `IMAGE_ORG` to `$a000`, and
-reads every table and pattern through `peek()` at its original address: the
-data holds absolute pointers, and music init copies blocks of the image to
-`$730e` (song pointer tables and patterns, over the end of the image) and
-`$914f-$9e07`, as the original does. Gosub return stacks, default pulse widths
-and hard-restart frequencies live in gaps of the original code and are read and
-written in `ram[]` at the same addresses, so stack overflow and underflow reach
-the same bytes. Pointer tables, the frequency table and all reads past their
-ends (notes above 96, deep gosubs) resolve as in the original.
+`gen_ghouls.py` emits each array of the original's data with its first address
+(`<NAME>_ORG`):
+
+| Array | Addresses | Content |
+|---|---|---|
+| `blocks` | `$29e7-$60b1` | music init's block tables and the blocks it copies |
+| `tables` | `$6cb7-$730d` | effect lists, frequency tables, command jump table, effect patterns |
+| `pulse_default` | `$6a05-$6a0a` | default pulse width per voice, in a gap of the code |
+| `stack` | `$6b1f-$6b30` | gosub return stacks, 3 low then 3 high bytes per voice |
+| `hr_freq` | `$6bda` + `$1b` × voice | hard restart frequency per voice, in gaps of the code |
+| `music` | `$730e-$86e8` | copied: song pointer tables and patterns |
+| `patterns` | `$914f-$9e06` | copied: each song's patterns |
+
+`music` and `patterns` are the unions of the blocks' destinations; init fills them.
+`peek()` and `poke()` resolve an original address to its array through `segments[]`, so
+the data's absolute pointers, reads past a table's end (notes above 96, deep gosubs) and
+return stack overflow and underflow reach the same bytes as in the original. Other
+addresses (the original's code, RAM it never uses) read 0 and ignore writes.
+`tests/test_ghouls.py` checks per byte that the arrays hold only the original's data and
+every byte it reads as data ([docs/footprint.md](../../docs/footprint.md)).
 
 ## Player structure
 
@@ -59,7 +69,8 @@ runs `play_voice(v)` per voice. `tools/copies.py` lists the copies; `tools/resid
 `make check` compares every SID write of all 32 subtunes, from init to each
 HVSC song length, against the original (`tools/sidtrace.py`).
 
-`tests/test_ghouls.py` also patches song 4 to play one pattern on all three
+`tests/test_ghouls.py` also patches song 4 to play one pattern, at the start of its second
+copy block, on all three
 voices that drives the paths no subtune takes (listed with the pattern), and
 asserts with `tools/survey.py` that the subtunes and that variant take every
 branch outcome of the original except those no input can reach: the second

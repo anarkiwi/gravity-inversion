@@ -15,6 +15,7 @@ import irmodule
 import sidtrace
 
 import eventlog
+import footprint
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIX = ROOT / "fixtures"
@@ -25,18 +26,6 @@ PSIDS = {
     "ghouls": FIX / "Ghouls_n_Ghosts.sid",
     "incoherent": FIX / "Incoherent_Nightmare_tune_2.sid",
     "automatas": FIX / "Automatas.sid",
-}
-#: The hand C's data arrays, ``{symbol: (origin macro or ref.labels name, data macro)}``.
-HAND = {
-    "commando": {
-        "song": ("SONG_ORG", "SONG_DATA"),
-        "v": ("freqsl", "FREQ_TABLE"),
-        "sid": ("sid", "SID_OFFSETS"),
-    },
-    "emomyst": {"tab": ("TABLES_ORG", "TABLES"), "music": ("MUSIC_ORG", "MUSIC")},
-    "ghouls": {"ram": ("IMAGE_ORG", "IMAGE")},
-    "incoherent": {"data": ("DATA_ORG", "DATA")},
-    "automatas": {"data": ("DATA_ORG", "DATA")},
 }
 #: The original's dispatch tables ``[lo, hi)``, branch offsets and jump vectors it stores
 #: into its own code: the hand C dispatches with a switch instead and reads none of them.
@@ -268,19 +257,8 @@ def test_fuzz(style, seed, seq):
 
 
 def _spans(tune):
-    """The hand C's ``{symbol: (origin, length)}``."""
-    h = (ROOT / "tunes" / tune / "build" / f"{tune}_data.h").read_text(encoding="ascii")
-    defs = dict(re.findall(r"#define (\w+) ((?:[^\n\\]|\\\n)*)", h))
-    labels = sidtrace.parse_labels(
-        (COMMANDO / "ref.labels").read_text(encoding="ascii")
-    )
-    return {
-        s: (
-            int(defs[o], 16) if o in defs else labels[o],
-            len(re.findall(r"0x[0-9a-fA-F]+", defs[n])),
-        )
-        for s, (o, n) in HAND[tune].items()
-    }
+    """The hand C's ``{symbol: original addresses}``."""
+    return footprint.maps(tune, PSIDS[tune])[0]
 
 
 def _dispatched(psid, frames, song, table, code):
@@ -341,8 +319,8 @@ def test_hand(tune):
     gen = log.read_set()
     assert np.isin(eventlog.keys(gen), eventlog.keys(orig)).all()
     held = np.zeros(0x10000, bool)
-    for lo, n in _spans(tune).values():
-        held[lo : lo + n] = True
+    for addrs in _spans(tune).values():
+        held[list(addrs)] = True
     gen = gen[held[gen["addr"]] & ~table[gen["addr"]]]
     assert not table[hand["addr"]].any()
     assert np.array_equal(eventlog.keys(gen, False), eventlog.keys(hand, False))

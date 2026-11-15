@@ -4,10 +4,11 @@
  * the cutoff, then on every eighth call the arranger and pattern rows, then
  * the two sidTAB program layers of each voice, then pitch and pulse.
  *
- * DATA (automatas_data.h) is the original image from DATA_ORG to its end:
- * the note/slide word table, the sidTAB, pattern and arranger tables, the
- * pattern and sidTAB streams. Addresses below are original ones, read with
- * at(). VOICE_INIT holds the voice state the original keeps in its code.
+ * automatas_data.h holds the original's data with its addresses: the
+ * note/slide word table, the code bytes its reads past the end reach, and the
+ * sidTAB, pattern and arranger tables and streams. Addresses below are
+ * original ones, read with at(). VOICE_INIT holds the voice state the
+ * original keeps in its code.
  */
 #include <c64.h>
 #include <stdint.h>
@@ -64,7 +65,10 @@ enum { SWEEP_UP = 0x80 };
 enum { STOPPED = 0x80, FULL_CALLS = 8 };
 enum { DETECT_LINE = 0xfc, CIA_PERIOD = 0x0998 };
 
-static const uint8_t data[] = {DATA};
+static const uint8_t words[] = {WORDS};
+static const uint8_t code_read[] = {CODE_READ};
+static const uint16_t code_read_at[] = {CODE_READ_ADDRS};
+static const uint8_t tables[] = {TABLES};
 
 struct voice {
   uint16_t slide;
@@ -84,7 +88,18 @@ static uint8_t route, mode, cp, cut_lo, cut_hi, step_lo, step_hi;
 static uint8_t cut_sub = CUT_SUB; /* kept across init, as in the original */
 static uint8_t cut_min, cut_shift;
 
-static uint8_t at(uint16_t a) { return data[a - DATA_ORG]; }
+/* The original's data byte at a; 0 where it holds none. */
+static uint8_t at(uint16_t a) {
+  uint8_t i;
+  if ((uint16_t)(a - TABLES_ORG) < sizeof tables)
+    return tables[a - TABLES_ORG];
+  if ((uint16_t)(a - WORDS_ORG) < sizeof words)
+    return words[a - WORDS_ORG];
+  for (i = 0; i < sizeof code_read; ++i)
+    if (code_read_at[i] == a)
+      return code_read[i];
+  return 0;
+}
 static uint16_t word(uint16_t i) {
   return at(WORD_LO + i) | at(WORD_HI + i) << 8;
 }

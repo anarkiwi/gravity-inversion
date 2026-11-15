@@ -5,6 +5,7 @@ import functools
 import pytest
 
 import disasm
+import footprint
 import sidtrace
 import survey
 import transliterate
@@ -301,6 +302,19 @@ def test_variant_identical(  # pylint: disable=too-many-arguments,too-many-posit
     prg = swp.build_prg(data, gen, tmp_path)
     ref = sidtrace.trace_psid(data, frames)
     assert sidtrace.diff(ref, sidtrace.trace_prg(prg, frames)) is None
+
+
+def test_data_footprint(psid, gen, swp, frames):
+    """The hand C holds only the original's data, and every byte the original reads as data
+    but its operand state and the state, tables and switches it names, over twice the tune
+    and the patched variants."""
+    runs = [(psid, [2 * frames], [0])]
+    for patch, _, _ in VARIANTS.values():
+        m = swp.Music(psid, gen)
+        patch(m)
+        runs.append((m.bytes(), [frames], [0]))
+    orig = footprint.Original(runs, 1)
+    assert footprint.check(orig, gen.held(psid), gen.named(psid)) == footprint.CLEAN
 
 
 @functools.cache

@@ -4,6 +4,8 @@ songs."""
 import pytest
 
 import disasm
+import footprint
+import gen_ghouls
 import sidtrace
 import transliterate
 from ghouls_support import HVSC, BUILD, build_prg, gen_prg, with_pattern
@@ -97,6 +99,18 @@ def test_variant_closes_branch_gaps(psid, variant):
         psid, [sidtrace.song_calls(psid, s, HVSC) for s in SONGS], list(SONGS), 8
     )
     assert disasm.one_way(variant[0], cov) == UNREACHABLE
+
+
+def test_data_footprint(psid, variant):
+    """The hand C holds only the original's data, and every byte the original reads as data
+    but its operand state and the table it names, over every subtune and the variant."""
+    runs = [
+        (psid, [sidtrace.song_calls(psid, s, HVSC) for s in SONGS], list(SONGS)),
+        (variant[0], [VARIANT_FRAMES], [VARIANT_SONG]),
+    ]
+    orig = footprint.Original(runs, 8)
+    got = footprint.check(orig, gen_ghouls.held(psid), gen_ghouls.named(psid))
+    assert got == footprint.CLEAN
 
 
 def test_mismatch_reported(psid, variant, tmp_path, capsys):

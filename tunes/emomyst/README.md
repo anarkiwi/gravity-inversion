@@ -12,10 +12,16 @@ Hermit, SID-Wizard 1.x, SWP export (player at `$1000`, music at `$1c00`). HVSC
   addresses from the SWP header as the original's relocator does (subtune 0
   orderlists, pattern/instrument pointer tables, chords, tempo table and tempo
   programs). Tempo effects write into the tempo table, so `music[]` is RAM.
-- `TABLES`: the player's tables as loaded, `$1830` to 255 past the frequency-low
-  table (`$19d0`): the slowdown ADSR conversion tables, the exponent table,
-  frequency high/low. 8-bit indexed reads run past the frequency table into the
-  player code that follows, and the tune itself reads those bytes as frequencies.
+- `TABLES`: the player's tables as loaded, `$1830-$1938`: the slowdown ADSR
+  conversion tables, the exponent table, frequency high/low.
+- `CODE_READ` at `CODE_READ_ADDRS`: the bytes of the player code after the tables
+  (`$1939-$196f`) that 8-bit indexed reads past the frequency tables take in the
+  tune and the patched variants; the tune itself reads them as frequencies, and the
+  note fx branch operand `$1952` among them is written. `T()` reads an original
+  address from the tables or these bytes; other addresses read 0.
+
+`tests/test_emomyst.py` checks per byte that the arrays hold only the original's data and
+every byte it reads as data ([docs/footprint.md](../../docs/footprint.md)).
 
 ## Behaviour kept from the 6502 code
 
