@@ -734,6 +734,26 @@
    "covered": false,
    "uncovered": "the song does not take every one of these edges",
    "transform": "T7"
+  },
+  {
+   "id": "big_fx.tempo_pos_all",
+   "kind": "goto",
+   "edges": [
+    [
+     "$1B25",
+     "$1AFD"
+    ]
+   ],
+   "hand": {
+    "fn": "big_fx",
+    "form": "tempo_pos_all(music[tempo_prg + a])"
+   },
+   "why": "The tempo program command $1B1F loads the program's start and jumps into the main tempo command's position stores $1AFD-$1B0F, past its tempo store $1AF8, which the funk tempo command $1B1D BPL enters: an entry part-way into a shared sequence.",
+   "lift": "goto",
+   "covered": false,
+   "uncovered": "the song sets no tempo program by command; the patched tempo_fx variant in tests/test_emomyst.py reaches it",
+   "hand_differs": "the hand C outlines the position stores as tempo_pos_all() and calls it from the three tempo commands, instead of a goto into one tail",
+   "transform": "T7"
   }
  ]
 }

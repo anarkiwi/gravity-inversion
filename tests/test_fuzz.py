@@ -11,6 +11,7 @@ import re
 import subprocess
 
 import pytest
+from jennings.acme import assemble
 
 import fuzzplayer
 import sidtrace
@@ -41,43 +42,32 @@ def _cases(check):
     ]
 
 
-def _psid(style, seed, out):
-    src = out / f"{style}{seed}.asm"
-    src.write_text(fuzzplayer.player(style, seed), encoding="ascii")
-    sid = out / f"{style}{seed}.sid"
-    subprocess.run(["acme", "-o", sid, src], check=True, capture_output=True)
-    return sid.read_bytes()
+def _psid(style, seed):
+    return assemble(fuzzplayer.player(style, seed))[0]
 
 
 RELOC = 0x2000
 
 
 @pytest.fixture(scope="module", name="relocated")
-def fixture_relocated(tmp_path_factory):
+def fixture_relocated():
     """{(style, seed): c} of each player assembled at RELOC, translated once."""
-    out = tmp_path_factory.mktemp("reloc")
     done = {}
     for s in fuzzplayer.STYLES:
         for seed in SEEDS:
-            src = out / f"{s}{seed}.asm"
             text = fuzzplayer.player(s, seed)
-            src.write_text(
-                text.replace("ADDR = $1000", f"ADDR = ${RELOC:04x}"), "ascii"
-            )
-            sid = out / f"{s}{seed}.sid"
-            subprocess.run(["acme", "-o", sid, src], check=True, capture_output=True)
-            done[s, seed] = transliterate(sid.read_bytes(), "fuzz.h")[0]
+            psid = assemble(text.replace("ADDR = $1000", f"ADDR = ${RELOC:04x}"))[0]
+            done[s, seed] = transliterate(psid, "fuzz.h")[0]
     return done
 
 
 @pytest.fixture(scope="module", name="translated")
-def fixture_translated(tmp_path_factory):
+def fixture_translated():
     """{(style, seed): (psid, c, h, info)}, translated once."""
-    out = tmp_path_factory.mktemp("fuzz")
     done = {}
     for s in fuzzplayer.STYLES:
         for seed in SEEDS:
-            psid = _psid(s, seed, out)
+            psid = _psid(s, seed)
             done[s, seed] = (psid, *transliterate(psid, "fuzz.h"))
     return done
 
@@ -132,4 +122,4 @@ def test_cli(tmp_path):
     out = tmp_path / "p.asm"
     fuzzplayer.main(["smc", "1", str(out)])
     assert "s0f" in out.read_text(encoding="ascii")
-    subprocess.run(["acme", "-o", tmp_path / "p.sid", out], check=True)
+    subprocess.run(["jennings-acme", "-o", tmp_path / "p.sid", out], check=True)

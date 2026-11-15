@@ -4,9 +4,9 @@ exact steps keep a player's SID writes; the data accounting matches the jennings
 
 import json
 import re
-import subprocess
 
 import pytest
+from jennings.acme import assemble
 
 import ablate
 import cflow
@@ -232,12 +232,8 @@ def _pass(ctx, fn, text=SOURCE):
     return out
 
 
-def _psid(asm, out):
-    src = out / "player.asm"
-    src.write_text(asm, encoding="ascii")
-    sid = out / "player.sid"
-    subprocess.run(["acme", "-o", sid, src], check=True, capture_output=True)
-    return sid.read_bytes()
+def _psid(asm):
+    return assemble(asm)[0]
 
 
 def _generated(psid, out):
@@ -360,7 +356,7 @@ def fixture_player(tmp_path_factory):
     offset dispatch, an init loop (run on the host, its state in the .h), a code byte read
     as data."""
     out = tmp_path_factory.mktemp("player")
-    psid = _psid(fuzzplayer.HEADER + PLAYER, out)
+    psid = _psid(fuzzplayer.HEADER + PLAYER)
     return psid, ablate.ablate(
         psid, _generated(psid, out), frames=FRAMES, work=out / "w", verify=True
     )
@@ -394,7 +390,7 @@ def test_accounting(player):
 @pytest.mark.parametrize("style", ["smc", "jsr3"])
 def test_fuzz_exact(style, tmp_path):
     """Exact steps keep a fuzz player's SID writes."""
-    psid = _psid(fuzzplayer.player(style, 0), tmp_path)
+    psid = _psid(fuzzplayer.player(style, 0))
     report = ablate.ablate(
         psid,
         _generated(psid, tmp_path),

@@ -1,8 +1,8 @@
 {
  "pins": {
-  "deity-informant": "0.28.2",
+  "deity-informant": "0.28.4",
   "vagrant-moses": "0.17.0",
-  "jennings": "0.11.0",
+  "jennings": "0.14.0",
   "pysidtracker": "0.61.0"
  },
  "causes": {
@@ -10,13 +10,14 @@
    "A1": "each row copy's operand pointer, advanced by its row's length, read through a span's bounds-checked reader: its values are bounded to a byte, not to its table",
    "C1": "init's song guard: A outside the PSID header's songs (by construction); $10D4 the patched opcode cell S_F1 holding a value outside the set its stores write",
    "C3": "patched opcode cells tested against their opcodes (ADC or SBC) instead of selecting the operation by the state that patches them",
-   "D1": "span C0 $14D4-$1713 holds init's code $14D4-$1553 (the frequency reads at $13F4 index by Y = 2A after a BPL that leaves Y >= $80, which the lift's interval does not narrow) and play's code $168C-$1713 (reads at $1426/$143F indexed by a note byte)",
+   "D1": "span C0 $1554-$1713 holds play's code $168C-$1713, which the reads at $1426/$143F indexed by a note byte reach",
    "D4": "init's SID writes replayed from the CGEN_IO table instead of translated",
    "D5": "the row copies' operand cells (V0_* fields) and patched immediates and opcodes (S_*) play stores: real state"
   },
   "commando": {
-   "A1": "the song and pattern pointers ($F0-$F3) and the instrument rows at a constant plus 8 times an instrument byte, which the lift does not prove inside one region, read through span C0's bounds-checked reader",
-   "C1": "init's song guard: A outside the PSID header's songs (by construction); $10A1 the pattern pointer a song byte selects from its tables, guarded against the stack page and I/O",
+   "A1": "the song and pattern pointers ($F0-$F3) and the instrument rows at a constant plus 8 times an instrument byte, which the lift does not prove inside one region and which past the loaded program's end are no array's, read through span C0's bounds-checked reader; the pulse width stores into the instrument rows ($1212, $1275, $127C) write through oob_wr where their index's C type reaches past region R3",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction); $10A1 the pattern pointer a song byte selects from its tables, guarded against the stack page and I/O; $1212, $1275 and $127C the pulse width stores into the instrument row an instrument byte selects, guarded against a row past the loaded program",
+   "C3": "bounds tests before the oob_wr of the pulse width stores into the instrument rows",
    "D1": "span C0 starts at R1's origin $1368, init's code $1368-$139D: init runs on the host, so the post-init lift does not see it as instructions, and the song pointers' bounds-checked reads reach it",
    "D4": "init's SID writes (gates off, volume) replayed from the CGEN_IO table instead of translated"
   },
@@ -25,7 +26,6 @@
    "A2": "the command dispatches, JMPs through an operand cell, printed as switches over code addresses",
    "A3": "the status after an ADC or SBC packed for PHP: PLP restores it and its D bit decides the decimal trap",
    "C1": "init's song guard: A outside the PSID header's songs (by construction); $1612 the decimal flag set by the restored status; $1947 an effect byte past its table's extent",
-   "C2": "$1B25 \u2192 $1AFD, a jump back into $1AFD from command code the song never runs, which the run's listing decodes as data, so the construct map cannot name the edge",
    "C3": "a shared handler tail retests the dispatch selector (v5 == 0x24, 0x2A) after the switch; bounds tests before oob_wr",
    "D1": "the address operands init's relocator patches, held as 2-byte regions R5-R23 an oob_wr of unknown address may reach, and play's code $1939-$19D0 in span C3",
    "D4": "init's SID writes replayed from the CGEN_IO table instead of translated",
@@ -132,7 +132,19 @@
    "A1": [
     [
      "$1003",
-     "rdC0(R0[0] | ((uint16_t)R0[1] << 8), R1[0xF6 + v5])"
+     "oob_wr(R3_ORG + 0x52B + v53, v59)"
+    ],
+    [
+     "$1003",
+     "oob_wr(R3_ORG + 0x52B + v65, v66)"
+    ],
+    [
+     "$1003",
+     "oob_wr(R3_ORG + 0x52C + v53, v60)"
+    ],
+    [
+     "$1003",
+     "rdC0(R0[0] | ((uint16_t)R0[1] << 8), C0[C0_AT72 + v5])"
     ],
     [
      "$1003",
@@ -141,6 +153,34 @@
     [
      "$1003",
      "rdC0(R0[2] | ((uint16_t)R0[3] << 8), v29 + 1)"
+    ],
+    [
+     "$1003",
+     "rdC0(R3_ORG + 0x52B, v27)"
+    ],
+    [
+     "$1003",
+     "rdC0(R3_ORG + 0x52B, v53)"
+    ],
+    [
+     "$1003",
+     "rdC0(R3_ORG + 0x52B, v53)"
+    ],
+    [
+     "$1003",
+     "rdC0(R3_ORG + 0x52B, v65)"
+    ],
+    [
+     "$1003",
+     "rdC0(R3_ORG + 0x52C, v27)"
+    ],
+    [
+     "$1003",
+     "rdC0(R3_ORG + 0x52C, v53)"
+    ],
+    [
+     "$1003",
+     "rdC0(R3_ORG + 0x52C, v53)"
     ],
     [
      "$1003",
@@ -156,15 +196,15 @@
     ],
     [
      "$1003",
-     "rdC0(R3_ORG + 0x530, v32)"
+     "rdC0(R3_ORG + 0x530, v33)"
     ],
     [
      "$1003",
-     "rdC0(R3_ORG + 0x531, v32)"
+     "rdC0(R3_ORG + 0x531, v33)"
     ],
     [
      "$1003",
-     "rdC0(R3_ORG + 0x532, v32)"
+     "rdC0(R3_ORG + 0x532, v33)"
     ],
     [
      "$1003",
@@ -178,11 +218,37 @@
    "C1": [
     [
      "$1000",
-     "trap(2) deopt"
+     "trap(5) deopt"
     ],
     [
      "$10A1",
      "trap(1) deopt"
+    ],
+    [
+     "$1212",
+     "trap(2) deopt"
+    ],
+    [
+     "$1275",
+     "trap(3) deopt"
+    ],
+    [
+     "$127C",
+     "trap(4) deopt"
+    ]
+   ],
+   "C3": [
+    [
+     "$1003",
+     "bounds test before dispatch"
+    ],
+    [
+     "$1003",
+     "bounds test before dispatch"
+    ],
+    [
+     "$1003",
+     "bounds test before dispatch"
     ]
    ]
   },
@@ -290,14 +356,6 @@
   },
   "automatas": {
    "D1": [
-    [
-     "$14D4",
-     "C0 $14D4-$14E8 (21 B): C0@$0FE3, C0@$1022"
-    ],
-    [
-     "$14F2",
-     "C0 $14F2-$1553 (98 B): C0@$0FE3, C0@$1022"
-    ],
     [
      "$168C",
      "C0 $168C-$1713 (136 B): C0@$0FE3, C0@$1022"
@@ -1705,12 +1763,6 @@
      "trap(2) deopt"
     ]
    ],
-   "C2": [
-    [
-     "$1B25",
-     "goto $1AFD"
-    ]
-   ],
    "C3": [
     [
      "$19AB",
@@ -2365,16 +2417,6 @@
    ]
   },
   "fuzz-inlineargs-2": {
-   "A1": [
-    [
-     "$103D",
-     "rd(R4_ORG + v1)"
-    ],
-    [
-     "$103D",
-     "rd(R4_ORG + v1)"
-    ]
-   ],
    "A2": [
     [
      "$103D",

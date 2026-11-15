@@ -10,8 +10,16 @@ from transliterate import transliterate
 import constructs
 
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
+REINDEXED = (
+    "the voice index STX $148D saves before the guarded pulse width stores $1275/$127C is "
+    "reloaded by LDX $148D, not forwarded, so the per-voice tests read state at an index only "
+    "its type bounds and print as separate statements, not one condition"
+)
 UNCHECKED = {"region", "inline_repeat", "unrolled_stores", "per_voice_paths"}
-MISSED = {}
+MISSED = {
+    "commando:drum-condition": REINDEXED,
+    "commando:skydive-condition": REINDEXED,
+}
 #: The keys of an entry naming its instructions.
 PCS = (
     "head",
