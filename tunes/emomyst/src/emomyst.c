@@ -2,8 +2,8 @@
  * Emomyst.
  *
  * emomyst_data.h is generated from the original PSID: TABLES is the player's
- * table block as loaded (ADSR conversion, exponent and frequency tables, to 255
- * past the frequency-low table, where 8-bit indexed reads run into the code),
+ * table block as loaded (ADSR conversion, exponent and frequency tables),
+ * CODE_READ the code bytes after it that 8-bit indexed reads reach,
  * MUSIC the SWP music data from its base address. Pointers in the music are
  * relative to that base, as are the table addresses init reads from the SWP
  * header. Tempo effects write into the music's tempo table, so it is RAM.
@@ -13,16 +13,34 @@
  * PITCH + filter-controller voice behave as in the original.
  */
 #include <c64.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "driver.h"
 #include "emomyst_data.h"
 
 static uint8_t tab[] = {TABLES};
+static uint8_t code_read[] = {CODE_READ};
+static const uint16_t code_read_at[] = {CODE_READ_ADDRS};
 static uint8_t music[] = {MUSIC};
 
-/* player tables, by original address */
-#define T(addr) tab[(uint16_t)((addr) - TABLES_ORG)]
+/* The code byte at original address a that reads past the tables reach; NULL
+ * where the original's data holds none. */
+static __attribute__((noinline)) uint8_t *past_tab(uint16_t a) {
+  uint8_t i;
+  for (i = 0; i < sizeof code_read; ++i)
+    if (code_read_at[i] == a)
+      return code_read + i;
+  return NULL;
+}
+/* player tables and the code bytes past them, by original address */
+static __attribute__((noinline)) uint8_t T(uint16_t a) {
+  uint8_t *p;
+  if ((uint16_t)(a - TABLES_ORG) < sizeof tab)
+    return tab[(uint16_t)(a - TABLES_ORG)];
+  p = past_tab(a);
+  return p ? *p : 0;
+}
 #define ADSR_OFFS 0x1840
 #define ADSR_EXPTB 0x1850
 #define EXPTAB 0x185e
@@ -367,7 +385,7 @@ static void note_fx(uint8_t a) {
     nib_val = a;
     vibrato_fx(nib_hi(rd(I_VIB)));
   } else {
-    T(NOTE_FX_OPERAND) = T(NOTE_FX_OFFS + a);
+    *past_tab(NOTE_FX_OPERAND) = T(NOTE_FX_OFFS + a);
     switch (a) {
     case 0x79:
       w |= 2; /* sync */

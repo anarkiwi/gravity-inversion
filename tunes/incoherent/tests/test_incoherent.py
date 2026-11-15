@@ -5,6 +5,8 @@ import functools
 import pytest
 
 from incoherent_support import BUILD, FIX, SID, VARIANTS, build_prg, gen_prg, patched
+import footprint
+import gen_incoherent
 import sidtrace
 import transliterate
 
@@ -83,6 +85,17 @@ def test_variant_c_identical(name, psid):
     """A patched song generates the original's .c: song data is only in the .h."""
     variant = patched(psid, VARIANTS[name][0])
     assert transliterate.transliterate(variant, "gen.h")[0] == _base_c(psid)
+
+
+def test_data_footprint(psid):
+    """The hand C holds only the original's data, and every byte the original reads as data
+    but its operand state and the state and switch it names, through order list jumps and
+    over the patched variants."""
+    runs = [(psid, [2 * sidtrace.song_calls(psid, 0, FIX)], [0])]
+    runs += [(patched(psid, p), [VARIANT_FRAMES], [0]) for p, _ in VARIANTS.values()]
+    orig = footprint.Original(runs, 1)
+    got = footprint.check(orig, gen_incoherent.held(psid), gen_incoherent.named(psid))
+    assert got == footprint.CLEAN
 
 
 def test_mismatch_reported(psid, capsys):

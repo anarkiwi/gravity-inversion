@@ -4,7 +4,7 @@ import os
 import pathlib
 import subprocess
 
-from gen_ghouls import generate
+from gen_ghouls import BLOCK_DST, BLOCK_LEN, BLOCK_SRC, generate
 from sidtrace import psid_parts
 from transliterate import build
 
@@ -16,8 +16,7 @@ HVSC = FIXTURES
 DRIVER = ROOT.parent.parent / "c64"
 
 SONG_PTRS_SRC = 0x2A44  # block 0, copied to the song pointer tables at $730e
-SONG_INDEX = 0x2A0F
-PATTERN = 0x8800  # free after the copied blocks
+SONG_INDEX, SONG_BLOCK_B = 0x2A0F, 0x2A25
 
 
 def build_prg(psid, out_dir):
@@ -39,7 +38,8 @@ def gen_prg(psid, out_dir):
 
 
 def with_pattern(psid, song, pattern):
-    """`psid` with every voice of music `song` (0-6) playing `pattern` at PATTERN."""
+    """`psid` with every voice of music `song` (0-6) playing `pattern`, which replaces the
+    start of the song's second copy block."""
     load, _, _, image = psid_parts(psid)
     data = bytearray(psid)
     head = len(psid) - len(image)
@@ -47,8 +47,15 @@ def with_pattern(psid, song, pattern):
     def at(addr):
         return head + addr - load
 
+    def word(addr):
+        return data[at(addr)] | data[at(addr) + 1] << 8
+
+    block = 2 * data[at(SONG_BLOCK_B + song)]
+    assert len(pattern) <= word(BLOCK_LEN + block)
+    src, dst = word(BLOCK_SRC + block), word(BLOCK_DST + block)
+    data[at(src) : at(src) + len(pattern)] = pattern
     col = data[at(SONG_INDEX + song)]
     for voice in range(3):
-        data[at(SONG_PTRS_SRC + 14 * voice + col)] = PATTERN & 0xFF
-        data[at(SONG_PTRS_SRC + 14 * voice + 7 + col)] = PATTERN >> 8
-    return bytes(data) + bytes(PATTERN - load - len(image)) + bytes(pattern)
+        data[at(SONG_PTRS_SRC + 14 * voice + col)] = dst & 0xFF
+        data[at(SONG_PTRS_SRC + 14 * voice + 7 + col)] = dst >> 8
+    return bytes(data)

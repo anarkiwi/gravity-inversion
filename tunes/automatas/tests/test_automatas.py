@@ -7,6 +7,8 @@ import pytest
 from automatas_support import BUILD, FIX, SID, build_prg, gen_prg
 from vagrant_moses.memmap import PAL
 
+import footprint
+import gen_automatas
 import sidtrace
 import transliterate
 
@@ -104,6 +106,19 @@ def test_variant_c_identical(name, psid):
     """A patched song generates the original's .c: song data is only in the .h."""
     variant = _patched(psid, VARIANTS[name][0])
     assert transliterate.transliterate(variant, "gen.h")[0] == _base_c(psid)
+
+
+def test_data_footprint(psid):
+    """The hand C holds only the original's data, and every byte the original reads as data
+    but its operand state and the voice state it names, over the song and the patched
+    variants."""
+    runs = [(psid, [sidtrace.song_calls(psid, 0, FIX)], [0])]
+    runs += [
+        (_patched(psid, p), [VARIANT_CALLS], [0]) for p, _ in VARIANTS.values() if p
+    ]
+    orig = footprint.Original(runs, 1)
+    got = footprint.check(orig, gen_automatas.held(psid), gen_automatas.named(psid))
+    assert got == footprint.CLEAN
 
 
 def test_mismatch_reported(psid, capsys):

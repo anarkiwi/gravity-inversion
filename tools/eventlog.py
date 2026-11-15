@@ -216,16 +216,16 @@ def prg_reads(  # pylint: disable=too-many-arguments,too-many-positional-argumen
     prg, frames, song, spans, mask, max_cycles=sidtrace.MAX_CYCLES
 ):
     """``(writes, reads)``: a C64 build's SID writes per call and the ``READS`` (values 0) of
-    its play calls' reads of song data; ``spans`` maps its symbols to the ``(origin,
-    length)`` of the original bytes they hold."""
+    its play calls' reads of song data; ``spans`` maps its symbols to the original addresses
+    of the bytes they hold."""
     calls, addrs = array.array("I"), array.array("H")
 
     def observe(mpu, syms, log):
         where = {
-            syms[s] + i: org + i
-            for s, (org, n) in spans.items()
-            for i in range(n)
-            if mask[org + i]
+            syms[s] + i: a
+            for s, held in spans.items()
+            for i, a in enumerate(held)
+            if mask[a]
         }
 
         def on_read(a):

@@ -3,7 +3,11 @@
 import pytest
 
 from support import BUILD, STOP_FRAMES, VARIANTS, build_prg, patched
+import footprint
+import gen_data
 import sidtrace
+
+LOOP_LIMIT = 20000
 
 
 def test_psid_parts(ref_psid, labels):
@@ -36,6 +40,22 @@ def test_variant_identical(name, ref_psid, labels, tmp_path):
     assert sidtrace.diff(ref, sidtrace.trace_prg(prg, STOP_FRAMES)) is None
     if name == "stop":
         assert not ref[-1] and (0x18, 0x0F) in sum(ref[2:], [])
+
+
+def test_data_footprint(ref_psid, labels):
+    """The hand C holds only the original's data, and every byte the original reads as data
+    but its operand state and the state it names, up to the tune loop and over the patched
+    variants."""
+    frames = sidtrace.loop_frame(ref_psid, labels["posoff"], LOOP_LIMIT)
+    runs = [(ref_psid, [frames], [0])]
+    runs += [
+        (patched(ref_psid, labels, p), [STOP_FRAMES], [0]) for p in VARIANTS.values()
+    ]
+    orig = footprint.Original(runs, 1)
+    held = gen_data.held(ref_psid, labels)
+    assert (
+        footprint.check(orig, held, gen_data.named(ref_psid, labels)) == footprint.CLEAN
+    )
 
 
 def test_mismatch_reported(ref_psid, labels, tmp_path, capsys):

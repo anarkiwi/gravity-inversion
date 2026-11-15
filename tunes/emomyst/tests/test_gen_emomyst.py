@@ -23,6 +23,9 @@ def test_generate_is_byte_identical(gen, psid):
     assert len(tables) == gen.TABLES_END - gen.TABLES_ORG
     assert tables == image[gen.TABLES_ORG - load : gen.TABLES_END - load]
     assert f"#define TABLES_ORG 0x{gen.TABLES_ORG:04x}" in header
+    addrs = re.search(r"#define CODE_READ_ADDRS (.*)", header)[1].split(",")
+    assert [int(a, 16) for a in addrs] == list(gen.CODE_READ)
+    assert _array(header, "CODE_READ") == bytes(image[a - load] for a in gen.CODE_READ)
 
 
 def test_music_org_checks_init(gen, psid):

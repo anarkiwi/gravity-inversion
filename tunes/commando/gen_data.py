@@ -18,6 +18,26 @@ def c_bytes(data):
     return ",".join(f"0x{b:02x}" for b in data)
 
 
+def held(psid, labels):
+    """{array: original addresses}: the song data to the image's end, the frequency table
+    and the voice offsets."""
+    load, image = load_psid(psid)
+    return {
+        "song": range(labels["_songdata"], load + len(image)),
+        "v": range(labels["freqsl"], labels["posoff"]),
+        "sid": range(labels["sid"], labels["sid"] + 3),
+    }
+
+
+def named(_psid, labels):
+    """{state: original addresses} the C keeps as variables."""
+    return {
+        "voice state, status, tempo, temporaries": range(
+            labels["posoff"], labels["sid"]
+        )
+    }
+
+
 def generate(psid, labels):
     """Return header text for the song data image."""
     load, image = load_psid(psid)
