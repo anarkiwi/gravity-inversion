@@ -44,7 +44,7 @@ Hermit, SID-Wizard 1.x, SWP export (player at `$1000`, music at `$1c00`). HVSC
 
 Play calls the track routine `$124D` with X = `$0E`, `$07`, `$00` (`$11F4-$11FE`); init loops
 over the voices (`$1143-$1160`). `seq_read` (`$17C8`) picks one of three per-voice paths by X,
-and the slide effects enter a shared tail at `$1AB4` with Y preset. `tests/test_structure.py` checks the generated C recovers it.
+and the slide effects enter a shared tail at `$1AB4` with Y preset. `tools/residue.py` (kind C2) checks the generated C recovers it.
 
 ## Gotos
 
@@ -88,6 +88,6 @@ against `make check` and the variant tests) leaves only equivalent mutants.
 `tools/transliterate.py`; `make check` compares it over twice the HVSC length, and the tests on each
 patched variant.
 
-## Size
+## Residue
 
-`tests/test_sizes.py` bounds the hand and generated PRGs by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).
+`tests/test_residue.py` checks the generated C's residue sites against `tests/residue_manifest.json` ([docs/residue.md](../../docs/residue.md)); PRG sizes are in [docs/sizes.md](../../docs/sizes.md).

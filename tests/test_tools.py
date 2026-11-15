@@ -1,7 +1,9 @@
-"""Tests for tools/disasm.py and tools/survey.py on a real PSID."""
+"""Tests for tools/disasm.py, tools/survey.py and tools/sizes.py on a real PSID."""
 
 import hashlib
 import json
+import os
+import subprocess
 import re
 
 import pytest
@@ -9,7 +11,9 @@ import pytest
 import disasm
 import mutate
 import sidtrace
+import sizes
 import survey
+import constructs
 
 
 def _listing_bytes(text):
@@ -115,3 +119,31 @@ def test_mutate_apply():
     )
     with pytest.raises(AssertionError):
         mutate.apply("a = 1;", [["1", "a"], ["a", "b"]])
+
+
+def test_sizes(tmp_path, capsys):
+    """An empty player's code is the runtime alone; the CLI reports a built PRG beside its
+    original's instruction bytes, which lie inside its image."""
+    src = tmp_path / "empty.c"
+    src.write_text(
+        '#include "driver.h"\nvoid tune_init(uint8_t s) { (void)s; }\n'
+        "void tune_play(void) {}\n",
+        encoding="ascii",
+    )
+    driver = constructs.ROOT / "c64"
+    subprocess.run(
+        [os.environ.get("CC", "mos-c64-clang"), "-Os", f"-I{driver}", "-o"]
+        + [tmp_path / "empty.prg", src, driver / "driver.c"],
+        check=True,
+    )
+    elf = tmp_path / "empty.prg.elf"
+    runtime = sizes.sections(elf)[0][".text"]
+    assert sizes.usage(elf, runtime)[0] == 0
+    hand = constructs.ROOT / "tunes" / "commando" / "build" / "commando.prg.elf"
+    assert sizes.main(["commando", str(hand), "--runtime", str(runtime)]) == 0
+    out = capsys.readouterr().out
+    insns = int(re.search(r"original (\d+) instruction bytes", out)[1])
+    image = sidtrace.psid_parts(
+        (constructs.ROOT / constructs.load("commando")["psid"]).read_bytes()
+    )[3]
+    assert 0 < insns < len(image)

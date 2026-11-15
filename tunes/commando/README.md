@@ -28,7 +28,7 @@ writable.
 ## Voice structure in the original
 
 `mainloop` iterates the voices with X (`ldx #2` ... `dex` / `bmi`), Y = `sid,x`; the C keeps the
-loop. `putfreq` and `instrument` are code the original repeats inline. `tests/test_structure.py`
+loop. `putfreq` and `instrument` are code the original repeats inline. `tools/residue.py` (kind C2)
 checks the generated C keeps the voice loop.
 
 ## Verification
@@ -57,6 +57,6 @@ the PSID by `tools/transliterate.py`; `make check` compares it to the tune loop.
   original reads an address high byte as data, so its writes depend on the load address);
 - the `.c` has no `goto` and is under twice the playroutine source.
 
-## Size
+## Residue
 
-`tests/test_sizes.py` bounds the hand and generated PRGs by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).
+`tests/test_residue.py` checks the generated C's residue sites against `tests/residue_manifest.json` ([docs/residue.md](../../docs/residue.md)); PRG sizes are in [docs/sizes.md](../../docs/sizes.md).

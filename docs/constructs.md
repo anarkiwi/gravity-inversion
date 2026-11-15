@@ -69,7 +69,7 @@ repeated inline code) and are not lifted. Seventeen entries record where the han
 the procedure (`hand_differs`): a loop back edge written as a goto, nested copy loops written as
 one, a shared suffix outlined as a helper, gotos into a subroutine, gotos at joins with a
 structured form, and flags or outlined helpers where an edge has none. There the rule wins: the
-generated C must take the rule's form (`tests/test_structure.py` compares its gotos with the map's
+generated C must take the rule's form (`tools/residue.py` lists its gotos beyond the map's
 `goto` entries), and the hand C's form is a readability choice that costs size.
 
 The number of passes the facts need is proved in [passes.md](passes.md).

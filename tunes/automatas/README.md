@@ -43,7 +43,7 @@ SID writes at `$1022`/`$1053`/`$1084` (`$31` apart, chained by `JMP`), the patte
 `$112A`/`$11B2`/`$123A` (`$88` apart, fall-through), and six sidTAB copies from `$12BE`
 (`$31` apart, each calling `$168C`). Pitch and pulse is a real loop over X = `$62`, `$31`, 0
 (`SBX #$31`). The C loops over `struct voice`. `tools/copies.py` lists the copies;
-`tests/test_structure.py` checks the generated C recovers it.
+`tools/residue.py` (kind C2) checks the generated C recovers it.
 
 ## Verification
 
@@ -61,6 +61,6 @@ the tests through the arranger loop twice and on the patched songs. Init, with i
 runs on `tools/transliterate.py`'s C64 (a 6581): the model is `.h` state, so on an 8580 the generated
 C plays as the original does on a 6581.
 
-## Size
+## Residue
 
-`tests/test_sizes.py` bounds the hand and generated PRGs by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).
+`tests/test_residue.py` checks the generated C's residue sites against `tests/residue_manifest.json` ([docs/residue.md](../../docs/residue.md)); PRG sizes are in [docs/sizes.md](../../docs/sizes.md).
