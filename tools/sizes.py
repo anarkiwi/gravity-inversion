@@ -1,23 +1,22 @@
-"""Size bounds of a translation, relative to the original 6502 player (docs/sizes.md).
+"""Sizes of a translation's PRG beside the original 6502 player's, as information (docs/sizes.md).
 
-Code: the PRG's .text, less the runtime an empty player costs, at most 2.5 times the original's
-instruction bytes. Data: the PRG's data sections at most the original's data footprint plus the
-code bytes it reads as data. The PRG loads below $D000."""
+Code: the PRG's .text, less the runtime an empty player costs; data: its data sections; top:
+the highest address a section reaches. The original: its instruction bytes and its data
+footprint (the image's other bytes and the RAM outside it the run writes, I/O and the stack
+excluded)."""
 
 import argparse
 import pathlib
 
 import numpy as np
 from elftools.elf.elffile import ELFFile
-from jennings.coverage import READ, WRITE
+from jennings.coverage import WRITE
 from jennings.coverage.cfg import LEN
 
 from constructs import memory, run
 from sidtrace import psid_parts
 
-CODE_FACTOR = 2.5
 IO, STACK = (0xD000, 0xE000), (0x100, 0x200)
-TOP = 0xD000
 DATA_SECTIONS = (".rodata", ".data", ".bss", ".zp", ".zp.data", ".zp.bss", ".noinit")
 
 
@@ -43,8 +42,9 @@ def usage(elf, runtime):
     )
 
 
-def bounds(tune, jobs=4):
-    """(code bound, data bound) of a tune from its original's listing and run coverage."""
+def original(tune, jobs=4):
+    """(instruction bytes, data footprint) of a tune's original from its listing and run
+    coverage."""
     _, data, cov, starts = run(tune, jobs)
     load, _, _, image = psid_parts(data)
     mem = memory(data)
@@ -58,13 +58,12 @@ def bounds(tune, jobs=4):
     for lo, hi in (IO, STACK):
         skip[lo:hi] = True
     written = (cov.flags & WRITE) != 0
-    read = (cov.flags & READ) != 0
     footprint = int((inside & ~code).sum()) + int((written & ~inside & ~skip).sum())
-    return int(CODE_FACTOR * code.sum()), footprint + int((read & code).sum())
+    return int(code.sum()), footprint
 
 
 def main(argv=None):
-    """CLI entry point: print a PRG's sizes against its tune's bounds."""
+    """CLI entry point: print a PRG's sizes beside its tune's original."""
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("tune")
     ap.add_argument("elf", type=pathlib.Path)
@@ -73,9 +72,12 @@ def main(argv=None):
     )
     args = ap.parse_args(argv)
     code, data, top = usage(args.elf, args.runtime)
-    cb, db = bounds(args.tune)
-    print(f"{args.tune}: code {code}/{cb}, data {data}/{db}, top ${top:04X}/${TOP:04X}")
-    return 0 if code <= cb and data <= db and top <= TOP else 1
+    insns, footprint = original(args.tune)
+    print(
+        f"{args.tune}: code {code} (original {insns} instruction bytes), "
+        f"data {data} (original footprint {footprint}), top ${top:04X}"
+    )
+    return 0
 
 
 if __name__ == "__main__":

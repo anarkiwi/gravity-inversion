@@ -42,7 +42,7 @@ without hard restart) are read from the code.
 
 The channel routine `$0996` is X-indexed: play calls it with `JSR` for X = 0 and 7, then sets
 X = `$0E` and falls into it, its `RTS` returning from play; init does the same into `$0922`. The
-C calls `voice_play` per voice. `tests/test_structure.py` checks the generated C recovers it.
+C calls `voice_play` per voice. `tools/residue.py` (kind C2) checks the generated C recovers it.
 
 ## Gotos
 
@@ -76,9 +76,9 @@ command byte below `$40`.
 
 `make` also builds `build/gen.prg` from `build/gen/incoherent.c` and `.h`, generated from the PSID by
 `tools/transliterate.py`; `make check` compares it over the HVSC length, and the tests over twice that,
-without init and on the patched songs above. `tests/test_structure.py` compares its gotos with
+without init and on the patched songs above. `tools/residue.py` (kind C2) lists its gotos beyond
 `constructs.json`'s.
 
-## Size
+## Residue
 
-`tests/test_sizes.py` bounds the hand and generated PRGs by the original 6502 player ([docs/sizes.md](../../docs/sizes.md)).
+`tests/test_residue.py` checks the generated C's residue sites against `tests/residue_manifest.json` ([docs/residue.md](../../docs/residue.md)); PRG sizes are in [docs/sizes.md](../../docs/sizes.md).

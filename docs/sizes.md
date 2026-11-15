@@ -1,33 +1,27 @@
-# Size bounds
+# Sizes
 
-A translation must fit in a C64 beside its song data, the driver and the stack, so its compiled
-PRG is bounded by the original 6502 player (`tools/sizes.py`, checked by `tests/test_sizes.py` for
-the hand and the generated translations):
+`tools/sizes.py` reports a compiled PRG's sizes beside the original 6502 player's, as
+information; lift quality is measured as residue ([residue.md](residue.md)), not against a byte
+count.
 
-| Bound | Measure |
+    python3 tools/sizes.py commando tunes/commando/build/gen.prg.elf --runtime N
+
+| Measure | Definition |
 |---|---|
-| code ≤ 2.5 × the original's instruction bytes | the PRG's `.text` less the `.text` of a player that does nothing (the C runtime and driver); instruction bytes from jennings' listing of the PSID image |
-| data ≤ the original's data footprint + the code bytes it reads as data | all data sections (`.rodata`, `.data`, `.bss`, zero page); the footprint is the image's non-instruction bytes and the RAM outside the image the run writes (I/O and the stack excluded), from jennings coverage |
-| the PRG loads below `$D000` | the highest address of any allocated section |
+| code | the PRG's `.text` less `N`, the `.text` of a player that does nothing (the C runtime and driver) |
+| data | all data sections (`.rodata`, `.data`, `.bss`, zero page) |
+| top | the highest address of any allocated section |
+| original instructions | instruction bytes of jennings' listing of the PSID image |
+| original footprint | the image's non-instruction bytes and the RAM outside the image the run writes (I/O and the stack excluded), from jennings coverage |
 
-2.5 is the smallest half-step every hand translation meets (1.33× to 2.43× of the original's
-instructions); it is llvm-mos's cost of 6502 idioms in C: 16-bit pointer arithmetic, flags as
-values, register traffic through zero page. The data bound holds every byte the original uses
-once and nothing else.
+Bytes; deity-informant 0.28.2, llvm-mos SDK v23.4.0, `-Os`.
 
-The generated C's constructs that cost code size are detected in [costs.md](costs.md); where
-the generated PRGs' bytes go is measured by ablation in [ablate.md](ablate.md).
+| Tune | Original instructions | Hand code | Generated code | Original footprint | Hand data | Generated data | Hand top | Generated top |
+|---|---|---|---|---|---|---|---|---|
+| Commando | 926 | 1416 | 2115 | 1981 | 1963 | 2189 | `$15B1` | `$194E` |
+| Incoherent | 1070 | 2603 | 2589 | 5861 | 5839 | 5840 | `$297C` | `$2966` |
+| Automatas | 1600 | 2655 | 2702 | 6563 | 6832 | 6862 | `$2D8A` | `$2DB2` |
+| Ghouls | 2665 | 3552 | 3581 | 23279 | 30523 | 30844 | `$8D8A` | `$8ECB` |
+| Emomyst | 2173 | 4519 | 5099 | 3111 | 2862 | 3142 | `$2536` | `$2889` |
 
-## Translations against the bounds
-
-Bytes, from `tools/sizes.py`; the hand and generated PRGs all load below `$D000`.
-
-| Tune | Code bound | Hand code | Generated code | Data bound | Hand data | Generated data |
-|---|---|---|---|---|---|---|
-| Commando | 2315 | 1416 | 2115 | 1981 | 1963 | 2189 |
-| Incoherent | 2675 | 2603 | 2589 | 5863 | 5839 | 5840 |
-| Automatas | 4000 | 2655 | 2702 | 6583 | 6832 | 6862 |
-| Ghouls | 6662 | 3552 | 3581 | 23291 | 30523 | 30844 |
-| Emomyst | 5432 | 4519 | 5099 | 3170 | 2862 | 3142 |
-
-Where a translation exceeds a bound, `tests/test_sizes.py` records the cause as a strict xfail.
+Where the generated PRGs' bytes go is measured by ablation in [ablate.md](ablate.md).

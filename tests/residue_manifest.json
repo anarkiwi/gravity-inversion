@@ -1,0 +1,2778 @@
+{
+ "pins": {
+  "deity-informant": "0.28.2",
+  "vagrant-moses": "0.17.0",
+  "jennings": "0.11.0",
+  "pysidtracker": "0.61.0"
+ },
+ "causes": {
+  "automatas": {
+   "A1": "each row copy's operand pointer, advanced by its row's length, read through a span's bounds-checked reader: its values are bounded to a byte, not to its table",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction); $10D4 the patched opcode cell S_F1 holding a value outside the set its stores write",
+   "C3": "patched opcode cells tested against their opcodes (ADC or SBC) instead of selecting the operation by the state that patches them",
+   "D1": "span C0 $14D4-$1713 holds init's code $14D4-$1553 (the frequency reads at $13F4 index by Y = 2A after a BPL that leaves Y >= $80, which the lift's interval does not narrow) and play's code $168C-$1713 (reads at $1426/$143F indexed by a note byte)",
+   "D4": "init's SID writes replayed from the CGEN_IO table instead of translated",
+   "D5": "the row copies' operand cells (V0_* fields) and patched immediates and opcodes (S_*) play stores: real state"
+  },
+  "commando": {
+   "A1": "the song and pattern pointers ($F0-$F3) and the instrument rows at a constant plus 8 times an instrument byte, which the lift does not prove inside one region, read through span C0's bounds-checked reader",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction); $10A1 the pattern pointer a song byte selects from its tables, guarded against the stack page and I/O",
+   "D1": "span C0 starts at R1's origin $1368, init's code $1368-$139D: init runs on the host, so the post-init lift does not see it as instructions, and the song pointers' bounds-checked reads reach it",
+   "D4": "init's SID writes (gates off, volume) replayed from the CGEN_IO table instead of translated"
+  },
+  "emomyst": {
+   "A1": "init's relocator runs on the host: the operands it patches from the SWP header words are pointers into the song play reads through the spans' bounds-checked readers; stores through them dispatch by oob_wr",
+   "A2": "the command dispatches, JMPs through an operand cell, printed as switches over code addresses",
+   "A3": "the status after an ADC or SBC packed for PHP: PLP restores it and its D bit decides the decimal trap",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction); $1612 the decimal flag set by the restored status; $1947 an effect byte past its table's extent",
+   "C2": "$1B25 \u2192 $1AFD, a jump back into $1AFD from command code the song never runs, which the run's listing decodes as data, so the construct map cannot name the edge",
+   "C3": "a shared handler tail retests the dispatch selector (v5 == 0x24, 0x2A) after the switch; bounds tests before oob_wr",
+   "D1": "the address operands init's relocator patches, held as 2-byte regions R5-R23 an oob_wr of unknown address may reach, and play's code $1939-$19D0 in span C3",
+   "D4": "init's SID writes replayed from the CGEN_IO table instead of translated",
+   "D5": "the operands the relocator and play patch, held as S_* variables: pointers into the song and play's own state"
+  },
+  "fuzz-brk": {
+   "A1": "a read of voice state at a region origin plus the voice index (values 0, 7, 14) the lift does not prove inside one region, dispatched through rd()",
+   "A2": "the BRK vector the program stores at $FFFE, compared with its handler",
+   "A3": "the status byte PHP or BRK pushes, packed so RTI's restore can test its D bit",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction); the BRK vector holding another address (an unresolved indirect jump); the decimal flag set by the status RTI restores"
+  },
+  "fuzz-decimal": {
+   "A1": "a read of voice state at a region origin plus the voice index (values 0, 7, 14) the lift does not prove inside one region, dispatched through rd()",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+  },
+  "fuzz-fallthrough": {
+   "A1": "a read of voice state at a region origin plus the voice index (values 0, 7, 14) the lift does not prove inside one region, dispatched through rd()",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+  },
+  "fuzz-indx": {
+   "A1": "the (zp,X) pointers init sets are bounded to 16 bits, not the values init leaves, so the load reads span C0's bounds-checked reader and the store dispatches through wr() and codechk()",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction); the pointer guarded against the stack page and I/O; a store into code",
+   "D1": "span C0 holds the player's code, which the (zp,X) store of unknown address may hit"
+  },
+  "fuzz-inlineargs": {
+   "A1": "a read of voice state at a region origin plus the voice index (values 0, 7, 14) the lift does not prove inside one region, dispatched through rd()",
+   "A2": "JSR's return address stored as the stack bytes the subroutine pulls to read its inline argument and pushes back advanced",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+  },
+  "fuzz-jam": {
+   "A1": "a read of voice state at a region origin plus the voice index (values 0, 7, 14) the lift does not prove inside one region, dispatched through rd(); the guard byte $31F0 past the image, which nothing writes, read through rd()",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction); the JAM opcode the motif places (by construction)"
+  },
+  "fuzz-jsr3": {
+   "A1": "a read of voice state at a region origin plus the voice index (values 0, 7, 14) the lift does not prove inside one region, dispatched through rd()",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+  },
+  "fuzz-loop": {
+   "A1": "a read of voice state at a region origin plus the voice index (values 0, 7, 14) the lift does not prove inside one region, dispatched through rd()",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+  },
+  "fuzz-rmw": {
+   "A1": "a read of voice state at a region origin plus the voice index (values 0, 7, 14) the lift does not prove inside one region, dispatched through rd()",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction)",
+   "D5": "the immediate ISC increments in place, held as a variable: real state (by construction)"
+  },
+  "fuzz-rti": {
+   "A1": "a read of voice state at a region origin plus the voice index (values 0, 7, 14) the lift does not prove inside one region, dispatched through rd()",
+   "A2": "the return address RTI pops from the pushed table pair, compared with each target",
+   "A3": "the status byte PHP or BRK pushes, packed so RTI's restore can test its D bit",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction); the decimal flag set by the status RTI restores"
+  },
+  "fuzz-skip": {
+   "A1": "a read of voice state at a region origin plus the voice index (values 0, 7, 14) the lift does not prove inside one region, dispatched through rd()",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+  },
+  "fuzz-smc": {
+   "C1": "init's song guard: A outside the PSID header's songs (by construction)",
+   "D1": "each copy reads its own code byte (C0[K2[k]]): span C0 holds the copies' code between the three bytes read",
+   "D5": "the copies' operand cells, one field array per cell: real state (by construction)"
+  },
+  "fuzz-stackswitch": {
+   "A1": "a read of voice state at a region origin plus the voice index (values 0, 7, 14) the lift does not prove inside one region, dispatched through rd()",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+  },
+  "fuzz-unrolled": {
+   "C1": "init's song guard: A outside the PSID header's songs (by construction)",
+   "D2": "one state field per voice at the copies' stride held as a run over the three copies: the bytes between the copies' fields are held and never written"
+  },
+  "fuzz-vflag": {
+   "A1": "a read of voice state at a region origin plus the voice index (values 0, 7, 14) the lift does not prove inside one region, dispatched through rd()",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+  },
+  "ghouls": {
+   "A1": "each voice's song pointer may hold 0 (init clears zero page; a loop end restores the cleared loop pointer) or only a high byte an effect list wrote, so its reads are span C3's bounds-checked reads; the call command's return stack pushes are bounds-checked against the stack (oob_wr past it)",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction); $6368 a song command byte outside $80-$94 indexing the command table past its extent",
+   "C3": "the bounds tests of the return stack pushes before oob_wr",
+   "D1": "init's operand bytes $29D8 and $6219-$621A, which init patches per song (the copy tables replay the writes) and play never reads; the effect handlers' code between the per-voice return stacks in span C2, which the call command pushes at an unbounded depth; init's code $7316-$733E inside the song span C3",
+   "D2": "$86E9-$914E between the songs' copies past the image, in the song pointers' span C3: nothing writes it",
+   "D4": "init's per-song state (song pointers, tempo, SID setup) replayed by copy, literal and I/O tables instead of translated",
+   "D5": "the per-voice operand cells (V*_f* fields) and scalars play patches: real state"
+  },
+  "incoherent": {
+   "A1": "the sequence and pattern pointers read through span C0's bounds-checked reader",
+   "A2": "the command dispatches, JMPs through an operand cell play stores from a table, printed as switches over code addresses",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction); $09B8 and $0ABE a song byte indexing a table past its extent ($F, 4)",
+   "D5": "operand cells play patches (instrument and effect parameters, a computed jump's operand) held as S_* variables: real state"
+  }
+ },
+ "sites": {
+  "commando": {
+   "D1": [
+    [
+     "$1368",
+     "C0 $1368-$139D (54 B): rdC0@$1003"
+    ]
+   ],
+   "D4": [
+    [
+     "$1000",
+     "4 I/O writes"
+    ]
+   ],
+   "A1": [
+    [
+     "$1003",
+     "rdC0(R0[0] | ((uint16_t)R0[1] << 8), R1[0xF6 + v5])"
+    ],
+    [
+     "$1003",
+     "rdC0(R0[2] | ((uint16_t)R0[3] << 8), v16 + 1)"
+    ],
+    [
+     "$1003",
+     "rdC0(R0[2] | ((uint16_t)R0[3] << 8), v29 + 1)"
+    ],
+    [
+     "$1003",
+     "rdC0(R3_ORG + 0x52D, v27)"
+    ],
+    [
+     "$1003",
+     "rdC0(R3_ORG + 0x52E, v27)"
+    ],
+    [
+     "$1003",
+     "rdC0(R3_ORG + 0x52F, v27)"
+    ],
+    [
+     "$1003",
+     "rdC0(R3_ORG + 0x530, v32)"
+    ],
+    [
+     "$1003",
+     "rdC0(R3_ORG + 0x531, v32)"
+    ],
+    [
+     "$1003",
+     "rdC0(R3_ORG + 0x532, v32)"
+    ],
+    [
+     "$1003",
+     "rdC0(v12, v13 + 1)"
+    ],
+    [
+     "$1003",
+     "rdC0(v12, v13)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(2) deopt"
+    ],
+    [
+     "$10A1",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "incoherent": {
+   "D5": [
+    [
+     "$088F",
+     "S_8C: operand of $088E, stored by $0886"
+    ],
+    [
+     "$08A5",
+     "S_A2: operand of $08A4, stored by $0ABB, $0C33"
+    ],
+    [
+     "$08FF",
+     "S_FC: operand of $08FE, stored by $0914"
+    ],
+    [
+     "$0933",
+     "S_130: operand of $0932, stored by $0843, $0911, $0978, $0A48"
+    ],
+    [
+     "$0937",
+     "S_134: operand of $0936, stored by $0840, $095A, $0967, $0A4D"
+    ],
+    [
+     "$097C",
+     "S_179: operand of $097B, stored by $0847, $0954, $0964"
+    ],
+    [
+     "$0981",
+     "S_17E: operand of $0980, stored by $090E, $0948"
+    ],
+    [
+     "$0986",
+     "S_183: operand of $0985, stored by $0942"
+    ],
+    [
+     "$0A66",
+     "S_263: operand of $0A65, stored by $09BB"
+    ],
+    [
+     "$0A72",
+     "S_26F: operand of $0A71, stored by $09BE"
+    ],
+    [
+     "$0AFC",
+     "S_2F9: operand of $0AFB, stored by $0ADC"
+    ],
+    [
+     "$0B00",
+     "S_2FD: operand of $0AFF, stored by $0AC1, $0C39"
+    ]
+   ],
+   "A1": [
+    [
+     "$0996",
+     "rdC0(((uint16_t)v102 << 8) | v101, v103)"
+    ],
+    [
+     "$0996",
+     "rdC0(R0[0] | ((uint16_t)R0[1] << 8), v103 + 1)"
+    ],
+    [
+     "$0996",
+     "rdC0(R0[0] | ((uint16_t)R0[1] << 8), v112 + 1)"
+    ],
+    [
+     "$0996",
+     "rdC0(R0[0] | ((uint16_t)R0[1] << 8), v116 + 1)"
+    ],
+    [
+     "$0996",
+     "rdC0(R0[0] | ((uint16_t)R0[1] << 8), v118 + 1)"
+    ]
+   ],
+   "A2": [
+    [
+     "$0A65",
+     "switch over 11 code addresses"
+    ],
+    [
+     "$0AFF",
+     "switch over 3 code addresses"
+    ],
+    [
+     "$0C49",
+     "switch over 8 code addresses"
+    ]
+   ],
+   "C1": [
+    [
+     "$0800",
+     "trap(3) deopt"
+    ],
+    [
+     "$09B8",
+     "trap(1) deopt"
+    ],
+    [
+     "$0ABE",
+     "trap(2) deopt"
+    ]
+   ]
+  },
+  "automatas": {
+   "D1": [
+    [
+     "$14D4",
+     "C0 $14D4-$14E8 (21 B): C0@$0FE3, C0@$1022"
+    ],
+    [
+     "$14F2",
+     "C0 $14F2-$1553 (98 B): C0@$0FE3, C0@$1022"
+    ],
+    [
+     "$168C",
+     "C0 $168C-$1713 (136 B): C0@$0FE3, C0@$1022"
+    ]
+   ],
+   "D4": [
+    [
+     "$0FD0",
+     "30 I/O writes"
+    ]
+   ],
+   "D5": [
+    [
+     "$0FE4",
+     "S_1: operand of $0FE3, stored by $0FF2"
+    ],
+    [
+     "$1023",
+     "V0_f0A[0]: operand of $1022, stored by indexed or indirect stores"
+    ],
+    [
+     "$1025",
+     "V0_f0C[0]: operand of $1024, stored by indexed or indirect stores"
+    ],
+    [
+     "$102D",
+     "V0_f14[0]: operand of $102C, stored by indexed or indirect stores"
+    ],
+    [
+     "$102F",
+     "V0_f16[0]: operand of $102E, stored by indexed or indirect stores"
+    ],
+    [
+     "$1037",
+     "V0_f1E[0]: operand of $1036, stored by indexed or indirect stores"
+    ],
+    [
+     "$1039",
+     "V0_f20[0]: operand of $1038, stored by indexed or indirect stores"
+    ],
+    [
+     "$103B",
+     "V0_f22[0]: operand of $103A, stored by indexed or indirect stores"
+    ],
+    [
+     "$103D",
+     "V0_f24[0]: operand of $103C, stored by indexed or indirect stores"
+    ],
+    [
+     "$1054",
+     "V0_f0A[1]: operand of $1053, stored by indexed or indirect stores"
+    ],
+    [
+     "$1056",
+     "V0_f0C[1]: operand of $1055, stored by indexed or indirect stores"
+    ],
+    [
+     "$105E",
+     "V0_f14[1]: operand of $105D, stored by indexed or indirect stores"
+    ],
+    [
+     "$1060",
+     "V0_f16[1]: operand of $105F, stored by indexed or indirect stores"
+    ],
+    [
+     "$1068",
+     "V0_f1E[1]: operand of $1067, stored by indexed or indirect stores"
+    ],
+    [
+     "$106A",
+     "V0_f20[1]: operand of $1069, stored by indexed or indirect stores"
+    ],
+    [
+     "$106C",
+     "V0_f22[1]: operand of $106B, stored by indexed or indirect stores"
+    ],
+    [
+     "$106E",
+     "V0_f24[1]: operand of $106D, stored by indexed or indirect stores"
+    ],
+    [
+     "$1085",
+     "V0_f0A[2]: operand of $1084, stored by indexed or indirect stores"
+    ],
+    [
+     "$1087",
+     "V0_f0C[2]: operand of $1086, stored by indexed or indirect stores"
+    ],
+    [
+     "$108F",
+     "V0_f14[2]: operand of $108E, stored by indexed or indirect stores"
+    ],
+    [
+     "$1091",
+     "V0_f16[2]: operand of $1090, stored by indexed or indirect stores"
+    ],
+    [
+     "$1099",
+     "V0_f1E[2]: operand of $1098, stored by indexed or indirect stores"
+    ],
+    [
+     "$109B",
+     "V0_f20[2]: operand of $109A, stored by indexed or indirect stores"
+    ],
+    [
+     "$109D",
+     "V0_f22[2]: operand of $109C, stored by indexed or indirect stores"
+    ],
+    [
+     "$109F",
+     "V0_f24[2]: operand of $109E, stored by indexed or indirect stores"
+    ],
+    [
+     "$10AA",
+     "S_C7: operand of $10A9, stored by $1723"
+    ],
+    [
+     "$10AF",
+     "S_CC: operand of $10AE, stored by $1731"
+    ],
+    [
+     "$10B6",
+     "S_D3: operand of $10B5, stored by $10BA, $174C"
+    ],
+    [
+     "$10B8",
+     "S_D5: opcode of $10B8, stored by $1767, $1778"
+    ],
+    [
+     "$10B9",
+     "S_D6: operand of $10B8, stored by $1754, $175E, $176E"
+    ],
+    [
+     "$10BE",
+     "S_DB: operand of $10BD, stored by $10C6, $174F"
+    ],
+    [
+     "$10BF",
+     "S_DC: opcode of $10BF, stored by $176A, $177B"
+    ],
+    [
+     "$10C0",
+     "S_DD: operand of $10BF, stored by $1757, $1762, $1773"
+    ],
+    [
+     "$10CA",
+     "S_E7: operand of $10C9, stored by $173C"
+    ],
+    [
+     "$10CE",
+     "S_EB: operand of $10CD, stored by indexed or indirect stores"
+    ],
+    [
+     "$10D4",
+     "S_F1: opcode of $10D4, stored by indexed or indirect stores"
+    ],
+    [
+     "$10D8",
+     "S_F5: opcode of $10D8, stored by $100C, $1013"
+    ],
+    [
+     "$10D9",
+     "S_F6: operand of $10D8, stored by $10DE, $1197, $121F, $12A7"
+    ],
+    [
+     "$10EB",
+     "S_108: operand of $10EA, stored by $1123"
+    ],
+    [
+     "$1129",
+     "V1_f00[0]: operand of $1128, stored by $10E1, $112C, $11AB"
+    ],
+    [
+     "$114A",
+     "V1_f21[0]: operand of $1149, stored by $113A"
+    ],
+    [
+     "$1161",
+     "V1_f38[0]: operand of $1160, stored by $1150"
+    ],
+    [
+     "$1165",
+     "V1_f3C[0]: operand of $1164, stored by $10FB, $11A1"
+    ],
+    [
+     "$1166",
+     "V1_f3D[0]: operand of $1164, stored by $1101, $11A6"
+    ],
+    [
+     "$116F",
+     "V1_f46[0]: operand of $116E, stored by $1154"
+    ],
+    [
+     "$1173",
+     "V1_f4A[0]: operand of $1172, stored by $1137"
+    ],
+    [
+     "$1174",
+     "V1_f4B[0]: operand of $1172, stored by $1143"
+    ],
+    [
+     "$117D",
+     "V1_f54[0]: operand of $117C, stored by $1158"
+    ],
+    [
+     "$1181",
+     "V1_f58[0]: operand of $1180, stored by $1134"
+    ],
+    [
+     "$1182",
+     "V1_f59[0]: operand of $1180, stored by $1140"
+    ],
+    [
+     "$1194",
+     "V1_f6B[0]: operand of $1193, stored by $114C"
+    ],
+    [
+     "$11B1",
+     "V1_f00[1]: operand of $11B0, stored by $10E4, $11B4, $1233"
+    ],
+    [
+     "$11D2",
+     "V1_f21[1]: operand of $11D1, stored by $11C2"
+    ],
+    [
+     "$11E9",
+     "V1_f38[1]: operand of $11E8, stored by $11D8"
+    ],
+    [
+     "$11ED",
+     "V1_f3C[1]: operand of $11EC, stored by $110A, $1229"
+    ],
+    [
+     "$11EE",
+     "V1_f3D[1]: operand of $11EC, stored by $1110, $122E"
+    ],
+    [
+     "$11F7",
+     "V1_f46[1]: operand of $11F6, stored by $11DC"
+    ],
+    [
+     "$11FB",
+     "V1_f4A[1]: operand of $11FA, stored by $11BF"
+    ],
+    [
+     "$11FC",
+     "V1_f4B[1]: operand of $11FA, stored by $11CB"
+    ],
+    [
+     "$1205",
+     "V1_f54[1]: operand of $1204, stored by $11E0"
+    ],
+    [
+     "$1209",
+     "V1_f58[1]: operand of $1208, stored by $11BC"
+    ],
+    [
+     "$120A",
+     "V1_f59[1]: operand of $1208, stored by $11C8"
+    ],
+    [
+     "$121C",
+     "V1_f6B[1]: operand of $121B, stored by $11D4"
+    ],
+    [
+     "$1239",
+     "V1_f00[2]: operand of $1238, stored by $10E7, $123C, $12BB"
+    ],
+    [
+     "$125A",
+     "V1_f21[2]: operand of $1259, stored by $124A"
+    ],
+    [
+     "$1271",
+     "V1_f38[2]: operand of $1270, stored by $1260"
+    ],
+    [
+     "$1275",
+     "V1_f3C[2]: operand of $1274, stored by $1119, $12B1"
+    ],
+    [
+     "$1276",
+     "V1_f3D[2]: operand of $1274, stored by $111F, $12B6"
+    ],
+    [
+     "$127F",
+     "V1_f46[2]: operand of $127E, stored by $1264"
+    ],
+    [
+     "$1283",
+     "V1_f4A[2]: operand of $1282, stored by $1247"
+    ],
+    [
+     "$1284",
+     "V1_f4B[2]: operand of $1282, stored by $1253"
+    ],
+    [
+     "$128D",
+     "V1_f54[2]: operand of $128C, stored by $1268"
+    ],
+    [
+     "$1291",
+     "V1_f58[2]: operand of $1290, stored by $1244"
+    ],
+    [
+     "$1292",
+     "V1_f59[2]: operand of $1290, stored by $1250"
+    ],
+    [
+     "$12A4",
+     "V1_f6B[2]: operand of $12A3, stored by $125C"
+    ],
+    [
+     "$12BF",
+     "V2_f00[0]: operand of $12BE, stored by $116A, $12C4, $12E0"
+    ],
+    [
+     "$12CE",
+     "V2_f0F[0]: operand of $12CD, stored by $1167, $12E7"
+    ],
+    [
+     "$12F0",
+     "V2_f00[1]: operand of $12EF, stored by $11F2, $12F5, $1311"
+    ],
+    [
+     "$12FF",
+     "V2_f0F[1]: operand of $12FE, stored by $11EF, $1318"
+    ],
+    [
+     "$1321",
+     "V2_f00[2]: operand of $1320, stored by $127A, $1326, $1342"
+    ],
+    [
+     "$1330",
+     "V2_f0F[2]: operand of $132F, stored by $1277, $1349"
+    ],
+    [
+     "$1352",
+     "V2_f00[3]: operand of $1351, stored by $1178, $1357, $1373"
+    ],
+    [
+     "$1361",
+     "V2_f0F[3]: operand of $1360, stored by $1175, $137A"
+    ],
+    [
+     "$1383",
+     "V2_f00[4]: operand of $1382, stored by $1200, $1388, $13A4"
+    ],
+    [
+     "$1392",
+     "V2_f0F[4]: operand of $1391, stored by $11FD, $13AB"
+    ],
+    [
+     "$13B4",
+     "V2_f00[5]: operand of $13B3, stored by $1288, $13B9, $13D5"
+    ],
+    [
+     "$13C3",
+     "V2_f0F[5]: operand of $13C2, stored by $1285, $13DC"
+    ]
+   ],
+   "A1": [
+    [
+     "$112A",
+     "rdC1(((uint16_t)V1_f3D[v1] << 8) | V1_f3C[v1], 1)"
+    ],
+    [
+     "$112A",
+     "rdC1(((uint16_t)V1_f4B[v1] << 8) | V1_f4A[v1], v10)"
+    ],
+    [
+     "$112A",
+     "rdC1(((uint16_t)V1_f59[v1] << 8) | V1_f58[v1], v11)"
+    ],
+    [
+     "$112A",
+     "rdC1(((uint16_t)v6 << 8) | V1_f21[v1], 0)"
+    ],
+    [
+     "$12BE",
+     "rdC1(R1[0] | ((uint16_t)R1[1] << 8), v14 + 1)"
+    ],
+    [
+     "$12BE",
+     "rdC1(R1[0] | ((uint16_t)R1[1] << 8), v15 + 1)"
+    ],
+    [
+     "$12BE",
+     "rdC1(R1[0] | ((uint16_t)R1[1] << 8), v17 + 1)"
+    ],
+    [
+     "$12BE",
+     "rdC1(R1[0] | ((uint16_t)R1[1] << 8), v19 + 1)"
+    ],
+    [
+     "$12BE",
+     "rdC1(R1[0] | ((uint16_t)R1[1] << 8), v21 + 1)"
+    ],
+    [
+     "$12BE",
+     "rdC1(R1[0] | ((uint16_t)R1[1] << 8), v23 + 1)"
+    ],
+    [
+     "$12BE",
+     "rdC1(R1[0] | ((uint16_t)R1[1] << 8), v30 + 1)"
+    ],
+    [
+     "$12BE",
+     "rdC1(R1[0] | ((uint16_t)R1[1] << 8), v33 + 1)"
+    ],
+    [
+     "$12BE",
+     "rdC1(R1[0] | ((uint16_t)R1[1] << 8), v38 + 1)"
+    ],
+    [
+     "$12BE",
+     "rdC1(v10, 0)"
+    ],
+    [
+     "$12BE",
+     "rdC1(v10, 1)"
+    ],
+    [
+     "$12BE",
+     "rdC1(v27, v12 + 1)"
+    ],
+    [
+     "$12BE",
+     "rdC1(v27, v12 + 2)"
+    ],
+    [
+     "$12BE",
+     "rdC1(v42, v40 + 1)"
+    ],
+    [
+     "$12BE",
+     "rdC1(v42, v40 + 2)"
+    ]
+   ],
+   "C1": [
+    [
+     "$0FD0",
+     "trap(2) deopt"
+    ],
+    [
+     "$10D4",
+     "trap(1) deopt"
+    ]
+   ],
+   "C3": [
+    [
+     "$10B8",
+     "opcode cell S_D5 tested"
+    ],
+    [
+     "$10BF",
+     "opcode cell S_DC tested"
+    ],
+    [
+     "$10D8",
+     "opcode cell S_F5 tested"
+    ]
+   ]
+  },
+  "ghouls": {
+   "D1": [
+    [
+     "$29D8",
+     "R10 $29D8-$29D8 (1 B): CP_DST@$6110"
+    ],
+    [
+     "$6219",
+     "R14 $6219-$621A (2 B): CP_DST@$6110"
+    ],
+    [
+     "$6B31",
+     "C2 $6B31-$6BD9 (169 B): C2@$6234, CGEN_IX@$6234, oob_wr@$6234"
+    ],
+    [
+     "$6BDC",
+     "C2 $6BDC-$6BF4 (25 B): C2@$6234, CGEN_IX@$6234, oob_wr@$6234"
+    ],
+    [
+     "$6BF7",
+     "C2 $6BF7-$6C0F (25 B): C2@$6234, CGEN_IX@$6234, oob_wr@$6234"
+    ],
+    [
+     "$6C12",
+     "C2 $6C12-$6C2D (28 B): C2@$6234, CGEN_IX@$6234, oob_wr@$6234"
+    ],
+    [
+     "$7316",
+     "C3 $7316-$733E (41 B): CP_DST@$6110, rdC3@$6234"
+    ]
+   ],
+   "D2": [
+    [
+     "$86E9",
+     "C3 $86E9-$914E (2662 B): rdC3@$6234"
+    ]
+   ],
+   "D4": [
+    [
+     "$6110",
+     "455 block copies"
+    ],
+    [
+     "$6110",
+     "65 I/O writes"
+    ],
+    [
+     "$6110",
+     "696 literal bytes"
+    ]
+   ],
+   "D5": [
+    [
+     "$6269",
+     "V0_f00[0]: operand of $6268, stored by $6292, $63B5"
+    ],
+    [
+     "$629E",
+     "V0_f35[0]: operand of $629D, stored by $62A1, $63BE"
+    ],
+    [
+     "$62EE",
+     "V0_f85[0]: operand of $62ED, stored by $6308, $6328, $63D5, $6952"
+    ],
+    [
+     "$6382",
+     "V0_f119[0]: operand of $6381, stored by $6385, $6C78"
+    ],
+    [
+     "$63D4",
+     "V0_f16B[0]: operand of $63D3, stored by $694F"
+    ],
+    [
+     "$63EB",
+     "V1_f00[0]: operand of $63EA, stored by $6A12"
+    ],
+    [
+     "$640F",
+     "V1_f24[0]: operand of $640E, stored by $68F0"
+    ],
+    [
+     "$6456",
+     "V0_f00[1]: operand of $6455, stored by $647F, $65A2"
+    ],
+    [
+     "$648B",
+     "V0_f35[1]: operand of $648A, stored by $648E, $65AB"
+    ],
+    [
+     "$64DB",
+     "V0_f85[1]: operand of $64DA, stored by $64F5, $6515, $65C2, $696B"
+    ],
+    [
+     "$656F",
+     "V0_f119[1]: operand of $656E, stored by $6572, $6C7E"
+    ],
+    [
+     "$65C1",
+     "V0_f16B[1]: operand of $65C0, stored by $6968"
+    ],
+    [
+     "$65DA",
+     "V1_f00[1]: operand of $65D9, stored by $6A46"
+    ],
+    [
+     "$65FE",
+     "V1_f24[1]: operand of $65FD, stored by $68F9"
+    ],
+    [
+     "$6645",
+     "V0_f00[2]: operand of $6644, stored by $666E, $6791"
+    ],
+    [
+     "$667A",
+     "V0_f35[2]: operand of $6679, stored by $667D, $679A"
+    ],
+    [
+     "$66CA",
+     "V0_f85[2]: operand of $66C9, stored by $66E4, $6704, $67B1, $6984"
+    ],
+    [
+     "$675E",
+     "V0_f119[2]: operand of $675D, stored by $6761, $6C84"
+    ],
+    [
+     "$67B0",
+     "V0_f16B[2]: operand of $67AF, stored by $6981"
+    ],
+    [
+     "$67C9",
+     "V1_f00[2]: operand of $67C8, stored by $6A7A"
+    ],
+    [
+     "$67ED",
+     "V1_f24[2]: operand of $67EC, stored by $6902"
+    ],
+    [
+     "$6800",
+     "S_5CC: operand of $67FF, stored by $63EC, $65DB, $67CA, $681C, $6836"
+    ],
+    [
+     "$6813",
+     "S_5DF: operand of $6812, stored by $6A2C, $6A60, $6A94"
+    ],
+    [
+     "$6819",
+     "S_5E5: operand of $6818, stored by $6A26, $6A5A, $6A8E"
+    ],
+    [
+     "$682D",
+     "S_5F9: operand of $682C, stored by $6A38, $6A6C, $6AA0"
+    ],
+    [
+     "$6833",
+     "S_5FF: operand of $6832, stored by $6A32, $6A66, $6A9A"
+    ]
+   ],
+   "A1": [
+    [
+     "$6234",
+     "oob_wr(R3_ORG + 3 + v4 + v80, R0[1 + v3] + ((uint8_t)(v81 + 3) < v81))"
+    ],
+    [
+     "$6234",
+     "oob_wr(R3_ORG + v4 + v80, v81 + 3)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 0)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 2)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 2)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 2)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 2)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 2)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 2)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 3)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 3)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 3)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 3)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 3)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 4)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 4)"
+    ],
+    [
+     "$6234",
+     "rdC3(((uint16_t)R0[1 + v3] << 8) | R0[v3], 4)"
+    ],
+    [
+     "$6234",
+     "rdC3(v69, v68 + 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(v69, v68 + 2)"
+    ],
+    [
+     "$6234",
+     "rdC3(v79, 5)"
+    ],
+    [
+     "$6234",
+     "rdC3(v79, 6)"
+    ],
+    [
+     "$6234",
+     "rdC3(v79, 7)"
+    ],
+    [
+     "$6234",
+     "rdC3(v79, 8)"
+    ],
+    [
+     "$6234",
+     "rdC3(v82, 1)"
+    ],
+    [
+     "$6234",
+     "rdC3(v82, 2)"
+    ]
+   ],
+   "C1": [
+    [
+     "$6110",
+     "trap(3) deopt"
+    ],
+    [
+     "$6368",
+     "trap(1) deopt"
+    ]
+   ],
+   "C3": [
+    [
+     "$6234",
+     "bounds test before dispatch"
+    ],
+    [
+     "$6234",
+     "bounds test before dispatch"
+    ]
+   ]
+  },
+  "emomyst": {
+   "D1": [
+    [
+     "$10CC",
+     "R5 $10CC-$10CD (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$10DB",
+     "R6 $10DB-$10DC (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$111F",
+     "R7 $111F-$111F (1 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$1164",
+     "R8 $1164-$1165 (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$137C",
+     "R9 $137C-$137D (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$1385",
+     "R10 $1385-$1386 (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$1397",
+     "R11 $1397-$1398 (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$13A0",
+     "R12 $13A0-$13A1 (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$140C",
+     "R13 $140C-$140D (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$1415",
+     "R14 $1415-$1416 (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$1527",
+     "R15 $1527-$1528 (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$1530",
+     "R16 $1530-$1531 (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$173C",
+     "R17 $173C-$173D (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$1754",
+     "R18 $1754-$1755 (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$175B",
+     "R19 $175B-$175C (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$1788",
+     "C2 $1788-$1788 (1 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$17C2",
+     "R20 $17C2-$17C3 (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$17C5",
+     "R21 $17C5-$17C6 (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$1939",
+     "C3 $1939-$19D0 (152 B): C3@$1003, C3@$1400, C3@$1537, C3@$16D6, C3@$1802, R2@$1400, R3@$19AB, oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$1A47",
+     "R22 $1A47-$1A48 (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ],
+    [
+     "$1B4D",
+     "R23 $1B4D-$1B4E (2 B): oob_wr@$19AB, oob_wr@$1B2A"
+    ]
+   ],
+   "D4": [
+    [
+     "$1000",
+     "24 I/O writes"
+    ]
+   ],
+   "D5": [
+    [
+     "$1202",
+     "S_1FF: operand of $1201, stored by $14D7, $1654"
+    ],
+    [
+     "$1204",
+     "S_201: operand of $1203, stored by $163B"
+    ],
+    [
+     "$1209",
+     "S_206: operand of $1208, stored by $1A60"
+    ],
+    [
+     "$120B",
+     "S_208: operand of $120A, stored by $1633"
+    ],
+    [
+     "$1211",
+     "S_20E: operand of $1210, stored by $1659"
+    ],
+    [
+     "$121F",
+     "S_21C: operand of $121E, stored by $1615, $1641, $1AF2"
+    ],
+    [
+     "$1247",
+     "S_244: operand of $1246, stored by $15F0, $1609, $1646"
+    ],
+    [
+     "$1256",
+     "S_253: operand of $1255, stored by indexed or indirect stores"
+    ],
+    [
+     "$1257",
+     "S_254: operand of $1255, stored by indexed or indirect stores"
+    ],
+    [
+     "$1279",
+     "S_276: operand of $1278, stored by indexed or indirect stores"
+    ],
+    [
+     "$127A",
+     "S_277: operand of $1278, stored by indexed or indirect stores"
+    ],
+    [
+     "$1282",
+     "S_27F: operand of $1281, stored by indexed or indirect stores"
+    ],
+    [
+     "$1283",
+     "S_280: operand of $1281, stored by indexed or indirect stores"
+    ],
+    [
+     "$1339",
+     "S_336: operand of $1338, stored by indexed or indirect stores"
+    ],
+    [
+     "$133A",
+     "S_337: operand of $1338, stored by indexed or indirect stores"
+    ],
+    [
+     "$1342",
+     "S_33F: operand of $1341, stored by indexed or indirect stores"
+    ],
+    [
+     "$1343",
+     "S_340: operand of $1341, stored by indexed or indirect stores"
+    ],
+    [
+     "$146E",
+     "S_46B: operand of $146D, stored by $1465"
+    ],
+    [
+     "$14A0",
+     "S_49D: operand of $149F, stored by indexed or indirect stores"
+    ],
+    [
+     "$14A1",
+     "S_49E: operand of $149F, stored by indexed or indirect stores"
+    ],
+    [
+     "$15D2",
+     "S_5CF: operand of $15D1, stored by $14C3"
+    ],
+    [
+     "$15D6",
+     "S_5D3: operand of $15D5, stored by $14C6, $165D, $19A8, $1AE4"
+    ],
+    [
+     "$15DD",
+     "S_5DA: operand of $15DC, stored by $15E0, $1662"
+    ],
+    [
+     "$1732",
+     "S_72F: operand of $1731, stored by indexed or indirect stores"
+    ],
+    [
+     "$1733",
+     "S_730: operand of $1731, stored by indexed or indirect stores"
+    ],
+    [
+     "$17CF",
+     "S_7CC: operand of $17CE, stored by indexed or indirect stores"
+    ],
+    [
+     "$17D0",
+     "S_7CD: operand of $17CE, stored by indexed or indirect stores"
+    ],
+    [
+     "$17D3",
+     "S_7D0: operand of $17D2, stored by indexed or indirect stores"
+    ],
+    [
+     "$17D4",
+     "S_7D1: operand of $17D2, stored by indexed or indirect stores"
+    ],
+    [
+     "$17D7",
+     "S_7D4: operand of $17D6, stored by indexed or indirect stores"
+    ],
+    [
+     "$17D8",
+     "S_7D5: operand of $17D6, stored by indexed or indirect stores"
+    ],
+    [
+     "$19E3",
+     "S_9E0: operand of $19E2, stored by $193D, $1A0F"
+    ],
+    [
+     "$1AF9",
+     "S_AF6: operand of $1AF8, stored by indexed or indirect stores"
+    ],
+    [
+     "$1AFA",
+     "S_AF7: operand of $1AF8, stored by indexed or indirect stores"
+    ],
+    [
+     "$1B16",
+     "S_B13: operand of $1B15, stored by indexed or indirect stores"
+    ],
+    [
+     "$1B17",
+     "S_B14: operand of $1B15, stored by indexed or indirect stores"
+    ],
+    [
+     "$1B23",
+     "S_B20: operand of $1B22, stored by indexed or indirect stores"
+    ],
+    [
+     "$1B24",
+     "S_B21: operand of $1B22, stored by indexed or indirect stores"
+    ],
+    [
+     "$1B2E",
+     "S_B2B: operand of $1B2D, stored by indexed or indirect stores"
+    ],
+    [
+     "$1B2F",
+     "S_B2C: operand of $1B2D, stored by indexed or indirect stores"
+    ],
+    [
+     "$1B46",
+     "S_B43: operand of $1B45, stored by indexed or indirect stores"
+    ],
+    [
+     "$1B47",
+     "S_B44: operand of $1B45, stored by indexed or indirect stores"
+    ]
+   ],
+   "A1": [
+    [
+     "$124D",
+     "rdC6((v48 << 8) | (uint8_t)v47, v49 + 1)"
+    ],
+    [
+     "$124D",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), v19 + 1)"
+    ],
+    [
+     "$124D",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), v19)"
+    ],
+    [
+     "$124D",
+     "rdC6(S_253 | ((uint16_t)S_254 << 8), v3 + 1)"
+    ],
+    [
+     "$124D",
+     "rdC6(S_276 | ((uint16_t)S_277 << 8), v11)"
+    ],
+    [
+     "$124D",
+     "rdC6(S_276 | ((uint16_t)S_277 << 8), v42)"
+    ],
+    [
+     "$124D",
+     "rdC6(S_27F | ((uint16_t)S_280 << 8), v11)"
+    ],
+    [
+     "$124D",
+     "rdC6(S_27F | ((uint16_t)S_280 << 8), v42)"
+    ],
+    [
+     "$124D",
+     "rdC6(S_336 | ((uint16_t)S_337 << 8), v63)"
+    ],
+    [
+     "$124D",
+     "rdC6(S_336 | ((uint16_t)S_337 << 8), v71)"
+    ],
+    [
+     "$124D",
+     "rdC6(S_336 | ((uint16_t)S_337 << 8), v76)"
+    ],
+    [
+     "$124D",
+     "rdC6(S_33F | ((uint16_t)S_340 << 8), v63)"
+    ],
+    [
+     "$124D",
+     "rdC6(S_33F | ((uint16_t)S_340 << 8), v71)"
+    ],
+    [
+     "$124D",
+     "rdC6(S_33F | ((uint16_t)S_340 << 8), v76)"
+    ],
+    [
+     "$124D",
+     "rdC6(v27, v19 + 2)"
+    ],
+    [
+     "$124D",
+     "rdC6(v27, v19 + 3)"
+    ],
+    [
+     "$124D",
+     "rdC6(v70, 0)"
+    ],
+    [
+     "$124D",
+     "rdC6(v70, 0)"
+    ],
+    [
+     "$124D",
+     "rdC6(v70, 1)"
+    ],
+    [
+     "$124D",
+     "rdC6(v70, 2)"
+    ],
+    [
+     "$1400",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), 0xC)"
+    ],
+    [
+     "$1400",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), 0xD)"
+    ],
+    [
+     "$1400",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), 0xE)"
+    ],
+    [
+     "$1400",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), 7)"
+    ],
+    [
+     "$1400",
+     "rdC6(S_336 | ((uint16_t)S_337 << 8), v4)"
+    ],
+    [
+     "$1400",
+     "rdC6(S_33F | ((uint16_t)S_340 << 8), v4)"
+    ],
+    [
+     "$1400",
+     "rdC6(S_49D | ((uint16_t)S_49E << 8), v33)"
+    ],
+    [
+     "$1400",
+     "rdC6(v26, 0)"
+    ],
+    [
+     "$1400",
+     "rdC6(v26, 0xF)"
+    ],
+    [
+     "$1400",
+     "rdC6(v26, 9)"
+    ],
+    [
+     "$1400",
+     "rdC6(v31, 5)"
+    ],
+    [
+     "$1400",
+     "rdC6(v31, 6)"
+    ],
+    [
+     "$1400",
+     "rdC6(v32, 0xA)"
+    ],
+    [
+     "$1400",
+     "rdC6(v32, 8)"
+    ],
+    [
+     "$1400",
+     "rdC6(v35, 0xB)"
+    ],
+    [
+     "$1400",
+     "rdC6(v35, v36)"
+    ],
+    [
+     "$1400",
+     "rdC6(v40, 3)"
+    ],
+    [
+     "$1400",
+     "rdC6(v40, 4)"
+    ],
+    [
+     "$1537",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), v35 + 1)"
+    ],
+    [
+     "$1537",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), v54 + 1)"
+    ],
+    [
+     "$1537",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), v64 + 1)"
+    ],
+    [
+     "$1537",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), v77 + 1)"
+    ],
+    [
+     "$1537",
+     "rdC6(v31, v30 + 1)"
+    ],
+    [
+     "$1537",
+     "rdC6(v31, v30 + 1)"
+    ],
+    [
+     "$1537",
+     "rdC6(v31, v30 + 1)"
+    ],
+    [
+     "$1537",
+     "rdC6(v31, v30)"
+    ],
+    [
+     "$1537",
+     "rdC6(v47, v30 + 1)"
+    ],
+    [
+     "$1537",
+     "rdC6(v47, v49)"
+    ],
+    [
+     "$1537",
+     "rdC6(v60, v59 + 1)"
+    ],
+    [
+     "$1537",
+     "rdC6(v60, v59)"
+    ],
+    [
+     "$1537",
+     "rdC6(v70, v69 + 1)"
+    ],
+    [
+     "$1537",
+     "rdC6(v70, v72)"
+    ],
+    [
+     "$16D6",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), v12 + 1)"
+    ],
+    [
+     "$16D6",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), v15)"
+    ],
+    [
+     "$16D6",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), v3)"
+    ],
+    [
+     "$16D6",
+     "rdC6(S_49D | ((uint16_t)S_49E << 8), R1[0x58 + v1])"
+    ],
+    [
+     "$16D6",
+     "rdC6(S_49D | ((uint16_t)S_49E << 8), R1[0x58 + v1])"
+    ],
+    [
+     "$16D6",
+     "rdC6(v17, R1[0x59 + v1])"
+    ],
+    [
+     "$16D6",
+     "rdC6(v17, v22)"
+    ],
+    [
+     "$16D6",
+     "rdC6(v6, v3 + 1)"
+    ],
+    [
+     "$16D6",
+     "rdC6(v6, v8)"
+    ],
+    [
+     "$17C8",
+     "rdC6(S_7CC | ((uint16_t)S_7CD << 8), v2)"
+    ],
+    [
+     "$17C8",
+     "rdC6(S_7D0 | ((uint16_t)S_7D1 << 8), v2)"
+    ],
+    [
+     "$17C8",
+     "rdC6(S_7D4 | ((uint16_t)S_7D5 << 8), v2)"
+    ],
+    [
+     "$19AB",
+     "oob_wr((S_B43 | ((uint16_t)S_B44 << 8)) + v15, (v6 & 0xF) | 0x80)"
+    ],
+    [
+     "$19AB",
+     "oob_wr(S_AF6 | ((uint16_t)S_AF7 << 8), v14)"
+    ],
+    [
+     "$19AB",
+     "oob_wr(S_B13 | ((uint16_t)S_B14 << 8), (v6 & 0xF) | 0x80)"
+    ],
+    [
+     "$19AB",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), 0xA)"
+    ],
+    [
+     "$19AB",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), 0xB)"
+    ],
+    [
+     "$19AB",
+     "rdC6(S_B20 | ((uint16_t)S_B21 << 8), v6)"
+    ],
+    [
+     "$19AB",
+     "rdC6(S_B20 | ((uint16_t)S_B21 << 8), v6)"
+    ],
+    [
+     "$19D3",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), v1)"
+    ],
+    [
+     "$19DB",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), v1)"
+    ],
+    [
+     "$1A42",
+     "rdC6(S_49D | ((uint16_t)S_49E << 8), v1)"
+    ],
+    [
+     "$1AC1",
+     "rdC6(R0[0] | ((uint16_t)R0[1] << 8), 0)"
+    ],
+    [
+     "$1B2A",
+     "oob_wr((S_B2B | ((uint16_t)S_B2C << 8)) + v3, v1)"
+    ]
+   ],
+   "A2": [
+    [
+     "$1951",
+     "switch over 6 code addresses"
+    ],
+    [
+     "$1A13",
+     "switch over 12 code addresses"
+    ]
+   ],
+   "A3": [
+    [
+     "$1537",
+     "(v40 >= 8) | 0x30 | ((v40 == 8) << 1) | (v2 << 2) | ((((v38 ^ v39 ^ 0xFF) & (v38 ^ v40) & 0x80) != 0) << 6) | ((((uint8_t)(v40 - 8) & 0x80) != 0) << 7)"
+    ],
+    [
+     "$1537",
+     "(v45 < v43) | 0x30 | ((v45 == 0) << 1) | (v2 << 2) | ((((v43 ^ v44 ^ 0xFF) & (v43 ^ v45) & 0x80) != 0) << 6) | (((v45 & 0x80) != 0) << 7)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(3) deopt"
+    ],
+    [
+     "$1612",
+     "trap(1) deopt"
+    ],
+    [
+     "$1947",
+     "trap(2) deopt"
+    ]
+   ],
+   "C2": [
+    [
+     "$1B25",
+     "goto $1AFD"
+    ]
+   ],
+   "C3": [
+    [
+     "$19AB",
+     "8 decision points, 6 original branches"
+    ],
+    [
+     "$19AB",
+     "bounds test before dispatch"
+    ],
+    [
+     "$19AB",
+     "bounds test before dispatch"
+    ],
+    [
+     "$19AB",
+     "bounds test before dispatch"
+    ],
+    [
+     "$1B2A",
+     "bounds test before dispatch"
+    ]
+   ]
+  },
+  "fuzz-loop-0": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R0_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R0_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-loop-1": {
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-loop-2": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R3_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R3_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-jsr3-0": {
+   "A1": [
+    [
+     "$104D",
+     "rd(R0_ORG + v1)"
+    ],
+    [
+     "$104D",
+     "rd(R0_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-jsr3-1": {
+   "A1": [
+    [
+     "$104D",
+     "rd(R2_ORG + v1)"
+    ],
+    [
+     "$104D",
+     "rd(R5_ORG + v1)"
+    ],
+    [
+     "$104D",
+     "rd(R5_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-jsr3-2": {
+   "A1": [
+    [
+     "$104D",
+     "rd(R3_ORG + v1)"
+    ],
+    [
+     "$104D",
+     "rd(R3_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-fallthrough-0": {
+   "A1": [
+    [
+     "$1049",
+     "rd(R0_ORG + v1)"
+    ],
+    [
+     "$1049",
+     "rd(R0_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-fallthrough-1": {
+   "A1": [
+    [
+     "$1049",
+     "rd(R2_ORG + v1)"
+    ],
+    [
+     "$1049",
+     "rd(R5_ORG + v1)"
+    ],
+    [
+     "$1049",
+     "rd(R5_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-fallthrough-2": {
+   "A1": [
+    [
+     "$1049",
+     "rd(R3_ORG + v1)"
+    ],
+    [
+     "$1049",
+     "rd(R3_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-unrolled-0": {
+   "D2": [
+    [
+     "$3021",
+     "R0 $3021-$3026 (6 B): R0@$103D"
+    ],
+    [
+     "$3028",
+     "R0 $3028-$302D (6 B): R0@$103D"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-unrolled-1": {
+   "D2": [
+    [
+     "$3041",
+     "R2 $3041-$3046 (6 B): R2@$103D"
+    ],
+    [
+     "$3048",
+     "R2 $3048-$304D (6 B): R2@$103D"
+    ],
+    [
+     "$3061",
+     "R3 $3061-$3066 (6 B): R3@$103D"
+    ],
+    [
+     "$3068",
+     "R3 $3068-$306D (6 B): R3@$103D"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-unrolled-2": {
+   "D2": [
+    [
+     "$3061",
+     "R3 $3061-$3066 (6 B): R3@$103D"
+    ],
+    [
+     "$3068",
+     "R3 $3068-$306D (6 B): R3@$103D"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-smc-0": {
+   "D1": [
+    [
+     "$105D",
+     "C0 $105D-$1103 (167 B): C0@$103D"
+    ]
+   ],
+   "D5": [
+    [
+     "$103E",
+     "V0_f00[0]: operand of $103D, stored by $1049, $1059, $1078"
+    ],
+    [
+     "$1063",
+     "V0_f25[0]: operand of $1062, stored by $1067, $108A"
+    ],
+    [
+     "$1091",
+     "V0_f00[1]: operand of $1090, stored by $109C, $10AC, $10CB"
+    ],
+    [
+     "$10B6",
+     "V0_f25[1]: operand of $10B5, stored by $10BA, $10DD"
+    ],
+    [
+     "$10E4",
+     "V0_f00[2]: operand of $10E3, stored by $10EF, $10FF, $111E"
+    ],
+    [
+     "$1109",
+     "V0_f25[2]: operand of $1108, stored by $110D, $1130"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-smc-1": {
+   "D1": [
+    [
+     "$103E",
+     "C0 $103E-$10B6 (121 B): C0@$103F"
+    ]
+   ],
+   "D5": [
+    [
+     "$1044",
+     "V0_f00[0]: operand of $1043, stored by $1048, $1070"
+    ],
+    [
+     "$104C",
+     "V0_f08[0]: operand of $104B, stored by $1050, $1060"
+    ],
+    [
+     "$1080",
+     "V0_f00[1]: operand of $107F, stored by $1084, $10AC"
+    ],
+    [
+     "$1088",
+     "V0_f08[1]: operand of $1087, stored by $108C, $109C"
+    ],
+    [
+     "$10BC",
+     "V0_f00[2]: operand of $10BB, stored by $10C0, $10E8"
+    ],
+    [
+     "$10C4",
+     "V0_f08[2]: operand of $10C3, stored by $10C8, $10D8"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-smc-2": {
+   "D1": [
+    [
+     "$103E",
+     "C0 $103E-$10C0 (131 B): C0@$103F"
+    ]
+   ],
+   "D5": [
+    [
+     "$1044",
+     "V0_f00[0]: operand of $1043, stored by $1048, $1051"
+    ],
+    [
+     "$1055",
+     "V0_f11[0]: operand of $1054, stored by $1061"
+    ],
+    [
+     "$1068",
+     "V0_f24[0]: operand of $1067, stored by $1072"
+    ],
+    [
+     "$1085",
+     "V0_f00[1]: operand of $1084, stored by $1089, $1092"
+    ],
+    [
+     "$1096",
+     "V0_f11[1]: operand of $1095, stored by $10A2"
+    ],
+    [
+     "$10A9",
+     "V0_f24[1]: operand of $10A8, stored by $10B3"
+    ],
+    [
+     "$10C6",
+     "V0_f00[2]: operand of $10C5, stored by $10CA, $10D3"
+    ],
+    [
+     "$10D7",
+     "V0_f11[2]: operand of $10D6, stored by $10E3"
+    ],
+    [
+     "$10EA",
+     "V0_f24[2]: operand of $10E9, stored by $10F4"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-rti-0": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R0_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R3_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R3_ORG + v1)"
+    ]
+   ],
+   "A2": [
+    [
+     "$103D",
+     "compared $1090"
+    ]
+   ],
+   "A3": [
+    [
+     "$103D",
+     "v12 | 0x30 | ((v15 == 0) << 1) | (v2 << 2) | (v11 << 6) | (((v15 & 0x80) != 0) << 7)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(2) deopt"
+    ],
+    [
+     "$108F",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-rti-1": {
+   "A2": [
+    [
+     "$103D",
+     "compared $1094"
+    ]
+   ],
+   "A3": [
+    [
+     "$103D",
+     "((uint8_t)(v5 + 1) < v5) | 0x30 | ((v7 == 0) << 1) | (v4 << 2) | ((((v5 ^ 1 ^ 0xFF) & (v5 ^ (v5 + 1)) & 0x80) != 0) << 6) | (((v7 & 0x80) != 0) << 7)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(2) deopt"
+    ],
+    [
+     "$1093",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-rti-2": {
+   "A2": [
+    [
+     "$103D",
+     "compared $1093"
+    ]
+   ],
+   "A3": [
+    [
+     "$103D",
+     "((uint8_t)(v4 + 0x2B) < v4) | 0x30 | ((v6 == 0) << 1) | (v2 << 2) | ((((v4 ^ 0x2B ^ 0xFF) & (v4 ^ (v4 + 0x2B)) & 0x80) != 0) << 6) | (((v6 & 0x80) != 0) << 7)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(2) deopt"
+    ],
+    [
+     "$1092",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-brk-0": {
+   "A1": [
+    [
+     "$104B",
+     "rd(R0_ORG + v1)"
+    ],
+    [
+     "$104B",
+     "rd(R0_ORG + v1)"
+    ]
+   ],
+   "A2": [
+    [
+     "$104B",
+     "compared $10AE"
+    ]
+   ],
+   "A3": [
+    [
+     "$104B",
+     "v12 | 0x30 | ((v14 == 0) << 1) | (v2 << 2) | (v11 << 6) | (((v14 & 0x80) != 0) << 7)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(3) deopt"
+    ],
+    [
+     "$1088",
+     "trap(1) ind"
+    ],
+    [
+     "$1090",
+     "trap(2) deopt"
+    ]
+   ]
+  },
+  "fuzz-brk-1": {
+   "A2": [
+    [
+     "$104B",
+     "compared $1098"
+    ]
+   ],
+   "A3": [
+    [
+     "$104B",
+     "((uint8_t)(v6 + 1) < v6) | 0x30 | ((v6 == 0xFF) << 1) | (v4 << 2) | ((((v6 ^ 1 ^ 0xFF) & (v6 ^ (v6 + 1)) & 0x80) != 0) << 6) | ((((v6 + 1) & 0x80) != 0) << 7)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(3) deopt"
+    ],
+    [
+     "$1089",
+     "trap(1) ind"
+    ],
+    [
+     "$1094",
+     "trap(2) deopt"
+    ]
+   ]
+  },
+  "fuzz-brk-2": {
+   "A2": [
+    [
+     "$104B",
+     "compared $109D"
+    ]
+   ],
+   "A3": [
+    [
+     "$104B",
+     "((uint8_t)(v4 + 0x2B) < v4) | 0x30 | ((v4 == 0xD5) << 1) | (v2 << 2) | ((((v4 ^ 0x2B ^ 0xFF) & (v4 ^ (v4 + 0x2B)) & 0x80) != 0) << 6) | ((((v4 + 0x2B) & 0x80) != 0) << 7)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(3) deopt"
+    ],
+    [
+     "$1085",
+     "trap(1) ind"
+    ],
+    [
+     "$1093",
+     "trap(2) deopt"
+    ]
+   ]
+  },
+  "fuzz-stackswitch-0": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R1_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R1_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-stackswitch-1": {
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-stackswitch-2": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R4_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R4_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-inlineargs-0": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R1_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R1_ORG + v1)"
+    ]
+   ],
+   "A2": [
+    [
+     "$103D",
+     "stored $1082"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-inlineargs-1": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R3_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R6_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R6_ORG + v1)"
+    ]
+   ],
+   "A2": [
+    [
+     "$103D",
+     "stored $1086"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-inlineargs-2": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R4_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R4_ORG + v1)"
+    ]
+   ],
+   "A2": [
+    [
+     "$103D",
+     "stored $1085"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-skip-0": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R0_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R3_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R3_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-skip-1": {
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-skip-2": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R3_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R3_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-decimal-0": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R0_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R0_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-decimal-1": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R2_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R5_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R5_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-decimal-2": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R3_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R3_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-rmw-0": {
+   "D5": [
+    [
+     "$1081",
+     "S_44: operand of $1080, stored by $1085"
+    ]
+   ],
+   "A1": [
+    [
+     "$103D",
+     "rd(R1_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R1_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-rmw-1": {
+   "D5": [
+    [
+     "$1085",
+     "S_48: operand of $1084, stored by $1089"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-rmw-2": {
+   "D5": [
+    [
+     "$1084",
+     "S_47: operand of $1083, stored by $1088"
+    ]
+   ],
+   "A1": [
+    [
+     "$103D",
+     "rd(R3_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R3_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-vflag-0": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R1_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R4_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R4_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-vflag-1": {
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-vflag-2": {
+   "A1": [
+    [
+     "$103D",
+     "rd(R4_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R4_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-indx-0": {
+   "D1": [
+    [
+     "$1000",
+     "C0 $1000-$10BC (189 B): rdC0@$1055, wr@$1055"
+    ]
+   ],
+   "A1": [
+    [
+     "$1055",
+     "codechk(v4, v5 + 0x22)"
+    ],
+    [
+     "$1055",
+     "rdC0(v4, 0)"
+    ],
+    [
+     "$1055",
+     "wr(v4, v5 + 0x22)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(3) deopt"
+    ],
+    [
+     "$109D",
+     "trap(1) deopt"
+    ],
+    [
+     "$109F",
+     "trap(2) deopt"
+    ]
+   ]
+  },
+  "fuzz-indx-1": {
+   "D1": [
+    [
+     "$1000",
+     "C0 $1000-$10A6 (167 B): rdC0@$1055, wr@$1055"
+    ]
+   ],
+   "A1": [
+    [
+     "$1055",
+     "codechk(v4, v5 + 0x1A)"
+    ],
+    [
+     "$1055",
+     "rdC0(v4, 0)"
+    ],
+    [
+     "$1055",
+     "wr(v4, v5 + 0x1A)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(3) deopt"
+    ],
+    [
+     "$10A1",
+     "trap(1) deopt"
+    ],
+    [
+     "$10A3",
+     "trap(2) deopt"
+    ]
+   ]
+  },
+  "fuzz-indx-2": {
+   "D1": [
+    [
+     "$1000",
+     "C0 $1000-$10AB (172 B): rdC0@$1055, wr@$1055"
+    ]
+   ],
+   "A1": [
+    [
+     "$1055",
+     "codechk(v3, v4 + 0x2C)"
+    ],
+    [
+     "$1055",
+     "rdC0(v3, 0)"
+    ],
+    [
+     "$1055",
+     "wr(v3, v4 + 0x2C)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(3) deopt"
+    ],
+    [
+     "$10A0",
+     "trap(1) deopt"
+    ],
+    [
+     "$10A2",
+     "trap(2) deopt"
+    ]
+   ]
+  },
+  "fuzz-jam-0": {
+   "A1": [
+    [
+     "$103D",
+     "rd(0x31F0)"
+    ],
+    [
+     "$103D",
+     "rd(R0_ORG + v1)"
+    ],
+    [
+     "$103D",
+     "rd(R0_ORG + v1)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(2) deopt"
+    ],
+    [
+     "$1085",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-jam-1": {
+   "A1": [
+    [
+     "$103D",
+     "rd(0x31F0)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(2) deopt"
+    ],
+    [
+     "$1089",
+     "trap(1) deopt"
+    ]
+   ]
+  },
+  "fuzz-jam-2": {
+   "A1": [
+    [
+     "$103D",
+     "rd(0x31F0)"
+    ]
+   ],
+   "C1": [
+    [
+     "$1000",
+     "trap(2) deopt"
+    ],
+    [
+     "$1088",
+     "trap(1) deopt"
+    ]
+   ]
+  }
+ }
+}
