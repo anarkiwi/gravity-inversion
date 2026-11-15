@@ -5,10 +5,10 @@ against their originals, and the five tunes against their hand C's reads of the 
 import json
 import pathlib
 import re
-import subprocess
 
 import numpy as np
 import pytest
+from jennings.acme import assemble
 
 import fuzzplayer
 import irmodule
@@ -57,12 +57,11 @@ def test_same_values():
     assert got.tolist() == [False, False, True, False, True]
 
 
-def test_reference_song_data(tmp_path):
+def test_reference_song_data():
     """Song data: the loaded bytes of no instruction the original never writes (not the
     operands play patches); its reads are the play calls'."""
-    sid = _fuzz("smc", 4, tmp_path, "direct")
-    at = {k: a for a, k in reversed(_labels(sid))}
-    psid = sid.read_bytes()
+    psid, labels = _fuzz("smc", 4, "direct")
+    at = {k: a for a, k in reversed(labels)}
     load, _, _, image = sidtrace.psid_parts(psid)
     assert np.flatnonzero(eventlog.song_mask(psid)).tolist() == list(
         range(load, load + len(image))
@@ -239,24 +238,10 @@ def test_promoted_cells(tmp_path):
     ]
 
 
-def _fuzz(style, seed, tmp_path, seq=None):
-    src = tmp_path / f"{style}{seed}.asm"
-    src.write_text(fuzzplayer.player(style, seed, seq=seq), encoding="ascii")
-    sid = tmp_path / f"{style}{seed}.sid"
-    subprocess.run(["acme", "-o", sid, src], check=True, capture_output=True)
-    return sid
-
-
-def _labels(sid):
-    """``[(address, label)]`` of a fuzz player, sorted, its digits dropped."""
-    src = sid.with_suffix(".asm")
-    lbl = sid.with_suffix(".lbl")
-    subprocess.run(["acme", "--symbollist", lbl, "-o", sid, src], check=True)
-    text = lbl.read_text(encoding="ascii")
-    return sorted(
-        (int(a, 16), re.sub(r"\d", "", k))
-        for k, a in re.findall(r"^\s*(\w+)\s*=\s*\$([0-9a-f]+)", text, re.M)
-    )
+def _fuzz(style, seed, seq=None):
+    """``(psid, [(address, label)])`` of a fuzz player, labels sorted, their digits dropped."""
+    psid, symbols = assemble(fuzzplayer.player(style, seed, seq=seq))
+    return psid, sorted((a, re.sub(r"\d", "", k)) for k, a in symbols.items())
 
 
 FUZZ_FRAMES = 200
@@ -265,12 +250,11 @@ FUZZ_FRAMES = 200
 @pytest.mark.parametrize("seq", fuzzplayer.SEQ)
 @pytest.mark.parametrize("style", ["loop", "jsr3", "fallthrough", "unrolled", "smc"])
 @pytest.mark.parametrize("seed", [4, 13])
-def test_fuzz(style, seed, seq, tmp_path):
+def test_fuzz(style, seed, seq):
     """Sequencer players (SID writes direct or shadowed): the generated C reads exactly the
     original's song bytes, call by call with values, score as events, frequency table as
     lookups, others (an unpatched operand) as tables; the log rebuilds the writes."""
-    sid = _fuzz(style, seed, tmp_path, seq)
-    psid, labels = sid.read_bytes(), _labels(sid)
+    psid, labels = _fuzz(style, seed, seq)
     log, summary, orig, _ = eventlog.run_tune(psid, FUZZ_FRAMES)
     want = {"song": "event", "freqlo": "lookup", "freqhi": "lookup"}
     at = np.array([a for a, _ in labels])
@@ -366,7 +350,8 @@ def test_hand(tune):
 
 def test_main(tmp_path):
     """The CLI writes the event and summary files."""
-    sid = _fuzz("loop", 14, tmp_path, "direct")
+    sid = tmp_path / "p.sid"
+    sid.write_bytes(_fuzz("loop", 14, "direct")[0])
     out = tmp_path / "log"
     assert eventlog.main([str(sid), str(out), "--frames", "50"]) == 0
     events = [json.loads(l) for l in (out / "events.jsonl").read_text().splitlines()]

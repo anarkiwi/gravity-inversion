@@ -4,10 +4,10 @@ detector finds exactly the sites of a small synthetic lift."""
 
 import functools
 import json
-import subprocess
 
 import numpy as np
 import pytest
+from jennings.acme import assemble
 
 import cflow
 import costs
@@ -156,14 +156,12 @@ INFO = {
 def fixture_lift(tmp_path_factory):
     """A hand-written lift of a small PSID: its C, header and info."""
     out = tmp_path_factory.mktemp("synthetic")
-    (out / "p.asm").write_text(fuzzplayer.HEADER + ASM, encoding="ascii")
-    subprocess.run(["acme", "-o", out / "p.sid", out / "p.asm"], check=True)
+    psid = assemble(fuzzplayer.HEADER + ASM)[0]
     (out / "gen.c").write_text(SOURCE, encoding="ascii")
     (out / "gen.h").write_text(HEADER, encoding="ascii")
     tree = costs.ast(out / "gen.c", [out])
     defs, _ = cflow.parse_header(HEADER)
     unit = cflow.Unit(SOURCE, tree, cflow.regions(defs))
-    psid = (out / "p.sid").read_bytes()
     return residue.Lift(psid, SOURCE, HEADER, INFO, tree, unit, defs)
 
 

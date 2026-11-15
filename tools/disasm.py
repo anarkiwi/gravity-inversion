@@ -94,10 +94,11 @@ def coverage(
 
 
 def listing(data, frames, song=None, jobs=1, cov=None):
-    """jennings Listing of the payload, from `cov` or coverage(data, frames, song, jobs)."""
+    """jennings Listing of the payload, from `cov` or coverage(data, frames, song, jobs), with
+    the targets of computed transfers through constant tables decoded."""
     cov = coverage(data, frames, song, jobs) if cov is None else cov
     mem, span, entries = _image(data)
-    return Listing.disassemble(mem, entries, cov=cov, ranges=[span])
+    return Listing.disassemble(mem, entries, cov=cov, ranges=[span], resolve=True)
 
 
 def one_way(data, cov):

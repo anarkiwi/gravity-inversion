@@ -5,7 +5,7 @@ import pathlib
 import subprocess
 
 from gen_data import generate
-from sidtrace import parse_labels, psid_parts
+from sidtrace import psid_parts
 from transliterate import build
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -33,17 +33,6 @@ def patched(psid, labels, patches):
     for label, offset, value in patches:
         data[labels[label] - load + len(psid) - len(image) + offset] = value
     return bytes(data)
-
-
-def assemble(asm, out_dir):
-    """(PSID, labels) of ACME source text `asm`."""
-    out_dir = pathlib.Path(out_dir)
-    src, sid, labels = (out_dir / f"t.{e}" for e in ("asm", "sid", "labels"))
-    src.write_text(asm, encoding="ascii")
-    subprocess.run(
-        ["acme", "-l", labels, "-o", sid, src], check=True, capture_output=True
-    )
-    return sid.read_bytes(), parse_labels(labels.read_text(encoding="ascii"))
 
 
 def _cc(prg, include, source):

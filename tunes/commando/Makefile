@@ -10,7 +10,7 @@ all: $(B)/commando.prg
 
 $(B)/ref.sid $(B)/ref.labels &: $(FIX)/$(FIXTURE)
 	mkdir -p $(B)
-	acme -l $(B)/ref.labels -o $(B)/ref.sid $<
+	jennings-acme -l $(B)/ref.labels -o $(B)/ref.sid $<
 
 $(B)/commando_data.h: $(B)/ref.sid $(B)/ref.labels gen_data.py
 	$(PY) gen_data.py $(B)/ref.sid $(B)/ref.labels $@

@@ -6,6 +6,7 @@ import re
 import time
 
 import pytest
+from jennings.acme import assemble
 
 from support import (
     ASM,
@@ -13,7 +14,6 @@ from support import (
     ROOT,
     STOP_FRAMES,
     VARIANTS,
-    assemble,
     gen_prg,
     patched,
 )
@@ -40,10 +40,10 @@ def fixture_wrap(ref_psid, labels):
     return sidtrace.loop_frame(ref_psid, labels["posoff"], 50_000)
 
 
-def _permuted(perm, out_dir, extra=()):
+def _permuted(perm, extra=()):
     """(PSID, labels) of the original source with permutation `perm` and `extra` edits."""
     edits = (PERMUTATIONS[perm] if perm else []) + list(extra)
-    return assemble(mutate.apply(ASM.read_text(encoding="ascii"), edits), out_dir)
+    return assemble(mutate.apply(ASM.read_text(encoding="ascii"), edits))
 
 
 def _plain(perm, psid, generated):
@@ -86,7 +86,7 @@ def test_generated_identical(  # pylint: disable=too-many-arguments,too-many-pos
     perm, variant, ref_psid, labels, generated, wrap, tmp_path
 ):
     """Song variants change only the .h; permuted and generated code keep every write."""
-    psid, perm_labels = _permuted(perm, tmp_path) if perm else (ref_psid, labels)
+    psid, perm_labels = _permuted(perm) if perm else (ref_psid, labels)
     plain = _plain(perm, psid, generated)
     frames = wrap
     if variant:
@@ -105,8 +105,8 @@ def test_generated_identical(  # pylint: disable=too-many-arguments,too-many-pos
 @pytest.mark.parametrize("perm", [None, "all"])
 def test_relocated(perm, generated, tmp_path):
     """Assembled at another address the .c is unchanged and the writes identical."""
-    plain = _plain(perm, _permuted(perm, tmp_path)[0], generated)
-    psid, labels = _permuted(perm, tmp_path, RELOCATE)
+    plain = _plain(perm, _permuted(perm)[0], generated)
+    psid, labels = _permuted(perm, RELOCATE)
     assert sidtrace.psid_parts(psid)[0] == 0x2345
     prg, c, _ = gen_prg(psid, tmp_path)
     assert c == plain[0]

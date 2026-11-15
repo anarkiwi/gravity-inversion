@@ -12,12 +12,12 @@ import json
 import multiprocessing
 import pathlib
 import re
-import subprocess
 import sys
 from collections import Counter
 from typing import NamedTuple
 
 import numpy as np
+from jennings.acme import assemble
 from jennings.coverage import EXEC, WRITE
 from jennings.coverage.cfg import LEN
 from jennings.opcodes import OPCODES
@@ -737,15 +737,10 @@ def hand_functions(tune):
     return len(HAND_FUNCTION.findall(src))
 
 
-def fuzz_psid(name, out):
-    """The PSID of fuzz target `fuzz-<style>-<seed>`, assembled with acme in `out`."""
+def fuzz_psid(name):
+    """The PSID of fuzz target `fuzz-<style>-<seed>`."""
     _, style, seed = name.split("-")
-    seed = int(seed)
-    out.mkdir(parents=True, exist_ok=True)
-    src = out / "p.asm"
-    src.write_text(fuzzplayer.player(style, seed), encoding="ascii")
-    subprocess.run(["acme", "-o", out / "p.sid", src], check=True, capture_output=True)
-    return (out / "p.sid").read_bytes()
+    return assemble(fuzzplayer.player(style, int(seed)))[0]
 
 
 def target(name, out=OUT):
@@ -754,7 +749,7 @@ def target(name, out=OUT):
     if name in TUNES:
         return (ROOT / load(name)["psid"]).read_bytes(), name, out
     if name.startswith("fuzz-"):
-        return fuzz_psid(name, out), None, out
+        return fuzz_psid(name), None, out
     return pathlib.Path(name).read_bytes(), None, out
 
 
