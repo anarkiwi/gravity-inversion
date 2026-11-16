@@ -192,6 +192,16 @@ def _fx_column(size, values, ifx=False, pw_end=False):
     return patch
 
 
+def _moved_table(m):
+    """The pattern pointer high table (SWP header word 8, up to the image's end) copied past
+    the image's end, header word 8 pointing at the copy: a layout change, same playback.
+    """
+    hi, end = m.table(8), m.end
+    m.psid += bytes(m[a] for a in range(hi, end))
+    off = end - m.base
+    m[m.base + 8], m[m.base + 9] = off & 0xFF, off >> 8
+
+
 # name: (patch, entry points first run, one-way branches it takes the other way)
 VARIANTS = {
     "orderlists": (_orderlists, {0x1153}, {0x13CB, 0x13D1}),
@@ -268,6 +278,7 @@ VARIANTS = {
         {0x1B28, 0x1B38, 0x1B49, 0x1B52, 0x1B54},
         set(),
     ),
+    "moved_table": (_moved_table, set(), set()),
 }
 
 
@@ -332,14 +343,21 @@ def test_outside_data_traps(code, psid, gen, swp, tmp_path):
 def test_data_footprint(psid, gen, swp, frames):
     """The hand C holds only the original's data, and every byte the original reads as data
     but its operand state and the state, tables and switches it names, over twice the tune
-    and the patched variants."""
-    runs = [(psid, [2 * frames], [0])]
+    and the patched variants of its layout; a variant that moves data holds every byte it
+    reads as data, once, in its own layout."""
+    runs, moved = [(psid, [2 * frames], [0])], []
     for patch, _, _ in VARIANTS.values():
         m = swp.Music(psid, gen)
         patch(m)
-        runs.append((m.bytes(), [frames], [0]))
+        data = m.bytes()
+        (runs if len(data) == len(psid) else moved).append((data, [frames], [0]))
     orig = footprint.Original(runs, 1)
     assert footprint.check(orig, gen.held(psid), gen.named(psid)) == footprint.CLEAN
+    for run in moved:
+        got = footprint.check(
+            footprint.Original([run], 1), gen.held(run[0]), gen.named(run[0])
+        )
+        assert not got["missing"] and not got["overlap"], got
 
 
 @functools.cache

@@ -4,8 +4,9 @@
 deliberately to the C form it takes, so translation decisions can be read rather than asked. Each
 map is checked against the original by `tools/constructs.py` (jennings' static listing and its run
 coverage of init and play, and of play alone) and against the generated C by
-`tests/test_constructs.py`. A construct only init runs is not in the generated C: init runs on the
-host and the state it leaves is in the `.h`, so none of its instructions are translated.
+`tests/test_constructs.py`. A construct only init runs takes its form in the generated C when
+init is translated; when init is replayed (`info["init"]`), its effect is tables in the `.h` and
+none of its instructions are translated.
 
 ## Entry
 

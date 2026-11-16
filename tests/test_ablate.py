@@ -201,7 +201,7 @@ t2: LDA #3
 t3: LDA #4
 done:
     STA $D402
-    LDA br
+    LDA t0,Y
     STA $D403
     INC pos,X
     RTS
@@ -353,8 +353,7 @@ def test_absent(tiny):
 @pytest.fixture(scope="module", name="player")
 def fixture_player(tmp_path_factory):
     """(PSID, report) of the test player: zero-page and self-modified pointers, a branch
-    offset dispatch, an init loop (run on the host, its state in the .h), a code byte read
-    as data."""
+    offset dispatch, an init loop, code bytes read by index as data."""
     out = tmp_path_factory.mktemp("player")
     psid = _psid(fuzzplayer.HEADER + PLAYER)
     return psid, ablate.ablate(
