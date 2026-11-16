@@ -1,5 +1,5 @@
-"""tools/costs.py names each code-size construct by line; tools/residue.py reports them per
-tune and fuzz player as kinds K1-K6 (tests/test_residue.py)."""
+"""tools/costs.py names each code-size construct by line and totals its kinds K1-K6, a cost
+report apart from the residue census (docs/costs.md)."""
 
 import costs
 

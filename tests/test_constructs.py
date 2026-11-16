@@ -23,10 +23,14 @@ def checked(tune):
 @functools.cache
 def provenance(tune):
     """cgen's provenance of the tune's generated C, with the instructions the C translates
-    (`starts`)."""
+    (`starts`) and the addresses of its promoted variables (`vars`)."""
     m = constructs.load(tune)
     _, _, info = transliterate((constructs.ROOT / m["psid"]).read_bytes(), "t.h")
-    return {**info["provenance"], "starts": set(info["starts"])}
+    return {
+        **info["provenance"],
+        "starts": set(info["starts"]),
+        "vars": set(info["state"]["vars"].values()),
+    }
 
 
 def _entries():
@@ -76,6 +80,10 @@ def lifted(c, prov):  # pylint: disable=too-many-return-statements
             for f in prov["functions"].values()
         )
     if k == "smc":
+        if c["lift"] == "variable":
+            return c["cell"] in prov["vars"]
+        if c["lift"].startswith("no variable"):
+            return c["cell"] not in prov["vars"] and c["reader"] in prov["switches"]
         return c["cell"] in prov["cells"]
     if k == "goto":
         # An edge from code the C does not translate leaves no goto.

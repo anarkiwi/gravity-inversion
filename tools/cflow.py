@@ -173,6 +173,84 @@ def regions(defs):
     }
 
 
+def full(node):
+    """The interval of a node's integer type (16 bits unknown)."""
+    bits, signed = ctype(node) or (16, False)
+    return (-(1 << bits - 1), (1 << bits - 1) - 1) if signed else (0, (1 << bits) - 1)
+
+
+def fit(iv, node):
+    """`iv` if the node's type holds it, else the type's interval."""
+    lo, hi = full(node)
+    return iv if lo <= iv[0] and iv[1] <= hi else (lo, hi)
+
+
+def _binary(op, a, b):
+    if op in ("+", "-", "*"):
+        f = {"+": int.__add__, "-": int.__sub__, "*": int.__mul__}[op]
+        xs = (
+            [f(a[0], b[0]), f(a[1], b[1])]
+            if op == "+"
+            else [f(x, y) for x in a for y in b]
+        )
+        return min(xs), max(xs)
+    if op in ("<<", ">>") and b[0] == b[1] and b[0] >= 0 and a[0] >= 0:
+        k = b[0]
+        return (a[0] << k, a[1] << k) if op == "<<" else (a[0] >> k, a[1] >> k)
+    if a[0] >= 0 and b[0] >= 0:
+        if op == "&":
+            return 0, min(a[1], b[1])
+        if op in ("|", "^"):
+            return 0, (1 << max(a[1], b[1]).bit_length()) - 1
+    return None
+
+
+def interval(node):  # pylint: disable=too-many-return-statements
+    """(lo, hi) of an integer expression's values, each variable over its type."""
+    kind, inner = node.get("kind"), node.get("inner", ())
+    if kind in ("IntegerLiteral", "CharacterLiteral"):
+        v = wrap(int(node["value"]), node)
+        return v, v
+    if kind in ("ParenExpr", "ConstantExpr"):
+        return interval(inner[0])
+    if kind in CASTS:
+        if node.get("castKind") == "IntegralToBoolean":
+            return 0, 1
+        return fit(interval(inner[0]), node)
+    op = node.get("opcode")
+    if kind == "BinaryOperator":
+        if op in ("==", "!=", "<", "<=", ">", ">=", "&&", "||"):
+            return 0, 1
+        if op == ",":
+            return interval(inner[1])
+        got = _binary(op, interval(inner[0]), interval(inner[1]))
+        return full(node) if got is None else fit(got, node)
+    if kind == "ConditionalOperator":
+        a, b = interval(inner[1]), interval(inner[2])
+        return min(a[0], b[0]), max(a[1], b[1])
+    if kind == "UnaryOperator" and op == "!":
+        return 0, 1
+    return full(node)
+
+
+def names(node):
+    """Names a subtree refers to."""
+    return {
+        r["referencedDecl"]["name"]
+        for r, _ in walk(node)
+        if r.get("kind") == "DeclRefExpr"
+    }
+
+
+def terms(node, sign=1):
+    """[(sign, term)] of a sum (`+`, `-`) through parentheses and casts."""
+    node = strip(node, ("ParenExpr", "ConstantExpr", *CASTS))
+    if node.get("kind") == "BinaryOperator" and node["opcode"] in ("+", "-"):
+        a, b = node["inner"]
+        return terms(a, sign) + terms(b, sign if node["opcode"] == "+" else -sign)
+    return [(sign, node)]
+
+
 class Unit:
     """A C file with its AST: functions, globals, call graph and source spans."""
 

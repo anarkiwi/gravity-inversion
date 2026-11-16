@@ -31,7 +31,7 @@ its form in the generated C too.
 | `tail_call` | `JMP`s, branches or fall-throughs into a `JSR` target | a call then return |
 | `multi_entry_loop` | a cycle entered by `edges` at two points, `back` -> `head` (`copies`: the same loop in other instances) | one loop with an entry selector |
 | `unrolled` | `copies` of one body, operands at strides (`inserted`: instructions only some copies have) | one function with an instance index |
-| `smc` | `writer` stores into `cell`, a byte of `reader` | a variable |
+| `smc` | `writer` stores into `cell`, a byte of `reader` | a variable (`lift` `variable`); none where the transfer it targets is a switch over the index the store's value is read by (`no variable: ...`) |
 | `goto` | `edges` with no structured form | a goto per edge |
 | `join` | edges rejoining at the post-dominator of their branch | if/else, no goto |
 | `short_circuit` | `branches` sharing `target` | one `&&`/`\|\|` condition |
