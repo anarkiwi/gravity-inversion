@@ -10,6 +10,8 @@ import sidtrace
 import survey
 import transliterate
 
+TRAP_CALLS = 1000
+
 # Branch arms the original can never take from init/play, by branch address.
 DEAD = {
     0x11D9: "sound effects: only the host API starts one",
@@ -302,6 +304,29 @@ def test_variant_identical(  # pylint: disable=too-many-arguments,too-many-posit
     prg = swp.build_prg(data, gen, tmp_path)
     ref = sidtrace.trace_psid(data, frames)
     assert sidtrace.diff(ref, sidtrace.trace_prg(prg, frames)) is None
+
+
+def _patterns_at_end(m):
+    """Every pattern pointer at the music's end."""
+    lo, hi = m.table(6), m.table(8)
+    off = m.end - m.base
+    for i in range(hi - lo):
+        m[lo + i], m[hi + i] = off & 0xFF, off >> 8
+
+
+# trap code: patch reading outside the data the hand C holds
+TRAPS = {1: _octave(0x70), 2: _patterns_at_end}
+
+
+@pytest.mark.parametrize("code", sorted(TRAPS))
+def test_outside_data_traps(code, psid, gen, swp, tmp_path):
+    """A read outside the data the hand C holds traps, with the code of its site: pitches
+    reading code bytes past the frequency tables, patterns past the music."""
+    m = swp.Music(psid, gen)
+    TRAPS[code](m)
+    prg = swp.build_prg(m.bytes(), gen, tmp_path)
+    with pytest.raises(AssertionError, match=rf"jam at \$[0-9a-f]+ \(trap {code}\)"):
+        sidtrace.trace_prg(prg, TRAP_CALLS)
 
 
 def test_data_footprint(psid, gen, swp, frames):

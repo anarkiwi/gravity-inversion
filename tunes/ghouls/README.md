@@ -18,8 +18,9 @@
 `music` and `patterns` are the unions of the blocks' destinations; init fills them.
 `peek()` and `poke()` resolve an original address to its array through `segments[]`, so
 the data's absolute pointers, reads past a table's end (notes above 96, deep gosubs) and
-return stack overflow and underflow reach the same bytes as in the original. Other
-addresses (the original's code, RAM it never uses) read 0 and ignore writes.
+return stack overflow and underflow reach the same bytes as in the original. Any other
+address (the original's code, RAM it never uses) traps: a read (code 1), a write (2), a
+copy block's source (3) or destination (4; the generator holds every destination).
 `tests/test_ghouls.py` checks per byte that the arrays hold only the original's data and
 every byte it reads as data ([docs/footprint.md](../../docs/footprint.md)).
 

@@ -42,17 +42,34 @@ static struct {
   uint8_t posoff[3], patoff[3], notec[3], notelen[3], ctrl[3], note[3],
       instr[3], pbend[3], pdelay[3], pdir[3], nfqh[3], nfql[3], trk[6];
 } v = {.freq = {FREQ_TABLE}};
-#define F(i) (((const uint8_t *)&v)[i])
+
+/* trap codes: an access outside the data held */
+enum { TRAP_FREQ = 1, TRAP_TRACK, TRAP_PATTERN, TRAP_INSTR };
+
+/* Byte i of the frequency table and the voice state after it; traps past the
+ * state. */
+static __attribute__((noinline)) uint8_t F(uint16_t i) {
+  if (i >= sizeof v)
+    trap(TRAP_FREQ);
+  return ((const uint8_t *)&v)[i];
+}
 
 static uint8_t status, tempo, tempoc, frc;
 
-static uint8_t *at(uint8_t lo, uint8_t hi) {
-  return song + (uint16_t)((lo | hi << 8) - SONG_ORG);
+/* The n bytes of song data from original address a; traps with k where the
+ * song data does not hold them. */
+static __attribute__((noinline)) uint8_t *at(uint16_t a, uint8_t n, uint8_t k) {
+  uint16_t o = a - SONG_ORG;
+  if (o > sizeof song - n)
+    trap(k);
+  return song + o;
 }
+#define TRK(y) (*at(trk + (uint8_t)(y), 1, TRAP_TRACK))
+#define PAT(y) (*at(pat + (uint8_t)(y), 1, TRAP_PATTERN))
 
 /* 6502: repeated inline at getinstr and vibrato (lda instr,x / asl x3). */
 static uint8_t *instrument(uint8_t x) {
-  return song + INS + (uint8_t)(v.instr[x] << 3);
+  return at(SONG_ORG + INS + (uint8_t)(v.instr[x] << 3), 8, TRAP_INSTR);
 }
 
 /* 6502: repeated inline at getfreq and arpeggio. */
@@ -64,32 +81,32 @@ static void putfreq(uint8_t so, uint8_t n) {
 
 /* Read the next note of voice x; returns 0 if the song stops. */
 static uint8_t newnote(uint8_t x, uint8_t so) {
-  const uint8_t *trk = at(v.trk[x], v.trk[x + 3]);
+  uint16_t trk = v.trk[x] | v.trk[x + 3] << 8;
   uint8_t a, y, len, gate = 0xff;
-  while ((a = trk[v.posoff[x]]) == 0xff) /* restart track */
+  while ((a = TRK(v.posoff[x])) == 0xff) /* restart track */
     v.notec[x] = v.posoff[x] = v.patoff[x] = 0;
   if (a == 0xfe) { /* stop */
     status = ST_INIT | ST_OFF;
     return 0;
   }
-  const uint8_t *pat = at(song[PATPL + a], song[PATPH + a]);
+  uint16_t pat = song[PATPL + a] | song[PATPH + a] << 8;
   v.pbend[x] = 0;
   y = v.patoff[x];
-  v.notelen[x] = len = pat[y];
+  v.notelen[x] = len = PAT(y);
   v.notec[x] = len & NL_LEN;
   if (len & NL_LEGATO) {
     gate = 0xfe;
   } else {
     ++v.patoff[x];
     if (len & NL_INSTR) { /* instrument, or pitch bend if bit 7 */
-      a = pat[++y];
+      a = PAT(++y);
       if (a & 0x80)
         v.pbend[x] = a;
       else
         v.instr[x] = a;
       ++v.patoff[x];
     }
-    v.note[x] = a = pat[++y];
+    v.note[x] = a = PAT(++y);
     putfreq(so, a);
     v.nfqh[x] = F((uint8_t)(a << 1) + 1);
     v.nfql[x] = F((uint8_t)(a << 1));
@@ -101,7 +118,7 @@ static uint8_t newnote(uint8_t x, uint8_t so) {
   SIDREG(AD) = in[I_AD];
   SIDREG(SR) = in[I_SR];
   v.ctrl[x] = in[I_CTRL];
-  if (pat[++v.patoff[x]] == 0xff) { /* end of pattern */
+  if (PAT(++v.patoff[x]) == 0xff) { /* end of pattern */
     v.patoff[x] = 0;
     ++v.posoff[x];
   }

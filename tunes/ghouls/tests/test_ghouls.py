@@ -8,12 +8,21 @@ import footprint
 import gen_ghouls
 import sidtrace
 import transliterate
-from ghouls_support import HVSC, BUILD, build_prg, gen_prg, with_pattern
+from ghouls_support import (
+    HVSC,
+    BUILD,
+    build_prg,
+    gen_prg,
+    pattern_block,
+    with_block_src,
+    with_pattern,
+)
 
 SONGS = range(32)
 PRG = str(BUILD / "ghouls.prg")
 PRGS = {"hand": PRG, "generated": str(BUILD / "gen.prg")}
 VARIANT_SONG, VARIANT_FRAMES = 4, 150
+CMD_GOTO, CMD_GOSUB = 0x87, 0x8A
 
 # One pattern on all three voices, for the paths no subtune runs: a register
 # list naming a SID mirror, a note without hard gate, hard restart over
@@ -99,6 +108,27 @@ def test_variant_closes_branch_gaps(psid, variant):
         psid, [sidtrace.song_calls(psid, s, HVSC) for s in SONGS], list(SONGS), 8
     )
     assert disasm.one_way(variant[0], cov) == UNREACHABLE
+
+
+def _trap_variants(psid):
+    """{trap code: patched PSID} accessing outside the data the hand C holds: a goto past
+    the gosub return bytes, a gosub to itself nesting until its return address is stored
+    there, a copy block sourced below the block tables."""
+    past = gen_ghouls.GAPS["stack"].stop
+    dst = pattern_block(psid, VARIANT_SONG)[1]
+    return {
+        1: with_pattern(psid, VARIANT_SONG, bytes([CMD_GOTO, past & 0xFF, past >> 8])),
+        2: with_pattern(psid, VARIANT_SONG, bytes([CMD_GOSUB, dst & 0xFF, dst >> 8])),
+        3: with_block_src(psid, VARIANT_SONG, gen_ghouls.BLOCK_SRC - 1),
+    }
+
+
+@pytest.mark.parametrize("code", [1, 2, 3])
+def test_outside_data_traps(code, psid, tmp_path):
+    """An access outside the data the hand C holds traps, with the code of its site."""
+    prg = build_prg(_trap_variants(psid)[code], tmp_path)
+    with pytest.raises(AssertionError, match=rf"jam at \$[0-9a-f]+ \(trap {code}\)"):
+        sidtrace.trace_prg(str(prg), VARIANT_FRAMES, VARIANT_SONG)
 
 
 def test_data_footprint(psid, variant):

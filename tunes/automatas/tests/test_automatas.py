@@ -14,6 +14,7 @@ import transliterate
 
 ARRANGER_POS = range(0x10EB, 0x10EC)
 VARIANT_CALLS = 30000
+PAT_LO, PAT_HI = 0x1A00, 0x1A80
 PRGS = {"hand": BUILD / "automatas.prg", "generated": BUILD / "gen.prg"}
 BUILDERS = {"hand": build_prg, "generated": gen_prg}
 
@@ -106,6 +107,20 @@ def test_variant_c_identical(name, psid):
     """A patched song generates the original's .c: song data is only in the .h."""
     variant = _patched(psid, VARIANTS[name][0])
     assert transliterate.transliterate(variant, "gen.h")[0] == _base_c(psid)
+
+
+@pytest.mark.parametrize("where", ["code", "end"])
+def test_outside_data_traps(where, psid, tmp_path):
+    """A read outside the data the hand C holds traps: every pattern pointer at a code byte
+    no read takes, or at the image's end."""
+    load, _, _, image = sidtrace.psid_parts(psid)
+    addr = {"code": max(gen_automatas.CODE_READ[:3]) + 1, "end": load + len(image)}[
+        where
+    ]
+    patches = {PAT_LO + i: addr & 0xFF for i in range(0x80)}
+    variant = _patched(psid, patches | {PAT_HI + i: addr >> 8 for i in range(0x80)})
+    with pytest.raises(AssertionError, match=r"jam at \$[0-9a-f]+ \(trap 1\)"):
+        sidtrace.trace_prg(build_prg(variant, tmp_path), VARIANT_CALLS)
 
 
 def test_data_footprint(psid):

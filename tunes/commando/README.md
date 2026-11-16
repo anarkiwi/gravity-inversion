@@ -8,6 +8,9 @@ pointer tables keep their original 16-bit addresses; `at()` resolves them relati
 to `SONG_ORG`. The frequency table and voice offset table (`sid`) are likewise copied
 from the image.
 
+A read outside the data held traps: the frequency table past the voice state after it
+(code 1), a track (2), pattern (3) or instrument record (4) outside `SONG_DATA`.
+
 Instrument pulse widths are modulated in place, as in the original, so `song[]` is
 writable.
 

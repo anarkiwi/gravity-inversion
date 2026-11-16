@@ -31,5 +31,7 @@ lengths, patched variants). The CLI checks every song for the construct map's fr
     python3 tools/footprint.py commando incoherent automatas ghouls emomyst
 
 Where the original's behaviour depends on addresses (absolute pointers in its data, reads past a
-table's end), the hand C resolves an original address to the array holding it; instruction bytes
-a read past a table's end takes in no run are not held and read 0.
+table's end), the hand C resolves an original address to the array holding it. An access to an
+address it does not hold traps: `trap(k)` in `c64/driver.c` (the generated C's, `cgen_trap`
+set to the site's code `k`, then a JAM), which `tools/sidtrace.py` reports. Each tune's
+`test_outside_data_traps` drives its traps from patched data.

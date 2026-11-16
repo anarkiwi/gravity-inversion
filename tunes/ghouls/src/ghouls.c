@@ -140,23 +140,24 @@ static uint8_t fixed_dur[3];        /* 0 = duration per note */
 static uint8_t cutoff_dir;          /* 0 = down */
 static uint8_t cutoff_min_lo, cutoff_min_hi, cutoff_max_lo, cutoff_max_hi;
 
-/* The byte held at original address a; NULL where the original holds no data
- * (its code, and RAM it never uses). */
-static __attribute__((noinline)) uint8_t *at(uint16_t a) {
+/* trap codes: an access outside the data held */
+enum { TRAP_READ = 1, TRAP_WRITE, TRAP_COPY_SRC, TRAP_COPY_DST };
+
+/* The n bytes held from original address a, in one array; traps with k where
+ * the original holds no data (its code, and RAM it never uses). */
+static __attribute__((noinline)) uint8_t *at(uint16_t a, uint16_t n,
+                                             uint8_t k) {
   const struct segment *s;
   for (s = segments; s < segments + sizeof segments / sizeof *segments; ++s)
-    if ((uint16_t)(a - s->org) < s->len)
+    if ((uint16_t)(a - s->org) < s->len && n <= s->len - (uint16_t)(a - s->org))
       return s->mem + (uint16_t)(a - s->org);
-  return NULL;
+  trap(k);
 }
 static __attribute__((noinline)) uint8_t peek(uint16_t a) {
-  uint8_t *p = at(a);
-  return p ? *p : 0;
+  return *at(a, 1, TRAP_READ);
 }
 static __attribute__((noinline)) void poke(uint16_t a, uint8_t b) {
-  uint8_t *p = at(a);
-  if (p)
-    *p = b;
+  *at(a, 1, TRAP_WRITE) = b;
 }
 static uint16_t peek16(uint16_t a) { return peek(a) | peek(a + 1) << 8; }
 
@@ -459,9 +460,13 @@ void tune_play(void) {
 
 static void copy_block(uint8_t n) {
   uint8_t i = n << 1;
-  const uint8_t *src = at(peek16(BLOCK_SRC + i));
-  uint8_t *dst = at(peek16(BLOCK_DST + i));
   uint16_t k, len = peek16(BLOCK_LEN + i);
+  const uint8_t *src;
+  uint8_t *dst;
+  if (!len)
+    return;
+  src = at(peek16(BLOCK_SRC + i), len, TRAP_COPY_SRC);
+  dst = at(peek16(BLOCK_DST + i), len, TRAP_COPY_DST);
   for (k = 0; k != len; ++k) /* 6502 loop $29C6-$29E0 */
     dst[k] = src[k];
 }

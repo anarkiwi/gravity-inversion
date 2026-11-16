@@ -76,7 +76,12 @@ enum {
 };
 
 static const uint8_t data[] = {DATA};
-#define at(a) data[(a) - DATA_ORG]
+/* The original's data byte at a; traps (code 1) outside DATA. */
+static uint8_t at(uint16_t a) {
+  if ((uint16_t)(a - DATA_ORG) >= sizeof data)
+    trap(1);
+  return data[(uint16_t)(a - DATA_ORG)];
+}
 #define word(lo, hi) ((uint16_t)(hi) << 8 | (lo))
 #define freq_of(n) word(at(FREQ_LO + (n)), at(FREQ_HI + (n)))
 #define ptr_at(lo, hi, i) word(at((lo) + (i)), at((hi) + (i)))

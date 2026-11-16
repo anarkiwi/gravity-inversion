@@ -10,7 +10,7 @@ generates `build/automatas_data.h` from the HVSC PSID.
 pointer and wait tables, pattern pointer and arranger tables, pattern and sidTAB streams), and
 `CODE_READ` at `CODE_READ_ADDRS`: the bytes of play's code `$168c-$16c0` that pitch and slide
 reads past the word table's end take in the song and the patched variants. `at()` reads an
-original address from them; other addresses read 0. `tests/test_automatas.py` checks per byte
+original address from them; any other address traps (code 1). `tests/test_automatas.py` checks per byte
 that they hold only the original's data and every byte it reads as data
 ([docs/footprint.md](../../docs/footprint.md)).
 The player keeps most of its state in code operands; init does not reset all of it, so

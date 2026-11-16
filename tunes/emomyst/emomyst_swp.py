@@ -31,7 +31,7 @@ class Music:
         self.base = gen.music_org(load, init, image)
 
     def _at(self, addr):
-        assert self.load <= addr < self.load + len(self.psid) - PSID_DATA, hex(addr)
+        assert self.load <= addr < self.end, hex(addr)
         return PSID_DATA + addr - self.load
 
     def __getitem__(self, addr):
@@ -39,6 +39,11 @@ class Music:
 
     def __setitem__(self, addr, value):
         self.psid[self._at(addr)] = value
+
+    @property
+    def end(self):
+        """Address past the image's end."""
+        return self.load + len(self.psid) - PSID_DATA
 
     def word(self, addr):
         """Little-endian word at addr."""

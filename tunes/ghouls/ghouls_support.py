@@ -37,22 +37,47 @@ def gen_prg(psid, out_dir):
     return build(psid, out_dir)[0]
 
 
-def with_pattern(psid, song, pattern):
-    """`psid` with every voice of music `song` (0-6) playing `pattern`, which replaces the
-    start of the song's second copy block."""
+def _image(psid):
+    """(byte offset in `psid` of original address a, little-endian word at a)."""
     load, _, _, image = psid_parts(psid)
-    data = bytearray(psid)
     head = len(psid) - len(image)
 
     def at(addr):
         return head + addr - load
 
-    def word(addr):
-        return data[at(addr)] | data[at(addr) + 1] << 8
+    return at, lambda addr: psid[at(addr)] | psid[at(addr) + 1] << 8
 
-    block = 2 * data[at(SONG_BLOCK_B + song)]
-    assert len(pattern) <= word(BLOCK_LEN + block)
-    src, dst = word(BLOCK_SRC + block), word(BLOCK_DST + block)
+
+def _block(psid, song):
+    """Table offset of music `song`'s (0-6) second copy block."""
+    at, _ = _image(psid)
+    return 2 * psid[at(SONG_BLOCK_B + song)]
+
+
+def pattern_block(psid, song):
+    """(source, destination, length) of music `song`'s (0-6) second copy block."""
+    _, word = _image(psid)
+    return tuple(
+        word(t + _block(psid, song)) for t in (BLOCK_SRC, BLOCK_DST, BLOCK_LEN)
+    )
+
+
+def with_block_src(psid, song, src):
+    """`psid` with music `song`'s (0-6) second copy block read from `src`."""
+    at, _ = _image(psid)
+    data = bytearray(psid)
+    data[at(BLOCK_SRC + _block(psid, song))] = src & 0xFF
+    data[at(BLOCK_SRC + _block(psid, song)) + 1] = src >> 8
+    return bytes(data)
+
+
+def with_pattern(psid, song, pattern):
+    """`psid` with every voice of music `song` (0-6) playing `pattern`, which replaces the
+    start of the song's second copy block."""
+    at, _ = _image(psid)
+    src, dst, length = pattern_block(psid, song)
+    assert len(pattern) <= length
+    data = bytearray(psid)
     data[at(src) : at(src) + len(pattern)] = pattern
     col = data[at(SONG_INDEX + song)]
     for voice in range(3):
