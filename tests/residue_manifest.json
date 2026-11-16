@@ -1,96 +1,92 @@
 {
  "pins": {
-  "deity-informant": "0.39.0",
+  "deity-informant": "0.39.2",
   "vagrant-moses": "0.17.0",
   "jennings": "0.14.1",
   "pysidtracker": "0.61.0"
  },
  "causes": {
   "automatas": {
-   "A1": "each row copy's operand pointer, advanced by its row's length, read through a span's bounds-checked reader: its values are bounded to a byte, not to its table",
-   "C1": "init's song guard: A outside the PSID header's songs (by construction); $10D4 the opcode cell init's SID model probe ($D41B) sets to ASL A or NOP holding another opcode",
+   "A1": "each row copy's operand pointers (the V1_f21, V1_f3C/f3D, V1_f4A/f4B and V1_f58/f59 cells of $1149, $1164, $1172, $1180 and their copies at $11D1-$1208 and $1259-$1290), advanced by its row's length and read through span C2's bounds-checked reader; the pattern pointer R1 and the pointers loaded from it, read through the same reader by the six copies at $12BE: their values are bounded to a byte, not to a table",
+   "C1": "$10D4 the opcode cell init's SID model probe ($D41B, the store at $14F9) sets to ASL A or NOP, holding another opcode: a deopt the lift could translate by the probe's result",
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)",
    "C3": "patched opcode cells tested against their opcodes (ADC or SBC) instead of selecting the operation by the state that patches them; play switches on the opcode cell $10D4 (ASL A or NOP) init's SID model probe sets instead of on the probe's result",
-   "D1": "span C1 $1554-$1713 holds play's code $168C-$1713, which the reads at $1426/$143F indexed by a note byte reach; span C0 $1020-$1083 holds the voice copies' gate bit and mask bytes ($1020-$1021 at the copies' $31 stride), constant after init and read at $12BE by voice index, and the copies' code $1022-$1049 and $1053-$107A between them",
-   "D5": "the row copies' operand cells (V0_* fields) and patched immediates and opcodes (S_*) init and play store, and the cells init's SID model probe sets (the immediate $10CE and the opcode $10D4): real state"
+   "D1": "span C1 $1554-$1713 holds play's code $168C-$1713, which the reads at $0FE3 and $1022 (the note reads at $1426/$143F) indexed by a note byte reach; span C0 $1020-$1083 holds the voice copies' gate bit and mask bytes ($1020-$1021 at the copies' $31 stride), constant after init and read at $12BE by voice index, and the copies' code $1022-$1049 and $1053-$107A between them"
   },
   "commando": {
    "A1": "the song and pattern pointers ($F0-$F3) and the instrument rows at a constant plus 8 times an instrument byte, which the lift does not prove inside one region and which past the loaded program's end are no array's, read through span C0's bounds-checked reader",
-   "C1": "init's song guard: A outside the PSID header's songs (by construction); $10A1 the pattern pointer a song byte selects from its tables, guarded against the stack page and I/O; $1212, $1275 and $127C the pulse width stores into the instrument row an instrument byte selects, guarded against a row past the loaded program",
+   "C1g": "init's song guard (A outside the PSID header's songs); $10A1 the pattern pointer a song byte selects from its tables, held to the window that excludes the stack page and I/O; $1212 and $1275 the pulse width stores into the instrument row an instrument byte selects, past the loaded program's end",
+   "C1r": "$127C the second pulse width store into the instrument row keeps its own guard though $1275's (trap 4) leaves Y inside it: trap_info implied_by [4]",
    "D1": "span C0 starts at R1's origin $1368, init's code $1368-$139D, which the song pointers' bounds-checked reads reach"
   },
   "emomyst": {
-   "A1": "init's voice setup at $17C8 (and its copy inlined in init) reads through the voice pointers $17CF/$17D3/$17D7 (R47-R49), and init's helper at $1163 through its own patched operand (S_161/S_162), through span C0's bounds-checked reader; play's song pointers, the operands the relocator leaves constant (K_*, named through the .h so the C does not depend on the song's layout) and those play patches (S_*) are read through it too",
-   "C1": "init's song guard: A outside the PSID header's songs (by construction); $1947 an effect byte past its table's extent",
+   "A1": "init's voice setup at $17C8 reads through the voice pointers $17CF/$17D3/$17D7 (R47-R49) and init's helper at $1163 through its own patched operand (S_161/S_162, the pointer operand site), through span C0's bounds-checked reader; play's song pointers, the operands the relocator leaves constant (K_*) and those play patches (S_*) are read through it too; init's relocator subscripts span C0 by the 16-bit operand addresses its relocation table lists less C0_ORG, and patches the pointer operands $10CB/$10DA it reads that table through; play's patched immediates (S_1FF-S_9ED), held in span C0 where the song pointers' reads reach, are found through cgen_var",
+   "A2": "the effect dispatches $19CF and $1A13 lift as switches over the effect index, but the stores of each handler's address byte into the JMPs' operands (S_9CE, S_A11) stay: the cells lie where span C0's reads reach, so the C keeps the code address bytes as values",
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction); $1947 an effect byte past its table's extent (the code after it)",
+   "C2": "shared tails entered by JMP and fall-through, lifted as functions: $1537 (the JMPs at $1424/$142E), $16D6 ($138C), $17BA ($145C/$151D), $17E5 ($1AC6), $1802 ($1ABA), $1B31 ($1B4F); and the effect handlers the dispatch JMPs $19CF/$1A13 reach ($1A23, $1A2D, $1A3E, $1A42, $1A59, $1A65, $1AC1), tail-jumped from the JSR'd routine $19AB, each a function the switch calls",
    "C3": "a shared handler tail retests the dispatch selector (v5 == 0x24, 0x2A) after the switch",
-   "D1": "span C0 $1000-$24A1 holds the whole image: init's relocator reads and patches the operands its relocation table lists by subscripts of C0 with their 16-bit addresses, and play's song pointers are bounds-checked reads of C0, so init's and play's code ($1000-$1B54 runs) is held; the effect offset table at $1A03 inside the code is read at $1A00 by a byte index, whose interval reaches the code after it",
-   "D5": "the operand cells play patches (effect parameters, the dispatch JMP operands) and those init patches for its own use: the relocation table read operands $10CC-$10CD and $10DB-$10DC ($10AB-$10B7), the song number stored into the operand $111F ($10A5) and the helper's read operand $1164-$1165: S_* variables, real state",
-   "K5": "init's relocator adds to each operand it patches at $1000 by subscripting span C0 with the operand's 16-bit address from the relocation table, not an 8-bit index"
+   "D1": "span C0 $1000-$24A1 holds the whole image: init's relocator reads and patches the operands its relocation table lists by subscripts of C0 with their 16-bit addresses, and play's song pointers are bounds-checked reads of C0, so init's and play's code ($1000-$1B54, one site per set of accesses reaching it) is held; the effect offset table at $1A03 inside the code is read at $1A00 by a byte index, whose interval reaches the code after it"
   },
   "fuzz-brk": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-decimal": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-fallthrough": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-indx": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction)",
-   "D2": "the (zp,X) pointers init seeds are held as zero-page region R0, the hull of the three pointer pairs (the whole zero page where the X index wraps): the bytes between and around the pairs, which nothing writes, are held",
-   "K5": "the (zp,X) load and store subscript span C0, the state the seeded pointers address, by the 16-bit pointer, not by an 8-bit index"
+   "A1": "the (zp,X) load and store subscript span C0 by the 16-bit pointer a seeded pair holds less C0_ORG: a machine address, not an 8-bit index",
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)",
+   "D2": "the (zp,X) pointers init seeds are held as zero-page region R0, the hull of the three pointer pairs (the whole zero page where the X index wraps): the bytes between and around the pairs, which nothing writes, are held"
   },
   "fuzz-inlineargs": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-jam": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction); the JAM opcode the motif places (by construction)"
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction); the JAM opcode the motif places (by construction)"
   },
   "fuzz-jsr3": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-loop": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-rmw": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction)",
-   "D5": "the immediate ISC increments in place, held as a variable: real state (by construction)"
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-rti": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-skip": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-smc": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction)",
-   "D1": "each copy reads its own code byte (C0[K2[k]]): span C0 holds the copies' code between the three bytes read",
-   "D5": "the copies' operand cells, one field array per cell: real state (by construction)"
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)",
+   "D1": "each copy reads its own code byte (C0[K2[k]]): span C0 holds the copies' code between the three bytes read"
   },
   "fuzz-stackswitch": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-unrolled": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction)",
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)",
    "D2": "one state field per voice at the copies' stride held as a run over the three copies: the bytes between the copies' fields are held and never written"
   },
   "fuzz-vflag": {
-   "C1": "init's song guard: A outside the PSID header's songs (by construction)"
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "ghouls": {
-   "A1": "command $85's register and value list, read at an offset its loop advances past the song pointer's guarded extent, is read through span C1's bounds-checked reader; the call command's return stack pushes are bounds-checked against the stack (oob_wr past it)",
-   "C1": "init's song guard: A outside the PSID header's songs (by construction); $299B a song's copy selector (from $2A1A/$2A25) past the ten copy pointer pairs at $29E7/$29FB; $61DD the song number less $0A indexing the song list pointers at $61DD/$61E2 past $15, which the song guard already excludes; $6362 a voice's song pointer outside the song data $6CB7-$9E07 it points into; $6368 a song command byte outside $80-$94 indexing the command table past its extent",
-   "C3": "the bounds tests of the return stack pushes before oob_wr",
-   "D1": "span C1 $2980-$A013 holds init's code ($2980-$29E6, $6110-$6122, $6153-$622D, $7316-$733E) and play's ($6234-$6CB6 runs): init's copy loop stores through its 16-bit copy pointers into C1, its song list reads and voice state clears subscript C1 by the 16-bit addresses it loads, and the song pointers' reads (CGEN_IX subscripts of C1 by the 16-bit pointer, and bounds-checked reads) reach it; the per-voice cells init clears that are not promoted are held as regions inside it",
-   "D5": "the operand cells play patches, per voice (V0_*/V1_* at the voice copies' stride) and shared (S_*), several of which init's setup also stores ($6181-$61D9); and the operand $29D8 of init's copy loop, which init patches at $29BD: real state",
-   "K5": "init's reads of a song's voice records at $6110 subscript span C1 by the 16-bit list pointer it loads from $61DD/$61E2, not by an 8-bit index"
+   "A1": "init's copy loop at $2999 subscripts span C1 by its 16-bit copy pointers ($FA/$FB, $FC/$FD) less C1_ORG and init's song setup at $6110 by the 16-bit list and record pointers it loads; command $85's register and value list, read at an offset its loop advances past the song pointer's guarded extent, through span C1's bounds-checked reader; the call command's return stack pushes, bounds-checked against the stack (oob_wr past it); the voice copies' patched immediates (V0_f00/f50/fE4/f136 and V1_f00 per voice) and the shared ones (S_5CC-S_5FF), held in span C1 where those reads reach, found through cgen_var",
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction) ($6110); $299B a song's copy selector (from $2A1A/$2A25) past the ten copy pointer pairs at $29E7/$29FB (the next object); $6362 a voice's song pointer outside the song data $6CB7-$9E07 it points into (objchk); $6368 a song command byte outside $80-$94 indexing the command table past its extent (the next object)",
+   "C1r": "$61DD the song number less $0A indexing the song list pointers at $61DD/$61E2: init's song guard already keeps it inside (A in $0B-$1F less $0A is 1-$15), but trap_info's held values lose A through the subtraction, so the guard stays (residue.IMPLIED records the derivation)",
+   "D1": "span C1 $2980-$A013 holds init's code ($2980-$29E6, $6110-$6122, $6153-$622D, $7316-$733E) and play's ($6234-$6CB6 runs): init's copy loop stores through its 16-bit copy pointers into C1, its song list reads and voice state clears subscript C1 by the 16-bit addresses it loads, and the song pointers' reads (CGEN_IX subscripts of C1 by the 16-bit pointer, and bounds-checked reads) reach it; the per-voice cells init clears that are not promoted are held as regions inside it"
   },
   "incoherent": {
-   "A1": "the sequence and pattern pointers read through span C1's bounds-checked reader",
-   "C1": "init's song guard: A outside the PSID header's songs (by construction); $09B8, $0ABE and $0AC7 a song byte indexing a table past its extent ($F, 4, $17)",
-   "C2": "the dispatch at $0AFF is a switch over the command index (the JMP operand table $0C5F's entry): the $0874 arm falls through at $0879 into the $087B arm, a goto into the switch's default arm",
-   "D5": "operand cells play patches (instrument and effect parameters) held as S_* variables: real state",
-   "K5": "the sequence reads at $0996 subscript span C1 by the 16-bit sequence pointer from the tables at $09C9/$09CE plus the position byte, not by an 8-bit index"
+   "A1": "the sequence and pattern pointers read through span C1's bounds-checked reader; the sequence reads at $0996 subscript span C1 by the 16-bit sequence pointer from the tables at $09C9/$09CE plus the position byte, and the pattern reads by the pointer R0[0..1] plus an offset, each a machine address less C1_ORG, not an 8-bit index",
+   "C1g": "init's song guard: A outside the PSID header's songs (by construction); $0ABE a song byte indexing the 5-entry table $0C5F past its extent (the next object); $0AC7 one indexing the 24-entry table $12CA past its extent (a byte another column reads)",
+   "C1r": "$09B8 the song byte indexing the 16-entry table $0C4F: the lift proves the index inside the table (trap_info proven), so its guard is redundant",
+   "C2": "shared code lifted as functions entered at no procedure: $085E (f14) the tail the branch $085A and the fall-through past $085C share; $0A65 (f4) the computed JSR $0A65 with its handler $0809, a function entered at the JSR, which $0A71's computed JSR also calls; $0C1A (f3) the tail $092F's JMP and $0C17's fall-through share"
   }
  },
  "sites": {
@@ -175,68 +171,14 @@
      "rdC0(v12, v13)"
     ]
    ],
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ],
-    [
-     "$10A1",
-     "trap(2) deopt"
-    ],
-    [
-     "$1212",
-     "trap(3) deopt"
-    ],
-    [
-     "$1275",
-     "trap(4) deopt"
-    ],
+   "C1r": [
     [
      "$127C",
-     "trap(5) deopt"
+     "trap(5) index implied by trap(4)"
     ]
    ]
   },
   "incoherent": {
-   "D5": [
-    [
-     "$088F",
-     "S_8C: operand of $088E, stored by $0886"
-    ],
-    [
-     "$08A5",
-     "S_A2: operand of $08A4, stored by $0ABB, $0C33"
-    ],
-    [
-     "$08FF",
-     "S_FC: operand of $08FE, stored by $08F4, $0914"
-    ],
-    [
-     "$0933",
-     "S_130: operand of $0932, stored by $0843, $0911, $0978, $0A48"
-    ],
-    [
-     "$0937",
-     "S_134: operand of $0936, stored by $0840, $095A, $0967, $0A4D"
-    ],
-    [
-     "$097C",
-     "S_179: operand of $097B, stored by $0847, $0954, $0964"
-    ],
-    [
-     "$0981",
-     "S_17E: operand of $0980, stored by $090E, $0948"
-    ],
-    [
-     "$0986",
-     "S_183: operand of $0985, stored by $0942"
-    ],
-    [
-     "$0AFC",
-     "S_2F9: operand of $0AFB, stored by $0ADC"
-    ]
-   ],
    "A1": [
     [
      "$0996",
@@ -257,44 +199,42 @@
     [
      "$0996",
      "rdC1(R0[0] | ((uint16_t)R0[1] << 8), v97 + 1)"
+    ],
+    [
+     "$0996",
+     "subscript by address C1[(uint16_t)((R0[0] | ((uint16_t)R0[1] << 8)) + (uint8_t)(v10 + 1) - C1_ORG)]"
+    ],
+    [
+     "$0996",
+     "subscript by address C1[v7 + (uint8_t)(v6 + 1) - C1_ORG]"
+    ],
+    [
+     "$0996",
+     "subscript by address C1[v7 + v11 - C1_ORG]"
+    ],
+    [
+     "$0996",
+     "subscript by address C1[v7 + v6 - C1_ORG]"
     ]
    ],
-   "C1": [
-    [
-     "$0800",
-     "trap(0) deopt"
-    ],
+   "C1r": [
     [
      "$09B8",
-     "trap(2) deopt"
-    ],
-    [
-     "$0ABE",
-     "trap(3) deopt"
-    ],
-    [
-     "$0AC7",
-     "trap(4) deopt"
+     "trap(2) index proven"
     ]
    ],
    "C2": [
     [
-     "$0879",
-     "goto $087B"
-    ]
-   ],
-   "K5": [
-    [
-     "$0996",
-     "C1[v7 + (uint8_t)(v6 + 1) - C1_ORG]"
+     "$085E",
+     "function f14 at no procedure entry"
     ],
     [
-     "$0996",
-     "C1[v7 + v11 - C1_ORG]"
+     "$0A65",
+     "function f4 at no procedure entry"
     ],
     [
-     "$0996",
-     "C1[v7 + v6 - C1_ORG]"
+     "$0C1A",
+     "function f3 at no procedure entry"
     ]
    ]
   },
@@ -302,383 +242,61 @@
    "D1": [
     [
      "$1022",
-     "C0 $1022-$1049 (40 B): C0@$12BE"
-    ],
-    [
-     "$1053",
-     "C0 $1053-$107A (40 B): C0@$12BE"
+     "C0 $1022-$1049, $1053-$107A (80 B): C0@$12BE"
     ],
     [
      "$168C",
      "C1 $168C-$1713 (136 B): C1@$0FE3, C1@$1022"
     ]
    ],
-   "D5": [
-    [
-     "$0FE4",
-     "S_1: operand of $0FE3, stored by $0FD2, $0FF2"
-    ],
-    [
-     "$1023",
-     "V0_f0A[0]: operand of $1022, stored by indexed or indirect stores"
-    ],
-    [
-     "$1025",
-     "V0_f0C[0]: operand of $1024, stored by indexed or indirect stores"
-    ],
-    [
-     "$102D",
-     "V0_f14[0]: operand of $102C, stored by indexed or indirect stores"
-    ],
-    [
-     "$102F",
-     "V0_f16[0]: operand of $102E, stored by indexed or indirect stores"
-    ],
-    [
-     "$1037",
-     "V0_f1E[0]: operand of $1036, stored by indexed or indirect stores"
-    ],
-    [
-     "$1039",
-     "V0_f20[0]: operand of $1038, stored by indexed or indirect stores"
-    ],
-    [
-     "$103B",
-     "V0_f22[0]: operand of $103A, stored by indexed or indirect stores"
-    ],
-    [
-     "$103D",
-     "V0_f24[0]: operand of $103C, stored by indexed or indirect stores"
-    ],
-    [
-     "$1054",
-     "V0_f0A[1]: operand of $1053, stored by indexed or indirect stores"
-    ],
-    [
-     "$1056",
-     "V0_f0C[1]: operand of $1055, stored by indexed or indirect stores"
-    ],
-    [
-     "$105E",
-     "V0_f14[1]: operand of $105D, stored by indexed or indirect stores"
-    ],
-    [
-     "$1060",
-     "V0_f16[1]: operand of $105F, stored by indexed or indirect stores"
-    ],
-    [
-     "$1068",
-     "V0_f1E[1]: operand of $1067, stored by indexed or indirect stores"
-    ],
-    [
-     "$106A",
-     "V0_f20[1]: operand of $1069, stored by indexed or indirect stores"
-    ],
-    [
-     "$106C",
-     "V0_f22[1]: operand of $106B, stored by indexed or indirect stores"
-    ],
-    [
-     "$106E",
-     "V0_f24[1]: operand of $106D, stored by indexed or indirect stores"
-    ],
-    [
-     "$1085",
-     "V0_f0A[2]: operand of $1084, stored by indexed or indirect stores"
-    ],
-    [
-     "$1087",
-     "V0_f0C[2]: operand of $1086, stored by indexed or indirect stores"
-    ],
-    [
-     "$108F",
-     "V0_f14[2]: operand of $108E, stored by indexed or indirect stores"
-    ],
-    [
-     "$1091",
-     "V0_f16[2]: operand of $1090, stored by indexed or indirect stores"
-    ],
-    [
-     "$1099",
-     "V0_f1E[2]: operand of $1098, stored by indexed or indirect stores"
-    ],
-    [
-     "$109B",
-     "V0_f20[2]: operand of $109A, stored by indexed or indirect stores"
-    ],
-    [
-     "$109D",
-     "V0_f22[2]: operand of $109C, stored by indexed or indirect stores"
-    ],
-    [
-     "$109F",
-     "V0_f24[2]: operand of $109E, stored by indexed or indirect stores"
-    ],
-    [
-     "$10AA",
-     "S_C7: operand of $10A9, stored by $151A, $1723"
-    ],
-    [
-     "$10AF",
-     "S_CC: operand of $10AE, stored by $151D, $1731"
-    ],
-    [
-     "$10B6",
-     "S_D3: operand of $10B5, stored by $10BA, $150B, $174C"
-    ],
-    [
-     "$10B8",
-     "S_D5: opcode of $10B8, stored by $1767, $1778"
-    ],
-    [
-     "$10B9",
-     "S_D6: operand of $10B8, stored by $1511, $1754, $175E, $176E"
-    ],
-    [
-     "$10BE",
-     "S_DB: operand of $10BD, stored by $10C6, $150E, $174F"
-    ],
-    [
-     "$10BF",
-     "S_DC: opcode of $10BF, stored by $176A, $177B"
-    ],
-    [
-     "$10C0",
-     "S_DD: operand of $10BF, stored by $1514, $1757, $1762, $1773"
-    ],
-    [
-     "$10CA",
-     "S_E7: operand of $10C9, stored by $1517, $173C"
-    ],
-    [
-     "$10CE",
-     "S_EB: operand of $10CD, stored by $14EB, $14F4"
-    ],
-    [
-     "$10D4",
-     "S_F1: opcode of $10D4, stored by $14F9"
-    ],
-    [
-     "$10D8",
-     "S_F5: opcode of $10D8, stored by $100C, $1013"
-    ],
-    [
-     "$10D9",
-     "S_F6: operand of $10D8, stored by $10DE, $1197, $121F, $12A7, $1550"
-    ],
-    [
-     "$10EB",
-     "S_108: operand of $10EA, stored by $1123, $14FE"
-    ],
-    [
-     "$1129",
-     "V1_f00[0]: operand of $1128, stored by $10E1, $112C, $11AB"
-    ],
-    [
-     "$114A",
-     "V1_f21[0]: operand of $1149, stored by $113A"
-    ],
-    [
-     "$1161",
-     "V1_f38[0]: operand of $1160, stored by $1150"
-    ],
-    [
-     "$1165",
-     "V1_f3C[0]: operand of $1164, stored by $10FB, $11A1"
-    ],
-    [
-     "$1166",
-     "V1_f3D[0]: operand of $1164, stored by $1101, $11A6"
-    ],
-    [
-     "$116F",
-     "V1_f46[0]: operand of $116E, stored by $1154"
-    ],
-    [
-     "$1173",
-     "V1_f4A[0]: operand of $1172, stored by $1137"
-    ],
-    [
-     "$1174",
-     "V1_f4B[0]: operand of $1172, stored by $1143"
-    ],
-    [
-     "$117D",
-     "V1_f54[0]: operand of $117C, stored by $1158"
-    ],
-    [
-     "$1181",
-     "V1_f58[0]: operand of $1180, stored by $1134"
-    ],
-    [
-     "$1182",
-     "V1_f59[0]: operand of $1180, stored by $1140"
-    ],
-    [
-     "$1194",
-     "V1_f6B[0]: operand of $1193, stored by $114C"
-    ],
-    [
-     "$11B1",
-     "V1_f00[1]: operand of $11B0, stored by $10E4, $11B4, $1233"
-    ],
-    [
-     "$11D2",
-     "V1_f21[1]: operand of $11D1, stored by $11C2"
-    ],
-    [
-     "$11E9",
-     "V1_f38[1]: operand of $11E8, stored by $11D8"
-    ],
-    [
-     "$11ED",
-     "V1_f3C[1]: operand of $11EC, stored by $110A, $1229"
-    ],
-    [
-     "$11EE",
-     "V1_f3D[1]: operand of $11EC, stored by $1110, $122E"
-    ],
-    [
-     "$11F7",
-     "V1_f46[1]: operand of $11F6, stored by $11DC"
-    ],
-    [
-     "$11FB",
-     "V1_f4A[1]: operand of $11FA, stored by $11BF"
-    ],
-    [
-     "$11FC",
-     "V1_f4B[1]: operand of $11FA, stored by $11CB"
-    ],
-    [
-     "$1205",
-     "V1_f54[1]: operand of $1204, stored by $11E0"
-    ],
-    [
-     "$1209",
-     "V1_f58[1]: operand of $1208, stored by $11BC"
-    ],
-    [
-     "$120A",
-     "V1_f59[1]: operand of $1208, stored by $11C8"
-    ],
-    [
-     "$121C",
-     "V1_f6B[1]: operand of $121B, stored by $11D4"
-    ],
-    [
-     "$1239",
-     "V1_f00[2]: operand of $1238, stored by $10E7, $123C, $12BB"
-    ],
-    [
-     "$125A",
-     "V1_f21[2]: operand of $1259, stored by $124A"
-    ],
-    [
-     "$1271",
-     "V1_f38[2]: operand of $1270, stored by $1260"
-    ],
-    [
-     "$1275",
-     "V1_f3C[2]: operand of $1274, stored by $1119, $12B1"
-    ],
-    [
-     "$1276",
-     "V1_f3D[2]: operand of $1274, stored by $111F, $12B6"
-    ],
-    [
-     "$127F",
-     "V1_f46[2]: operand of $127E, stored by $1264"
-    ],
-    [
-     "$1283",
-     "V1_f4A[2]: operand of $1282, stored by $1247"
-    ],
-    [
-     "$1284",
-     "V1_f4B[2]: operand of $1282, stored by $1253"
-    ],
-    [
-     "$128D",
-     "V1_f54[2]: operand of $128C, stored by $1268"
-    ],
-    [
-     "$1291",
-     "V1_f58[2]: operand of $1290, stored by $1244"
-    ],
-    [
-     "$1292",
-     "V1_f59[2]: operand of $1290, stored by $1250"
-    ],
-    [
-     "$12A4",
-     "V1_f6B[2]: operand of $12A3, stored by $125C"
-    ],
-    [
-     "$12BF",
-     "V2_f00[0]: operand of $12BE, stored by $116A, $12C4, $12E0"
-    ],
-    [
-     "$12CE",
-     "V2_f0F[0]: operand of $12CD, stored by $1167, $12E7"
-    ],
-    [
-     "$12F0",
-     "V2_f00[1]: operand of $12EF, stored by $11F2, $12F5, $1311"
-    ],
-    [
-     "$12FF",
-     "V2_f0F[1]: operand of $12FE, stored by $11EF, $1318"
-    ],
-    [
-     "$1321",
-     "V2_f00[2]: operand of $1320, stored by $127A, $1326, $1342"
-    ],
-    [
-     "$1330",
-     "V2_f0F[2]: operand of $132F, stored by $1277, $1349"
-    ],
-    [
-     "$1352",
-     "V2_f00[3]: operand of $1351, stored by $1178, $1357, $1373"
-    ],
-    [
-     "$1361",
-     "V2_f0F[3]: operand of $1360, stored by $1175, $137A"
-    ],
-    [
-     "$1383",
-     "V2_f00[4]: operand of $1382, stored by $1200, $1388, $13A4"
-    ],
-    [
-     "$1392",
-     "V2_f0F[4]: operand of $1391, stored by $11FD, $13AB"
-    ],
-    [
-     "$13B4",
-     "V2_f00[5]: operand of $13B3, stored by $1288, $13B9, $13D5"
-    ],
-    [
-     "$13C3",
-     "V2_f0F[5]: operand of $13C2, stored by $1285, $13DC"
-    ]
-   ],
    "A1": [
     [
-     "$112A",
-     "rdC2(((uint16_t)V1_f3D[v1] << 8) | V1_f3C[v1], 1)"
+     "$1149",
+     "pointer operand of $1149: V1_f21[0]"
     ],
     [
-     "$112A",
-     "rdC2(((uint16_t)V1_f4B[v1] << 8) | V1_f4A[v1], v10)"
+     "$1164",
+     "pointer operand of $1164: V1_f3C[0], V1_f3D[0]"
     ],
     [
-     "$112A",
-     "rdC2(((uint16_t)V1_f59[v1] << 8) | V1_f58[v1], v11)"
+     "$1172",
+     "pointer operand of $1172: V1_f4A[0], V1_f4B[0]"
     ],
     [
-     "$112A",
-     "rdC2(((uint16_t)v6 << 8) | V1_f21[v1], 0)"
+     "$1180",
+     "pointer operand of $1180: V1_f58[0], V1_f59[0]"
+    ],
+    [
+     "$11D1",
+     "pointer operand of $11D1: V1_f21[1]"
+    ],
+    [
+     "$11EC",
+     "pointer operand of $11EC: V1_f3C[1], V1_f3D[1]"
+    ],
+    [
+     "$11FA",
+     "pointer operand of $11FA: V1_f4A[1], V1_f4B[1]"
+    ],
+    [
+     "$1208",
+     "pointer operand of $1208: V1_f58[1], V1_f59[1]"
+    ],
+    [
+     "$1259",
+     "pointer operand of $1259: V1_f21[2]"
+    ],
+    [
+     "$1274",
+     "pointer operand of $1274: V1_f3C[2], V1_f3D[2]"
+    ],
+    [
+     "$1282",
+     "pointer operand of $1282: V1_f4A[2], V1_f4B[2]"
+    ],
+    [
+     "$1290",
+     "pointer operand of $1290: V1_f58[2], V1_f59[2]"
     ],
     [
      "$12BE",
@@ -743,12 +361,8 @@
    ],
    "C1": [
     [
-     "$0FD0",
-     "trap(0) deopt"
-    ],
-    [
      "$10D4",
-     "trap(2) deopt"
+     "trap(2) opcode"
     ]
    ],
    "C3": [
@@ -774,15 +388,7 @@
    "D1": [
     [
      "$2980",
-     "C1 $2980-$29E6 (103 B): C1@$2999, C1@$6110, CGEN_IX@$6234, rdC1@$6234"
-    ],
-    [
-     "$6110",
-     "C1 $6110-$6122 (19 B): C1@$2999, C1@$6110, CGEN_IX@$6234, rdC1@$6234"
-    ],
-    [
-     "$6153",
-     "C1 $6153-$622D (219 B): C1@$2999, C1@$6110, CGEN_IX@$6234, rdC1@$6234"
+     "C1 $2980-$29E6, $6110-$6122, $6153-$622D (341 B): C1@$2999, C1@$6110, CGEN_IX@$6234, rdC1@$6234"
     ],
     [
      "$6234",
@@ -794,112 +400,46 @@
     ],
     [
      "$6B31",
-     "C1 $6B31-$6BD9 (169 B): C1@$2999, C1@$6110, C1@$6234, CGEN_IX@$6234, oob_wr@$6234, rdC1@$6234"
-    ],
-    [
-     "$6BDC",
-     "C1 $6BDC-$6BF4 (25 B): C1@$2999, C1@$6110, C1@$6234, CGEN_IX@$6234, oob_wr@$6234, rdC1@$6234"
-    ],
-    [
-     "$6BF7",
-     "C1 $6BF7-$6C0F (25 B): C1@$2999, C1@$6110, C1@$6234, CGEN_IX@$6234, oob_wr@$6234, rdC1@$6234"
-    ],
-    [
-     "$6C12",
-     "C1 $6C12-$6CB6 (165 B): C1@$2999, C1@$6110, C1@$6234, CGEN_IX@$6234, oob_wr@$6234, rdC1@$6234"
+     "C1 $6B31-$6BD9, $6BDC-$6BF4, $6BF7-$6C0F, $6C12-$6CB6 (384 B): C1@$2999, C1@$6110, C1@$6234, CGEN_IX@$6234, oob_wr@$6234, rdC1@$6234"
     ],
     [
      "$7316",
      "C1 $7316-$733E (41 B): C1@$2999, C1@$6110, CGEN_IX@$6234, R38@$6110, rdC1@$6234"
     ]
    ],
-   "D5": [
-    [
-     "$29D8",
-     "S_I58: operand of $29D7, stored by $29BD"
-    ],
-    [
-     "$629E",
-     "V0_f00[0]: operand of $629D, stored by $62A1, $63BE"
-    ],
-    [
-     "$62EE",
-     "V0_f50[0]: operand of $62ED, stored by $61D3, $6308, $6328, $63D5, $6952"
-    ],
-    [
-     "$6382",
-     "V0_fE4[0]: operand of $6381, stored by $61C8, $6385, $6C78"
-    ],
-    [
-     "$63D4",
-     "V0_f136[0]: operand of $63D3, stored by $694F"
-    ],
-    [
-     "$63EB",
-     "V1_f00[0]: operand of $63EA, stored by $6A12"
-    ],
-    [
-     "$648B",
-     "V0_f00[1]: operand of $648A, stored by $648E, $65AB"
-    ],
-    [
-     "$64DB",
-     "V0_f50[1]: operand of $64DA, stored by $61D6, $64F5, $6515, $65C2, $696B"
-    ],
-    [
-     "$656F",
-     "V0_fE4[1]: operand of $656E, stored by $61CB, $6572, $6C7E"
-    ],
-    [
-     "$65C1",
-     "V0_f136[1]: operand of $65C0, stored by $6968"
-    ],
-    [
-     "$65DA",
-     "V1_f00[1]: operand of $65D9, stored by $6A46"
-    ],
-    [
-     "$667A",
-     "V0_f00[2]: operand of $6679, stored by $667D, $679A"
-    ],
-    [
-     "$66CA",
-     "V0_f50[2]: operand of $66C9, stored by $61D9, $66E4, $6704, $67B1, $6984"
-    ],
-    [
-     "$675E",
-     "V0_fE4[2]: operand of $675D, stored by $61CE, $6761, $6C84"
-    ],
-    [
-     "$67B0",
-     "V0_f136[2]: operand of $67AF, stored by $6981"
-    ],
-    [
-     "$67C9",
-     "V1_f00[2]: operand of $67C8, stored by $6A7A"
-    ],
-    [
-     "$6800",
-     "S_5CC: operand of $67FF, stored by $6181, $63EC, $65DB, $67CA, $681C, $6836"
-    ],
-    [
-     "$6813",
-     "S_5DF: operand of $6812, stored by $618D, $6A2C, $6A60, $6A94"
-    ],
-    [
-     "$6819",
-     "S_5E5: operand of $6818, stored by $6192, $6A26, $6A5A, $6A8E"
-    ],
-    [
-     "$682D",
-     "S_5F9: operand of $682C, stored by $6197, $6A38, $6A6C, $6AA0"
-    ],
-    [
-     "$6833",
-     "S_5FF: operand of $6832, stored by $619C, $6A32, $6A66, $6A9A"
-    ]
-   ],
    "A1": [
+    [
+     "$2999",
+     "subscript by address C1[(uint16_t)((R0[0xFA] | ((uint16_t)R0[0xFB] << 8)) + v8 - C1_ORG)]"
+    ],
+    [
+     "$2999",
+     "subscript by address C1[(uint16_t)((R0[0xFA] | ((uint16_t)R0[0xFB] << 8)) + v9 - C1_ORG)]"
+    ],
+    [
+     "$2999",
+     "subscript by address C1[(uint16_t)((R0[0xFC] | ((uint16_t)R0[0xFD] << 8)) + v8 - C1_ORG)]"
+    ],
+    [
+     "$2999",
+     "subscript by address C1[(uint16_t)((R0[0xFC] | ((uint16_t)R0[0xFD] << 8)) + v9 - C1_ORG)]"
+    ],
+    [
+     "$6110",
+     "subscript by address C1[(uint16_t)((((uint16_t)v7 << 8) | v6) - C1_ORG)]"
+    ],
+    [
+     "$6110",
+     "subscript by address C1[(uint16_t)((R0[0x96] | ((uint16_t)R0[0x97] << 8)) + (uint8_t)(v2 + 2) - C1_ORG)]"
+    ],
+    [
+     "$6110",
+     "subscript by address C1[(uint16_t)(v3 + (uint8_t)(v2 + 1) - C1_ORG)]"
+    ],
+    [
+     "$6110",
+     "subscript by address C1[(uint16_t)(v3 + v2 - C1_ORG)]"
+    ],
     [
      "$6234",
      "oob_wr(R34_ORG + 3 + v6 + v83, R0[0x22 + v5] + ((uint8_t)(v84 + 3) < v84))"
@@ -915,48 +455,92 @@
     [
      "$6234",
      "rdC1(v72, v71 + 2)"
+    ],
+    [
+     "$629E",
+     "V0_f00[0] reached by address"
+    ],
+    [
+     "$62EE",
+     "V0_f50[0] reached by address"
+    ],
+    [
+     "$6382",
+     "V0_fE4[0] reached by address"
+    ],
+    [
+     "$63D4",
+     "V0_f136[0] reached by address"
+    ],
+    [
+     "$63EB",
+     "V1_f00[0] reached by address"
+    ],
+    [
+     "$648B",
+     "V0_f00[1] reached by address"
+    ],
+    [
+     "$64DB",
+     "V0_f50[1] reached by address"
+    ],
+    [
+     "$656F",
+     "V0_fE4[1] reached by address"
+    ],
+    [
+     "$65C1",
+     "V0_f136[1] reached by address"
+    ],
+    [
+     "$65DA",
+     "V1_f00[1] reached by address"
+    ],
+    [
+     "$667A",
+     "V0_f00[2] reached by address"
+    ],
+    [
+     "$66CA",
+     "V0_f50[2] reached by address"
+    ],
+    [
+     "$675E",
+     "V0_fE4[2] reached by address"
+    ],
+    [
+     "$67B0",
+     "V0_f136[2] reached by address"
+    ],
+    [
+     "$67C9",
+     "V1_f00[2] reached by address"
+    ],
+    [
+     "$6800",
+     "S_5CC reached by address"
+    ],
+    [
+     "$6813",
+     "S_5DF reached by address"
+    ],
+    [
+     "$6819",
+     "S_5E5 reached by address"
+    ],
+    [
+     "$682D",
+     "S_5F9 reached by address"
+    ],
+    [
+     "$6833",
+     "S_5FF reached by address"
     ]
    ],
-   "C1": [
-    [
-     "$299B",
-     "trap(0) deopt"
-    ],
-    [
-     "$6110",
-     "trap(6) deopt"
-    ],
+   "C1r": [
     [
      "$61DD",
-     "trap(7) deopt"
-    ],
-    [
-     "$6362",
-     "trap(10) deopt"
-    ],
-    [
-     "$6368",
-     "trap(11) deopt"
-    ]
-   ],
-   "C3": [
-    [
-     "$6234",
-     "bounds test before dispatch"
-    ],
-    [
-     "$6234",
-     "bounds test before dispatch"
-    ]
-   ],
-   "K5": [
-    [
-     "$6110",
-     "C1[(uint16_t)(v3 + (uint8_t)(v2 + 1) - C1_ORG)]"
-    ],
-    [
-     "$6110",
-     "C1[(uint16_t)(v3 + v2 - C1_ORG)]"
+     "trap(7) index implied by init's song guard: $7316 CMP #$0B / BPL takes A in $0B-$1F (of songs 0-$1F) to $731D SBC #$0A / TAX, X in 1-$15"
     ]
    ]
   },
@@ -964,11 +548,7 @@
    "D1": [
     [
      "$1000",
-     "C0 $1000-$1005 (6 B): C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
-    ],
-    [
-     "$1015",
-     "C0 $1015-$101B (7 B): C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
+     "C0 $1000-$1005, $1015-$101B, $11AA, $11C4-$1223, $1243-$124B (119 B): C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ],
     [
      "$10A5",
@@ -977,18 +557,6 @@
     [
      "$1186",
      "C0 $1186-$118F (10 B): C0@$1000, C0@$1400, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
-    ],
-    [
-     "$11AA",
-     "C0 $11AA-$11AA (1 B): C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
-    ],
-    [
-     "$11C4",
-     "C0 $11C4-$1223 (96 B): C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
-    ],
-    [
-     "$1243",
-     "C0 $1243-$124B (9 B): C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ],
     [
      "$124D",
@@ -1011,152 +579,86 @@
      "C0 $1AAE-$1B54 (167 B): C0@$1000, C0@$19AB, C0@$1A00, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ]
    ],
-   "D5": [
-    [
-     "$10CC",
-     "S_C9: operand of $10CB, stored by $10AB"
-    ],
-    [
-     "$10CD",
-     "S_CA: operand of $10CB, stored by $10B4"
-    ],
-    [
-     "$10DB",
-     "S_D8: operand of $10DA, stored by $10AE"
-    ],
-    [
-     "$10DC",
-     "S_D9: operand of $10DA, stored by $10B7"
-    ],
-    [
-     "$111F",
-     "S_11C: operand of $111E, stored by $10A5"
-    ],
-    [
-     "$1164",
-     "S_161: operand of $1163, stored by $10ED"
-    ],
-    [
-     "$1165",
-     "S_162: operand of $1163, stored by $1101"
-    ],
-    [
-     "$1202",
-     "S_1FF: operand of $1201, stored by $14D7, $1654"
-    ],
-    [
-     "$1204",
-     "S_201: operand of $1203, stored by $163B"
-    ],
-    [
-     "$1209",
-     "S_206: operand of $1208, stored by $113D, $1A60"
-    ],
-    [
-     "$120B",
-     "S_208: operand of $120A, stored by $1135, $1633"
-    ],
-    [
-     "$1211",
-     "S_20E: operand of $1210, stored by $1138, $1659"
-    ],
-    [
-     "$121F",
-     "S_21C: operand of $121E, stored by $1615, $1641, $1AF2"
-    ],
-    [
-     "$1247",
-     "S_244: operand of $1246, stored by $15F0, $1609, $1646"
-    ],
-    [
-     "$1464",
-     "S_461: operand of $1463, stored by $1400"
-    ],
-    [
-     "$146E",
-     "S_46B: operand of $146D, stored by $1465"
-    ],
-    [
-     "$14F3",
-     "S_4F0: operand of $14F2, stored by $14DE"
-    ],
-    [
-     "$155B",
-     "S_558: operand of $155A, stored by $1550"
-    ],
-    [
-     "$15D2",
-     "S_5CF: operand of $15D1, stored by $1140, $14C3"
-    ],
-    [
-     "$15D6",
-     "S_5D3: operand of $15D5, stored by $14C6, $165D, $19A8, $1AE4"
-    ],
-    [
-     "$15DD",
-     "S_5DA: operand of $15DC, stored by $15E0, $1662"
-    ],
-    [
-     "$171C",
-     "S_719: operand of $171B, stored by $1713"
-    ],
-    [
-     "$17AA",
-     "S_7A7: operand of $17A9, stored by $1779"
-    ],
-    [
-     "$17AD",
-     "S_7AA: operand of $17AC, stored by $179D"
-    ],
-    [
-     "$17AF",
-     "S_7AC: operand of $17AE, stored by $1793"
-    ],
-    [
-     "$17B4",
-     "S_7B1: operand of $17B3, stored by $177F"
-    ],
-    [
-     "$17B6",
-     "S_7B3: operand of $17B5, stored by $17A6"
-    ],
-    [
-     "$19D1",
-     "S_9CE: operand of $19CF, stored by $19C9"
-    ],
-    [
-     "$19E3",
-     "S_9E0: operand of $19E2, stored by $193D, $1A0F"
-    ],
-    [
-     "$19E9",
-     "S_9E6: operand of $19E8, stored by $19DF"
-    ],
-    [
-     "$19F0",
-     "S_9ED: operand of $19EF, stored by $19EB"
-    ],
-    [
-     "$1A14",
-     "S_A11: operand of $1A13, stored by $1A09"
-    ]
-   ],
    "A1": [
     [
      "$1000",
-     "rdC0(R47[0] | ((uint16_t)R47[1] << 8), v21)"
+     "subscript by address C0[(uint16_t)((R46[1] | ((uint16_t)R46[2] << 8)) - C0_ORG)]"
     ],
     [
      "$1000",
-     "rdC0(R48[0] | ((uint16_t)R48[1] << 8), v21)"
+     "subscript by address C0[(uint16_t)((R46[4] | ((uint16_t)R46[5] << 8)) - C0_ORG)]"
     ],
     [
      "$1000",
-     "rdC0(R49[0] | ((uint16_t)R49[1] << 8), v21)"
+     "subscript by address C0[(uint16_t)((uint16_t)(1 + (((uint16_t)v2 << 8) | v3)) - C0_ORG)]"
+    ],
+    [
+     "$1000",
+     "subscript by address C0[(uint16_t)((uint16_t)(1 + (R0[0] | ((uint16_t)R0[1] << 8))) - C0_ORG)]"
+    ],
+    [
+     "$1000",
+     "subscript by address C0[(uint16_t)((uint16_t)(1 + v9) - C0_ORG)]"
+    ],
+    [
+     "$1000",
+     "subscript by address C0[(uint16_t)((uint16_t)(1 + v9) - C0_ORG)]"
+    ],
+    [
+     "$1000",
+     "subscript by address C0[(uint16_t)((uint16_t)(2 + (R0[0] | ((uint16_t)R0[1] << 8))) - C0_ORG)]"
+    ],
+    [
+     "$1000",
+     "subscript by address C0[(uint16_t)((uint16_t)(2 + (R0[0] | ((uint16_t)R0[1] << 8))) - C0_ORG)]"
+    ],
+    [
+     "$1000",
+     "subscript by address C0[(uint16_t)((uint16_t)(2 + (R0[0] | ((uint16_t)R0[1] << 8))) - C0_ORG)]"
+    ],
+    [
+     "$10CB",
+     "pointer operand of $10CB: S_C9, S_CA"
+    ],
+    [
+     "$10DA",
+     "pointer operand of $10DA: S_D8, S_D9"
+    ],
+    [
+     "$111F",
+     "S_11C reached by address"
     ],
     [
      "$1163",
-     "rdC0(S_161 | ((uint16_t)S_162 << 8), v1)"
+     "pointer operand of $1163: S_161, S_162"
+    ],
+    [
+     "$1202",
+     "S_1FF reached by address"
+    ],
+    [
+     "$1204",
+     "S_201 reached by address"
+    ],
+    [
+     "$1209",
+     "S_206 reached by address"
+    ],
+    [
+     "$120B",
+     "S_208 reached by address"
+    ],
+    [
+     "$1211",
+     "S_20E reached by address"
+    ],
+    [
+     "$121F",
+     "S_21C reached by address"
+    ],
+    [
+     "$1247",
+     "S_244 reached by address"
     ],
     [
      "$124D",
@@ -1311,6 +813,18 @@
      "rdC0(v29, 4)"
     ],
     [
+     "$1464",
+     "S_461 reached by address"
+    ],
+    [
+     "$146E",
+     "S_46B reached by address"
+    ],
+    [
+     "$14F3",
+     "S_4F0 reached by address"
+    ],
+    [
      "$1537",
      "rdC0(R0[0] | ((uint16_t)R0[1] << 8), v34 + 1)"
     ],
@@ -1367,6 +881,22 @@
      "rdC0(v65, v67)"
     ],
     [
+     "$155B",
+     "S_558 reached by address"
+    ],
+    [
+     "$15D2",
+     "S_5CF reached by address"
+    ],
+    [
+     "$15D6",
+     "S_5D3 reached by address"
+    ],
+    [
+     "$15DD",
+     "S_5DA reached by address"
+    ],
+    [
      "$16D6",
      "rdC0(K_72F | ((uint16_t)K_730 << 8), R2[0x77 + v1])"
     ],
@@ -1401,6 +931,30 @@
     [
      "$16D6",
      "rdC0(v6, v8)"
+    ],
+    [
+     "$171C",
+     "S_719 reached by address"
+    ],
+    [
+     "$17AA",
+     "S_7A7 reached by address"
+    ],
+    [
+     "$17AD",
+     "S_7AA reached by address"
+    ],
+    [
+     "$17AF",
+     "S_7AC reached by address"
+    ],
+    [
+     "$17B4",
+     "S_7B1 reached by address"
+    ],
+    [
+     "$17B6",
+     "S_7B3 reached by address"
     ],
     [
      "$17C8",
@@ -1439,6 +993,18 @@
      "rdC0(R0[0] | ((uint16_t)R0[1] << 8), v1)"
     ],
     [
+     "$19E3",
+     "S_9E0 reached by address"
+    ],
+    [
+     "$19E9",
+     "S_9E6 reached by address"
+    ],
+    [
+     "$19F0",
+     "S_9ED reached by address"
+    ],
+    [
      "$1A42",
      "rdC0(K_A44 | ((uint16_t)K_A45 << 8), v1)"
     ],
@@ -1447,14 +1013,68 @@
      "rdC0(R0[0] | ((uint16_t)R0[1] << 8), 0)"
     ]
    ],
-   "C1": [
+   "A2": [
     [
-     "$1000",
-     "trap(0) deopt"
+     "$19CF",
+     "transfer operand of $19CF: S_9CE"
     ],
     [
-     "$1947",
-     "trap(2) deopt"
+     "$1A13",
+     "transfer operand of $1A13: S_A11"
+    ]
+   ],
+   "C2": [
+    [
+     "$1537",
+     "function f6 at no procedure entry"
+    ],
+    [
+     "$16D6",
+     "function f12 at no procedure entry"
+    ],
+    [
+     "$17BA",
+     "function f5 at no procedure entry"
+    ],
+    [
+     "$17E5",
+     "function f9 at no procedure entry"
+    ],
+    [
+     "$1802",
+     "function f24 at no procedure entry"
+    ],
+    [
+     "$1A23",
+     "function f15 at no procedure entry"
+    ],
+    [
+     "$1A2D",
+     "function f14 at no procedure entry"
+    ],
+    [
+     "$1A3E",
+     "function f16 at no procedure entry"
+    ],
+    [
+     "$1A42",
+     "function f17 at no procedure entry"
+    ],
+    [
+     "$1A59",
+     "function f20 at no procedure entry"
+    ],
+    [
+     "$1A65",
+     "function f19 at no procedure entry"
+    ],
+    [
+     "$1AC1",
+     "function f18 at no procedure entry"
+    ],
+    [
+     "$1B31",
+     "function f23 at no procedure entry"
     ]
    ],
    "C3": [
@@ -1462,105 +1082,22 @@
      "$19AB",
      "8 decision points, 6 original branches"
     ]
-   ],
-   "K5": [
-    [
-     "$1000",
-     "C0[(uint16_t)((uint16_t)(1 + v9) - C0_ORG)]"
-    ],
-    [
-     "$1000",
-     "C0[(uint16_t)((uint16_t)(1 + v9) - C0_ORG)]"
-    ]
    ]
   },
-  "fuzz-loop-0": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-loop-1": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-loop-2": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-jsr3-0": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-jsr3-1": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-jsr3-2": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-fallthrough-0": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-fallthrough-1": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-fallthrough-2": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
+  "fuzz-loop-0": {},
+  "fuzz-loop-1": {},
+  "fuzz-loop-2": {},
+  "fuzz-jsr3-0": {},
+  "fuzz-jsr3-1": {},
+  "fuzz-jsr3-2": {},
+  "fuzz-fallthrough-0": {},
+  "fuzz-fallthrough-1": {},
+  "fuzz-fallthrough-2": {},
   "fuzz-unrolled-0": {
    "D2": [
     [
      "$3021",
-     "R0 $3021-$3026 (6 B): R0@$103D"
-    ],
-    [
-     "$3028",
-     "R0 $3028-$302D (6 B): R0@$103D"
-    ]
-   ],
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
+     "R0 $3021-$3026, $3028-$302D (12 B): R0@$103D"
     ]
    ]
   },
@@ -1568,25 +1105,11 @@
    "D2": [
     [
      "$3041",
-     "R2 $3041-$3046 (6 B): R2@$103D"
-    ],
-    [
-     "$3048",
-     "R2 $3048-$304D (6 B): R2@$103D"
+     "R2 $3041-$3046, $3048-$304D (12 B): R2@$103D"
     ],
     [
      "$3061",
-     "R3 $3061-$3066 (6 B): R3@$103D"
-    ],
-    [
-     "$3068",
-     "R3 $3068-$306D (6 B): R3@$103D"
-    ]
-   ],
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
+     "R3 $3061-$3066, $3068-$306D (12 B): R3@$103D"
     ]
    ]
   },
@@ -1594,17 +1117,7 @@
    "D2": [
     [
      "$3061",
-     "R3 $3061-$3066 (6 B): R3@$103D"
-    ],
-    [
-     "$3068",
-     "R3 $3068-$306D (6 B): R3@$103D"
-    ]
-   ],
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
+     "R3 $3061-$3066, $3068-$306D (12 B): R3@$103D"
     ]
    ]
   },
@@ -1614,38 +1127,6 @@
      "$105D",
      "C0 $105D-$1103 (167 B): C0@$103D"
     ]
-   ],
-   "D5": [
-    [
-     "$103E",
-     "V0_f00[0]: operand of $103D, stored by $1049, $1059, $1078"
-    ],
-    [
-     "$1063",
-     "V0_f25[0]: operand of $1062, stored by $1067, $108A"
-    ],
-    [
-     "$1091",
-     "V0_f00[1]: operand of $1090, stored by $109C, $10AC, $10CB"
-    ],
-    [
-     "$10B6",
-     "V0_f25[1]: operand of $10B5, stored by $10BA, $10DD"
-    ],
-    [
-     "$10E4",
-     "V0_f00[2]: operand of $10E3, stored by $10EF, $10FF, $111E"
-    ],
-    [
-     "$1109",
-     "V0_f25[2]: operand of $1108, stored by $110D, $1130"
-    ]
-   ],
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
    ]
   },
   "fuzz-smc-1": {
@@ -1653,38 +1134,6 @@
     [
      "$103E",
      "C0 $103E-$10B6 (121 B): C0@$103F"
-    ]
-   ],
-   "D5": [
-    [
-     "$1044",
-     "V0_f00[0]: operand of $1043, stored by $1048, $1070"
-    ],
-    [
-     "$104C",
-     "V0_f08[0]: operand of $104B, stored by $1050, $1060"
-    ],
-    [
-     "$1080",
-     "V0_f00[1]: operand of $107F, stored by $1084, $10AC"
-    ],
-    [
-     "$1088",
-     "V0_f08[1]: operand of $1087, stored by $108C, $109C"
-    ],
-    [
-     "$10BC",
-     "V0_f00[2]: operand of $10BB, stored by $10C0, $10E8"
-    ],
-    [
-     "$10C4",
-     "V0_f08[2]: operand of $10C3, stored by $10C8, $10D8"
-    ]
-   ],
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
     ]
    ]
   },
@@ -1694,283 +1143,43 @@
      "$103E",
      "C0 $103E-$10C0 (131 B): C0@$103F"
     ]
-   ],
-   "D5": [
-    [
-     "$1044",
-     "V0_f00[0]: operand of $1043, stored by $1048, $1051"
-    ],
-    [
-     "$1055",
-     "V0_f11[0]: operand of $1054, stored by $1061"
-    ],
-    [
-     "$1068",
-     "V0_f24[0]: operand of $1067, stored by $1072"
-    ],
-    [
-     "$1085",
-     "V0_f00[1]: operand of $1084, stored by $1089, $1092"
-    ],
-    [
-     "$1096",
-     "V0_f11[1]: operand of $1095, stored by $10A2"
-    ],
-    [
-     "$10A9",
-     "V0_f24[1]: operand of $10A8, stored by $10B3"
-    ],
-    [
-     "$10C6",
-     "V0_f00[2]: operand of $10C5, stored by $10CA, $10D3"
-    ],
-    [
-     "$10D7",
-     "V0_f11[2]: operand of $10D6, stored by $10E3"
-    ],
-    [
-     "$10EA",
-     "V0_f24[2]: operand of $10E9, stored by $10F4"
-    ]
-   ],
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
    ]
   },
-  "fuzz-rti-0": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-rti-1": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-rti-2": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-brk-0": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-brk-1": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-brk-2": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-stackswitch-0": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-stackswitch-1": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-stackswitch-2": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-inlineargs-0": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-inlineargs-1": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-inlineargs-2": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-skip-0": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-skip-1": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-skip-2": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-decimal-0": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-decimal-1": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-decimal-2": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-rmw-0": {
-   "D5": [
-    [
-     "$1081",
-     "S_44: operand of $1080, stored by $1085"
-    ]
-   ],
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-rmw-1": {
-   "D5": [
-    [
-     "$1085",
-     "S_48: operand of $1084, stored by $1089"
-    ]
-   ],
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-rmw-2": {
-   "D5": [
-    [
-     "$1084",
-     "S_47: operand of $1083, stored by $1088"
-    ]
-   ],
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-vflag-0": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-vflag-1": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
-  "fuzz-vflag-2": {
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ]
-  },
+  "fuzz-rti-0": {},
+  "fuzz-rti-1": {},
+  "fuzz-rti-2": {},
+  "fuzz-brk-0": {},
+  "fuzz-brk-1": {},
+  "fuzz-brk-2": {},
+  "fuzz-stackswitch-0": {},
+  "fuzz-stackswitch-1": {},
+  "fuzz-stackswitch-2": {},
+  "fuzz-inlineargs-0": {},
+  "fuzz-inlineargs-1": {},
+  "fuzz-inlineargs-2": {},
+  "fuzz-skip-0": {},
+  "fuzz-skip-1": {},
+  "fuzz-skip-2": {},
+  "fuzz-decimal-0": {},
+  "fuzz-decimal-1": {},
+  "fuzz-decimal-2": {},
+  "fuzz-rmw-0": {},
+  "fuzz-rmw-1": {},
+  "fuzz-rmw-2": {},
+  "fuzz-vflag-0": {},
+  "fuzz-vflag-1": {},
+  "fuzz-vflag-2": {},
   "fuzz-indx-0": {
    "D2": [
     [
      "$0042",
-     "R0 $0042-$0046 (5 B): R0@$1055"
-    ],
-    [
-     "$0049",
-     "R0 $0049-$004D (5 B): R0@$1055"
+     "R0 $0042-$0046, $0049-$004D (10 B): R0@$1055"
     ]
    ],
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ],
-   "K5": [
+   "A1": [
     [
      "$1055",
-     "C0[(uint16_t)(v5 - C0_ORG)]"
+     "subscript by address C0[(uint16_t)(v5 - C0_ORG)]"
     ]
    ]
   },
@@ -1978,31 +1187,13 @@
    "D2": [
     [
      "$0000",
-     "R0 $0000-$003F (64 B): R0@$1055"
-    ],
-    [
-     "$0042",
-     "R0 $0042-$0046 (5 B): R0@$1055"
-    ],
-    [
-     "$0049",
-     "R0 $0049-$004D (5 B): R0@$1055"
-    ],
-    [
-     "$0050",
-     "R0 $0050-$00FF (176 B): R0@$1055"
+     "R0 $0000-$003F, $0042-$0046, $0049-$004D, $0050-$00FF (250 B): R0@$1055"
     ]
    ],
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ],
-   "K5": [
+   "A1": [
     [
      "$1055",
-     "C0[(uint16_t)(v4 - C0_ORG)]"
+     "subscript by address C0[(uint16_t)(v4 - C0_ORG)]"
     ]
    ]
   },
@@ -2010,59 +1201,466 @@
    "D2": [
     [
      "$0042",
-     "R0 $0042-$0046 (5 B): R0@$1055"
-    ],
-    [
-     "$0049",
-     "R0 $0049-$004D (5 B): R0@$1055"
+     "R0 $0042-$0046, $0049-$004D (10 B): R0@$1055"
     ]
    ],
-   "C1": [
-    [
-     "$1000",
-     "trap(0) deopt"
-    ]
-   ],
-   "K5": [
+   "A1": [
     [
      "$1055",
-     "C0[(uint16_t)(v4 - C0_ORG)]"
+     "subscript by address C0[(uint16_t)(v4 - C0_ORG)]"
+    ]
+   ]
+  },
+  "fuzz-jam-0": {},
+  "fuzz-jam-1": {},
+  "fuzz-jam-2": {}
+ },
+ "informational": {
+  "commando": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ],
+    [
+     "$10A1",
+     "trap(2) window"
+    ],
+    [
+     "$1212",
+     "trap(3) index"
+    ],
+    [
+     "$1275",
+     "trap(4) index"
+    ]
+   ]
+  },
+  "incoherent": {
+   "C1g": [
+    [
+     "$0800",
+     "trap(0) entry"
+    ],
+    [
+     "$0ABE",
+     "trap(3) index"
+    ],
+    [
+     "$0AC7",
+     "trap(4) index"
+    ]
+   ]
+  },
+  "automatas": {
+   "C1g": [
+    [
+     "$0FD0",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "ghouls": {
+   "C1g": [
+    [
+     "$299B",
+     "trap(0) index"
+    ],
+    [
+     "$6110",
+     "trap(6) entry"
+    ],
+    [
+     "$6362",
+     "trap(10) objchk"
+    ],
+    [
+     "$6368",
+     "trap(11) index"
+    ]
+   ]
+  },
+  "emomyst": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ],
+    [
+     "$1947",
+     "trap(2) index"
+    ]
+   ]
+  },
+  "fuzz-loop-0": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-loop-1": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-loop-2": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-jsr3-0": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-jsr3-1": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-jsr3-2": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-fallthrough-0": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-fallthrough-1": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-fallthrough-2": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-unrolled-0": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-unrolled-1": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-unrolled-2": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-smc-0": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-smc-1": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-smc-2": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-rti-0": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-rti-1": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-rti-2": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-brk-0": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-brk-1": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-brk-2": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-stackswitch-0": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-stackswitch-1": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-stackswitch-2": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-inlineargs-0": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-inlineargs-1": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-inlineargs-2": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-skip-0": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-skip-1": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-skip-2": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-decimal-0": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-decimal-1": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-decimal-2": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-rmw-0": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-rmw-1": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-rmw-2": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-vflag-0": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-vflag-1": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-vflag-2": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-indx-0": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-indx-1": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
+    ]
+   ]
+  },
+  "fuzz-indx-2": {
+   "C1g": [
+    [
+     "$1000",
+     "trap(0) entry"
     ]
    ]
   },
   "fuzz-jam-0": {
-   "C1": [
+   "C1g": [
     [
      "$1000",
-     "trap(0) deopt"
+     "trap(0) entry"
     ],
     [
      "$1085",
-     "trap(2) deopt"
+     "trap(2) jam"
     ]
    ]
   },
   "fuzz-jam-1": {
-   "C1": [
+   "C1g": [
     [
      "$1000",
-     "trap(0) deopt"
+     "trap(0) entry"
     ],
     [
      "$1089",
-     "trap(2) deopt"
+     "trap(2) jam"
     ]
    ]
   },
   "fuzz-jam-2": {
-   "C1": [
+   "C1g": [
     [
      "$1000",
-     "trap(0) deopt"
+     "trap(0) entry"
     ],
     [
      "$1088",
-     "trap(2) deopt"
+     "trap(2) jam"
     ]
    ]
   }

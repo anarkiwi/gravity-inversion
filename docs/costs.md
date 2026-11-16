@@ -3,9 +3,8 @@
 `tools/costs.py` reads clang's AST of a generated translation and counts the constructs llvm-mos
 compiles to more code than the 6502 idiom they translate (`--sites` lists each by line). cgen's
 runtime (`rd`, `wr`, the bounds-checked span readers `rdCj`, ...) is not counted. They are
-residue kinds K1-K6 of [residue.md](residue.md), whose manifest records each that remains per
-tune and fuzz player with its cause; what each mechanism costs, measured by ablation, is in
-[ablate.md](ablate.md).
+code size, not machine model, so the residue census ([residue.md](residue.md)) does not count
+them; what each mechanism costs, measured by ablation, is in [ablate.md](ablate.md).
 
     python3 tools/costs.py tunes/ghouls/build/gen/ghouls.c -I tunes/ghouls/build/gen -I c64 --sites
 

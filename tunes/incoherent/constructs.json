@@ -214,8 +214,8 @@
     "fn": "command",
     "form": "the switch selector"
    },
-   "why": "The dispatch target lives in the JMP's own operand.",
-   "lift": "variable",
+   "why": "The dispatch target lives in the JMP's own operand, which $0AC1 stores from the operand table $0C5F by the command index.",
+   "lift": "no variable: the $0AFF switch selects its arm by the command index the store's table read takes",
    "transform": "T1"
   },
   {

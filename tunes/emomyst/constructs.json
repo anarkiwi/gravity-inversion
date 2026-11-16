@@ -536,8 +536,8 @@
     "fn": "note_fx",
     "form": "the switch selector"
    },
-   "why": "The branch offset is the dispatch target.",
-   "lift": "variable",
+   "why": "The branch offset is the dispatch target, which $194A stores by the effect index.",
+   "lift": "no variable: the $1951 switch selects its arm by the effect index the store's table read takes",
    "transform": "T1"
   },
   {
