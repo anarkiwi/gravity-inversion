@@ -13,4 +13,10 @@ extern volatile uint8_t song_number;
  * CIA 1 timer A underflow. The harness returns from it at once. */
 void frame_wait(void);
 
+/* The generated C's trap (vagrant-moses cgen): stores k in cgen_trap, which
+ * sidtrace reports, and halts on a JAM opcode. The hand C traps on an access
+ * outside the data it holds. */
+extern volatile uint16_t cgen_trap;
+__attribute__((noreturn)) void trap(uint16_t k);
+
 #endif

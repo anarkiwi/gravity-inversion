@@ -8,7 +8,8 @@ playroutine in C; `gen_incoherent.py` generates `build/incoherent_data.h` from t
 `DATA` is the original image from `$0ccf` to its end, byte-identical: frequency tables,
 order list and pattern pointer tables, instrument columns, wave, pulse, filter and speed
 tables, order lists and patterns. Addresses in the C are the original ones, read through
-`at()`; tables indexed from 1 keep their base minus one, as in the 6502 code.
+`at()`, which traps (code 1) outside `DATA`; tables indexed from 1 keep their base minus
+one, as in the 6502 code.
 
 The player keeps state in code operands (filter pointer, step time, cutoff, control and
 type; the init flag) and in variables its init does not clear (order list number, pattern,

@@ -14,6 +14,7 @@ PRG = BUILD / "incoherent.prg"
 PRGS = {"hand": PRG, "generated": BUILD / "gen.prg"}
 BUILDERS = {"hand": build_prg, "generated": gen_prg}
 SONG_POS = range(0x0C66, 0x0C7B, 7)
+PATT_LO, PATT_HI = 0x0D95, 0x0E0F
 VARIANT_FRAMES = 6000
 
 
@@ -65,6 +66,17 @@ def test_song_outside_range_traps():
     outside them (bit 7 set) traps at init."""
     with pytest.raises(AssertionError, match=r"jam at \$[0-9a-f]+ \(trap \d+\)"):
         sidtrace.trace_prg(PRGS["generated"], VARIANT_FRAMES, song=0x80)
+
+
+def test_outside_data_traps(psid, tmp_path):
+    """A read outside the data the hand C holds traps: every pattern pointer at the image's
+    end."""
+    load, _, _, image = sidtrace.psid_parts(psid)
+    end, n = load + len(image), PATT_HI - PATT_LO
+    patches = {PATT_LO + i: end & 0xFF for i in range(n)}
+    variant = patched(psid, patches | {PATT_HI + i: end >> 8 for i in range(n)})
+    with pytest.raises(AssertionError, match=r"jam at \$[0-9a-f]+ \(trap 1\)"):
+        sidtrace.trace_prg(build_prg(variant, tmp_path), VARIANT_FRAMES)
 
 
 @pytest.mark.parametrize("kind", BUILDERS)

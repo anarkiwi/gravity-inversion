@@ -18,7 +18,8 @@ Hermit, SID-Wizard 1.x, SWP export (player at `$1000`, music at `$1c00`). HVSC
   (`$1939-$196f`) that 8-bit indexed reads past the frequency tables take in the
   tune and the patched variants; the tune itself reads them as frequencies, and the
   note fx branch operand `$1952` among them is written. `T()` reads an original
-  address from the tables or these bytes; other addresses read 0.
+  address from the tables or these bytes; any other address traps (code 1).
+- An offset past the end of `MUSIC` traps (code 2).
 
 `tests/test_emomyst.py` checks per byte that the arrays hold only the original's data and
 every byte it reads as data ([docs/footprint.md](../../docs/footprint.md)).

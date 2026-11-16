@@ -13,7 +13,6 @@
  * PITCH + filter-controller voice behave as in the original.
  */
 #include <c64.h>
-#include <stddef.h>
 #include <stdint.h>
 
 #include "driver.h"
@@ -24,23 +23,31 @@ static uint8_t code_read[] = {CODE_READ};
 static const uint16_t code_read_at[] = {CODE_READ_ADDRS};
 static uint8_t music[] = {MUSIC};
 
-/* The code byte at original address a that reads past the tables reach; NULL
+/* trap codes: an access outside the data held */
+enum { TRAP_CODE = 1, TRAP_MUSIC };
+
+/* The code byte at original address a that reads past the tables reach; traps
  * where the original's data holds none. */
 static __attribute__((noinline)) uint8_t *past_tab(uint16_t a) {
   uint8_t i;
   for (i = 0; i < sizeof code_read; ++i)
     if (code_read_at[i] == a)
       return code_read + i;
-  return NULL;
+  trap(TRAP_CODE);
 }
 /* player tables and the code bytes past them, by original address */
 static __attribute__((noinline)) uint8_t T(uint16_t a) {
-  uint8_t *p;
   if ((uint16_t)(a - TABLES_ORG) < sizeof tab)
     return tab[(uint16_t)(a - TABLES_ORG)];
-  p = past_tab(a);
-  return p ? *p : 0;
+  return *past_tab(a);
 }
+/* the music byte at offset o from its base; traps past the music's end */
+static __attribute__((noinline)) uint8_t *mus(uint16_t o) {
+  if (o >= sizeof music)
+    trap(TRAP_MUSIC);
+  return music + o;
+}
+#define M(o) (*mus(o))
 #define ADSR_OFFS 0x1840
 #define ADSR_EXPTB 0x1850
 #define EXPTAB 0x185e
@@ -160,19 +167,17 @@ static uint8_t adc(uint8_t a, uint8_t b) {
   return r;
 }
 static uint8_t sbc(uint8_t a, uint8_t b) { return adc(a, ~b); }
-static uint8_t rd(uint8_t y) { return music[(uint16_t)(zp + y)]; }
-static uint16_t word(uint16_t a) { return music[a] | music[a + 1] << 8; }
+static uint8_t rd(uint8_t y) { return M((uint16_t)(zp + y)); }
+static uint16_t word(uint16_t a) { return M(a) | M(a + 1) << 8; }
 
 static void set_ptn(void) {
   uint8_t y = V(CUR_PTN);
-  zp = music[ptn_lo + y] | music[ptn_hi + y] << 8;
+  zp = M(ptn_lo + y) | M(ptn_hi + y) << 8;
 }
-static void set_ins(uint8_t y) {
-  zp = music[ins_lo + y] | music[ins_hi + y] << 8;
-}
+static void set_ins(uint8_t y) { zp = M(ins_lo + y) | M(ins_hi + y) << 8; }
 /* 6502 $17C8: CPX #7 picks one of three per-voice LDA base,Y / RTS paths. */
 static uint8_t seq_read(uint8_t y) {
-  return music[seq_ptr[x == 7 ? 1 : x > 7 ? 2 : 0] + y];
+  return M(seq_ptr[x == 7 ? 1 : x > 7 ? 2 : 0] + y);
 }
 
 /* nibble merges with the stored fx value */
@@ -222,7 +227,7 @@ static void vibrato_fx(uint8_t a) {
 
 static void set_chord(uint8_t a) {
   V(CHORD) = a;
-  V(CHORD_POS) = music[chord_ptr + a];
+  V(CHORD_POS) = M(chord_ptr + a);
 }
 
 static void set_arp_speed(uint8_t a) {
@@ -237,7 +242,7 @@ static void tempo_pos_all(uint8_t a) {
 
 static uint8_t track_tempo(uint8_t a) {
   uint8_t y = V(TRACK_TEMPO);
-  music[tempo + y] = a;
+  M(tempo + y) = a;
   V(TEMPO_BASE) = V(TEMPO_POS) = y;
   return y;
 }
@@ -323,28 +328,28 @@ static void big_fx(uint8_t fx, uint8_t a) {
     cutoff_hi = a;
     break;
   case 0x11: /* funk tempo */
-    music[tempo + 1] = (a & 0x0f) | 0x80;
+    M(tempo + 1) = (a & 0x0f) | 0x80;
     a >>= 4;
-    music[tempo] = a;
+    M(tempo) = a;
     tempo_pos_all(0);
     break;
   case 0x10: /* main tempo */
-    music[tempo] = a | 0x80;
+    M(tempo) = a | 0x80;
     tempo_pos_all(0);
     break;
   case 0x12: /* tempo program */
     if (a)
-      tempo_pos_all(music[tempo_prg + a]);
+      tempo_pos_all(M(tempo_prg + a));
     break;
   case 0x13: /* track tempo */
     track_tempo(a | 0x80);
     break;
   case 0x14: /* track funk tempo */
-    music[tempo + 1 + track_tempo(a >> 4)] = (a & 0x0f) | 0x80;
+    M(tempo + 1 + track_tempo(a >> 4)) = (a & 0x0f) | 0x80;
     break;
   case 0x15: /* track tempo program */
     if (a)
-      V(TEMPO_BASE) = V(TEMPO_POS) = music[tempo_prg + a];
+      V(TEMPO_BASE) = V(TEMPO_POS) = M(tempo_prg + a);
     break;
   case 0x16:
     V(SLIDE) = a & C_VIB_TYPE;
@@ -454,15 +459,15 @@ pitch: /* $170B, past the wave store $1705 that $16F3 and $1703 join */
   a = rd(++y);
   y++;
   if (a == 0x7f) { /* chord; the detune column is not used by this build */
-    a = music[chords + V(CHORD_POS)];
+    a = M(chords + V(CHORD_POS));
     if (a == 0x7e) {
-      V(CHORD_POS) = music[chord_ptr + V(CHORD)];
+      V(CHORD_POS) = M(chord_ptr + V(CHORD));
       V(WF_POS) += 3;
       goto row; /* 6502 $1749 JMP $16E3 */
     }
     if (a == 0x7f) {
-      y = V(CHORD_POS) = music[chord_ptr + V(CHORD)];
-      a = music[chords + y];
+      y = V(CHORD_POS) = M(chord_ptr + V(CHORD));
+      a = M(chords + y);
     }
     V(CHORD_POS)++;
     goto relative; /* 6502 $175D falls into $1760 */
@@ -836,8 +841,7 @@ static void tick1(void) {
 }
 
 static void do_track(void) {
-  uint8_t y = V(TEMPO_POS) + 1, a = V(SPD_CNT), t = music[tempo - 1 + y],
-          r = a - t;
+  uint8_t y = V(TEMPO_POS) + 1, a = V(SPD_CNT), t = M(tempo - 1 + y), r = a - t;
   if (!r || NEG((a ^ t) & (a ^ r))) { /* tempo reached, or $80 restart */
     if (r)
       y = V(TEMPO_BASE);
@@ -869,7 +873,7 @@ void tune_init(uint8_t song) {
   chord_ptr = word(H_CHORD_PTR);
   tempo = word(H_TEMPO);
   tempo_prg = word(H_TEMPO_PRG);
-  music[tempo] = music[subtune_tempo];
+  M(tempo) = M(subtune_tempo);
   for (r = 0; r < CLEARED; r++) /* 6502 loop $1127 */
     ch[r] = 0;
   r = 0x18;

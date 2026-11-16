@@ -88,7 +88,7 @@ static uint8_t route, mode, cp, cut_lo, cut_hi, step_lo, step_hi;
 static uint8_t cut_sub = CUT_SUB; /* kept across init, as in the original */
 static uint8_t cut_min, cut_shift;
 
-/* The original's data byte at a; 0 where it holds none. */
+/* The original's data byte at a; traps (code 1) where it holds none. */
 static uint8_t at(uint16_t a) {
   uint8_t i;
   if ((uint16_t)(a - TABLES_ORG) < sizeof tables)
@@ -98,7 +98,7 @@ static uint8_t at(uint16_t a) {
   for (i = 0; i < sizeof code_read; ++i)
     if (code_read_at[i] == a)
       return code_read[i];
-  return 0;
+  trap(1);
 }
 static uint16_t word(uint16_t i) {
   return at(WORD_LO + i) | at(WORD_HI + i) << 8;
