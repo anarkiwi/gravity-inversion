@@ -1,6 +1,6 @@
 {
  "pins": {
-  "deity-informant": "0.37.3",
+  "deity-informant": "0.39.0",
   "vagrant-moses": "0.17.0",
   "jennings": "0.14.1",
   "pysidtracker": "0.61.0"
@@ -19,11 +19,12 @@
    "D1": "span C0 starts at R1's origin $1368, init's code $1368-$139D, which the song pointers' bounds-checked reads reach"
   },
   "emomyst": {
-   "A1": "init's relocator walks the song's relocation table, reading and patching the operands it lists and adding the SWP header words, through rd(), wr() and codechk() of computed addresses, and its helper at $1163 reads through its own patched operand; play's song pointers, the operands the relocator leaves constant (K_*, named through the .h so the C does not depend on the song's layout) and those play patches (S_*) are read through span C0's bounds-checked reader",
-   "C1": "init's song guard: A outside the PSID header's songs (by construction); $17C4 init's copy through the LDA/STA at $17C1/$17C4, whose operands the relocator patches, guarded against the stack page and I/O, and $17C7 that store hitting code; $1947 an effect byte past its table's extent",
-   "C3": "a shared handler tail retests the dispatch selector (v5 == 0x24, 0x2A) after the switch; init tests codechk after the store through the patched STA operand at $17C4",
-   "D1": "span C0 $1000-$24A1 holds the whole image: init's relocator reads and patches operands through rd()/wr() of computed addresses and play's song pointers are bounds-checked reads of C0, so init's and play's code ($1000-$1B54 runs) is held; the effect offset table at $1A03 inside the code is read at $1A00 by a byte index, whose interval reaches the code after it",
-   "D5": "the operand cells play patches (effect parameters, the dispatch JMP operands) and those init uses as its own pointers: the relocator's read operand $1164-$1165, the LDA/STA operands $17C2-$17C6 it copies through and the voice pointers $17CF-$17D8 init's setup and play read at $17C8: S_* variables, real state"
+   "A1": "init's voice setup at $17C8 (and its copy inlined in init) reads through the voice pointers $17CF/$17D3/$17D7 (R47-R49), and init's helper at $1163 through its own patched operand (S_161/S_162), through span C0's bounds-checked reader; play's song pointers, the operands the relocator leaves constant (K_*, named through the .h so the C does not depend on the song's layout) and those play patches (S_*) are read through it too",
+   "C1": "init's song guard: A outside the PSID header's songs (by construction); $1947 an effect byte past its table's extent",
+   "C3": "a shared handler tail retests the dispatch selector (v5 == 0x24, 0x2A) after the switch",
+   "D1": "span C0 $1000-$24A1 holds the whole image: init's relocator reads and patches the operands its relocation table lists by subscripts of C0 with their 16-bit addresses, and play's song pointers are bounds-checked reads of C0, so init's and play's code ($1000-$1B54 runs) is held; the effect offset table at $1A03 inside the code is read at $1A00 by a byte index, whose interval reaches the code after it",
+   "D5": "the operand cells play patches (effect parameters, the dispatch JMP operands) and those init patches for its own use: the relocation table read operands $10CC-$10CD and $10DB-$10DC ($10AB-$10B7), the song number stored into the operand $111F ($10A5) and the helper's read operand $1164-$1165: S_* variables, real state",
+   "K5": "init's relocator adds to each operand it patches at $1000 by subscripting span C0 with the operand's 16-bit address from the relocation table, not an 8-bit index"
   },
   "fuzz-brk": {
    "C1": "init's song guard: A outside the PSID header's songs (by construction)"
@@ -35,15 +36,14 @@
    "C1": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-indx": {
-   "A1": "the (zp,X) pointers init sets are bounded to 16 bits, not the values init leaves, so the load reads span C0's bounds-checked reader and the store dispatches through wr() and codechk()",
-   "C1": "init's song guard: A outside the PSID header's songs (by construction); the pointer guarded against the stack page and I/O; a store into code",
-   "D1": "span C0 holds the player's code, which the (zp,X) store of unknown address may hit"
+   "C1": "init's song guard: A outside the PSID header's songs (by construction)",
+   "D2": "the (zp,X) pointers init seeds are held as zero-page region R0, the hull of the three pointer pairs (the whole zero page where the X index wraps): the bytes between and around the pairs, which nothing writes, are held",
+   "K5": "the (zp,X) load and store subscript span C0, the state the seeded pointers address, by the 16-bit pointer, not by an 8-bit index"
   },
   "fuzz-inlineargs": {
    "C1": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-jam": {
-   "A1": "the guard byte $31F0 past the image, which nothing writes, read through rd()",
    "C1": "init's song guard: A outside the PSID header's songs (by construction); the JAM opcode the motif places (by construction)"
   },
   "fuzz-jsr3": {
@@ -78,16 +78,18 @@
    "C1": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "ghouls": {
-   "A1": "command $85's register and value list, read at an offset its loop advances past the song pointer's guarded extent, is read through span C1's bounds-checked reader; the call command's return stack pushes are bounds-checked against the stack (oob_wr past it); init reads a song's list of voice records through the pointer it loads from $61DD/$61E2 (rd) and clears each voice's state through the address it loads from $61FC/$6202 into the STA operand $6219-$621A (wr)",
+   "A1": "command $85's register and value list, read at an offset its loop advances past the song pointer's guarded extent, is read through span C1's bounds-checked reader; the call command's return stack pushes are bounds-checked against the stack (oob_wr past it)",
    "C1": "init's song guard: A outside the PSID header's songs (by construction); $299B a song's copy selector (from $2A1A/$2A25) past the ten copy pointer pairs at $29E7/$29FB; $61DD the song number less $0A indexing the song list pointers at $61DD/$61E2 past $15, which the song guard already excludes; $6362 a voice's song pointer outside the song data $6CB7-$9E07 it points into; $6368 a song command byte outside $80-$94 indexing the command table past its extent",
    "C3": "the bounds tests of the return stack pushes before oob_wr",
-   "D1": "span C1 $2980-$A013 holds init's code ($2980-$29E6, $6110-$6122, $6153-$622D, $7316-$733E) and play's ($6234-$6CB6 runs): init's copy loop stores through its 16-bit copy pointers into C1, its rd()/wr() of loaded addresses and the song pointers' reads (CGEN_IX subscripts of C1 by the 16-bit pointer, and bounds-checked reads) reach it, and the per-voice operand cells init clears through wr() are held as regions R2-R33 inside it"
+   "D1": "span C1 $2980-$A013 holds init's code ($2980-$29E6, $6110-$6122, $6153-$622D, $7316-$733E) and play's ($6234-$6CB6 runs): init's copy loop stores through its 16-bit copy pointers into C1, its song list reads and voice state clears subscript C1 by the 16-bit addresses it loads, and the song pointers' reads (CGEN_IX subscripts of C1 by the 16-bit pointer, and bounds-checked reads) reach it; the per-voice cells init clears that are not promoted are held as regions inside it",
+   "D5": "the operand cells play patches, per voice (V0_*/V1_* at the voice copies' stride) and shared (S_*), several of which init's setup also stores ($6181-$61D9); and the operand $29D8 of init's copy loop, which init patches at $29BD: real state",
+   "K5": "init's reads of a song's voice records at $6110 subscript span C1 by the 16-bit list pointer it loads from $61DD/$61E2, not by an 8-bit index"
   },
   "incoherent": {
    "A1": "the sequence and pattern pointers read through span C1's bounds-checked reader",
-   "A2": "the dispatch at $0AFF, a JMP through the operand cell $0B00 play stores from the table at $0C33 ($0AC1, $0C39), printed as a switch over code addresses",
    "C1": "init's song guard: A outside the PSID header's songs (by construction); $09B8, $0ABE and $0AC7 a song byte indexing a table past its extent ($F, 4, $17)",
-   "D5": "operand cells play patches (instrument and effect parameters, a computed jump's operand) held as S_* variables: real state",
+   "C2": "the dispatch at $0AFF is a switch over the command index (the JMP operand table $0C5F's entry): the $0874 arm falls through at $0879 into the $087B arm, a goto into the switch's default arm",
+   "D5": "operand cells play patches (instrument and effect parameters) held as S_* variables: real state",
    "K5": "the sequence reads at $0996 subscript span C1 by the 16-bit sequence pointer from the tables at $09C9/$09CE plus the position byte, not by an 8-bit index"
   }
  },
@@ -233,38 +235,28 @@
     [
      "$0AFC",
      "S_2F9: operand of $0AFB, stored by $0ADC"
-    ],
-    [
-     "$0B00",
-     "S_2FD: operand of $0AFF, stored by $0AC1, $0C39"
     ]
    ],
    "A1": [
     [
      "$0996",
-     "rdC1(((uint16_t)v95 << 8) | v94, v96)"
+     "rdC1(((uint16_t)v96 << 8) | v95, v97)"
     ],
     [
      "$0996",
-     "rdC1(R0[0] | ((uint16_t)R0[1] << 8), v105 + 1)"
+     "rdC1(R0[0] | ((uint16_t)R0[1] << 8), v106 + 1)"
     ],
     [
      "$0996",
-     "rdC1(R0[0] | ((uint16_t)R0[1] << 8), v109 + 1)"
+     "rdC1(R0[0] | ((uint16_t)R0[1] << 8), v110 + 1)"
     ],
     [
      "$0996",
-     "rdC1(R0[0] | ((uint16_t)R0[1] << 8), v111 + 1)"
+     "rdC1(R0[0] | ((uint16_t)R0[1] << 8), v112 + 1)"
     ],
     [
      "$0996",
-     "rdC1(R0[0] | ((uint16_t)R0[1] << 8), v96 + 1)"
-    ]
-   ],
-   "A2": [
-    [
-     "$0AFF",
-     "switch over 3 code addresses"
+     "rdC1(R0[0] | ((uint16_t)R0[1] << 8), v97 + 1)"
     ]
    ],
    "C1": [
@@ -283,6 +275,12 @@
     [
      "$0AC7",
      "trap(4) deopt"
+    ]
+   ],
+   "C2": [
+    [
+     "$0879",
+     "goto $087B"
     ]
    ],
    "K5": [
@@ -776,77 +774,147 @@
    "D1": [
     [
      "$2980",
-     "C1 $2980-$29E6 (103 B): C1@$2999, CGEN_IX@$6234, R1@$2999, rd@$6110, rdC1@$6234, wr@$6110"
+     "C1 $2980-$29E6 (103 B): C1@$2999, C1@$6110, CGEN_IX@$6234, rdC1@$6234"
     ],
     [
      "$6110",
-     "C1 $6110-$6122 (19 B): C1@$2999, CGEN_IX@$6234, rd@$6110, rdC1@$6234, wr@$6110"
+     "C1 $6110-$6122 (19 B): C1@$2999, C1@$6110, CGEN_IX@$6234, rdC1@$6234"
     ],
     [
      "$6153",
-     "C1 $6153-$622D (219 B): C1@$2999, CGEN_IX@$6234, R1@$6110, rd@$6110, rdC1@$6234, wr@$6110"
+     "C1 $6153-$622D (219 B): C1@$2999, C1@$6110, CGEN_IX@$6234, rdC1@$6234"
     ],
     [
      "$6234",
-     "C1 $6234-$6A04 (2001 B): C1@$2999, C1@$6110, CGEN_IX@$6234, R12@$6110, R14@$6110, R17@$6110, R20@$6110, R22@$6110, R25@$6110, R26@$6110, R26@$6234, R27@$6110, R27@$6234, R28@$6110, R28@$6234, R29@$6110, R29@$6234, R30@$6110, R30@$6234, R4@$6110, R6@$6110, R9@$6110, rd@$6110, rdC1@$6234, wr@$6110"
+     "C1 $6234-$6A04 (2001 B): C1@$2999, C1@$6110, CGEN_IX@$6234, R17@$6110, R25@$6110, R9@$6110, rdC1@$6234"
     ],
     [
      "$6A0B",
-     "C1 $6A0B-$6B1E (276 B): C1@$2999, C1@$6234, CGEN_IX@$6234, rd@$6110, rdC1@$6234, wr@$6110"
+     "C1 $6A0B-$6B1E (276 B): C1@$2999, C1@$6110, C1@$6234, CGEN_IX@$6234, rdC1@$6234"
     ],
     [
      "$6B31",
-     "C1 $6B31-$6BD9 (169 B): C1@$2999, C1@$6234, CGEN_IX@$6234, oob_wr@$6234, rd@$6110, rdC1@$6234, wr@$6110"
+     "C1 $6B31-$6BD9 (169 B): C1@$2999, C1@$6110, C1@$6234, CGEN_IX@$6234, oob_wr@$6234, rdC1@$6234"
     ],
     [
      "$6BDC",
-     "C1 $6BDC-$6BF4 (25 B): C1@$2999, C1@$6234, CGEN_IX@$6234, oob_wr@$6234, rd@$6110, rdC1@$6234, wr@$6110"
+     "C1 $6BDC-$6BF4 (25 B): C1@$2999, C1@$6110, C1@$6234, CGEN_IX@$6234, oob_wr@$6234, rdC1@$6234"
     ],
     [
      "$6BF7",
-     "C1 $6BF7-$6C0F (25 B): C1@$2999, C1@$6234, CGEN_IX@$6234, oob_wr@$6234, rd@$6110, rdC1@$6234, wr@$6110"
+     "C1 $6BF7-$6C0F (25 B): C1@$2999, C1@$6110, C1@$6234, CGEN_IX@$6234, oob_wr@$6234, rdC1@$6234"
     ],
     [
      "$6C12",
-     "C1 $6C12-$6CB6 (165 B): C1@$2999, C1@$6234, CGEN_IX@$6234, oob_wr@$6234, rd@$6110, rdC1@$6234, wr@$6110"
+     "C1 $6C12-$6CB6 (165 B): C1@$2999, C1@$6110, C1@$6234, CGEN_IX@$6234, oob_wr@$6234, rdC1@$6234"
     ],
     [
      "$7316",
-     "C1 $7316-$733E (41 B): C1@$2999, CGEN_IX@$6234, R38@$6110, rd@$6110, rdC1@$6234, wr@$6110"
+     "C1 $7316-$733E (41 B): C1@$2999, C1@$6110, CGEN_IX@$6234, R38@$6110, rdC1@$6234"
+    ]
+   ],
+   "D5": [
+    [
+     "$29D8",
+     "S_I58: operand of $29D7, stored by $29BD"
+    ],
+    [
+     "$629E",
+     "V0_f00[0]: operand of $629D, stored by $62A1, $63BE"
+    ],
+    [
+     "$62EE",
+     "V0_f50[0]: operand of $62ED, stored by $61D3, $6308, $6328, $63D5, $6952"
+    ],
+    [
+     "$6382",
+     "V0_fE4[0]: operand of $6381, stored by $61C8, $6385, $6C78"
+    ],
+    [
+     "$63D4",
+     "V0_f136[0]: operand of $63D3, stored by $694F"
+    ],
+    [
+     "$63EB",
+     "V1_f00[0]: operand of $63EA, stored by $6A12"
+    ],
+    [
+     "$648B",
+     "V0_f00[1]: operand of $648A, stored by $648E, $65AB"
+    ],
+    [
+     "$64DB",
+     "V0_f50[1]: operand of $64DA, stored by $61D6, $64F5, $6515, $65C2, $696B"
+    ],
+    [
+     "$656F",
+     "V0_fE4[1]: operand of $656E, stored by $61CB, $6572, $6C7E"
+    ],
+    [
+     "$65C1",
+     "V0_f136[1]: operand of $65C0, stored by $6968"
+    ],
+    [
+     "$65DA",
+     "V1_f00[1]: operand of $65D9, stored by $6A46"
+    ],
+    [
+     "$667A",
+     "V0_f00[2]: operand of $6679, stored by $667D, $679A"
+    ],
+    [
+     "$66CA",
+     "V0_f50[2]: operand of $66C9, stored by $61D9, $66E4, $6704, $67B1, $6984"
+    ],
+    [
+     "$675E",
+     "V0_fE4[2]: operand of $675D, stored by $61CE, $6761, $6C84"
+    ],
+    [
+     "$67B0",
+     "V0_f136[2]: operand of $67AF, stored by $6981"
+    ],
+    [
+     "$67C9",
+     "V1_f00[2]: operand of $67C8, stored by $6A7A"
+    ],
+    [
+     "$6800",
+     "S_5CC: operand of $67FF, stored by $6181, $63EC, $65DB, $67CA, $681C, $6836"
+    ],
+    [
+     "$6813",
+     "S_5DF: operand of $6812, stored by $618D, $6A2C, $6A60, $6A94"
+    ],
+    [
+     "$6819",
+     "S_5E5: operand of $6818, stored by $6192, $6A26, $6A5A, $6A8E"
+    ],
+    [
+     "$682D",
+     "S_5F9: operand of $682C, stored by $6197, $6A38, $6A6C, $6AA0"
+    ],
+    [
+     "$6833",
+     "S_5FF: operand of $6832, stored by $619C, $6A32, $6A66, $6A9A"
     ]
    ],
    "A1": [
     [
-     "$6110",
-     "rd((R0[0x96] | ((uint16_t)R0[0x97] << 8)) + (uint8_t)(v2 + 2))"
-    ],
-    [
-     "$6110",
-     "rd(v3 + (uint8_t)(v2 + 1))"
-    ],
-    [
-     "$6110",
-     "rd(v3 + v2)"
-    ],
-    [
-     "$6110",
-     "wr(((uint16_t)v7 << 8) | v6, 0)"
+     "$6234",
+     "oob_wr(R34_ORG + 3 + v6 + v83, R0[0x22 + v5] + ((uint8_t)(v84 + 3) < v84))"
     ],
     [
      "$6234",
-     "oob_wr(R34_ORG + 3 + v8 + v85, R0[0x22 + v6] + ((uint8_t)(v86 + 3) < v86))"
+     "oob_wr(R34_ORG + v6 + v83, v84 + 3)"
     ],
     [
      "$6234",
-     "oob_wr(R34_ORG + v8 + v85, v86 + 3)"
+     "rdC1(v72, v71 + 1)"
     ],
     [
      "$6234",
-     "rdC1(v74, v73 + 1)"
-    ],
-    [
-     "$6234",
-     "rdC1(v74, v73 + 2)"
+     "rdC1(v72, v71 + 2)"
     ]
    ],
    "C1": [
@@ -880,60 +948,90 @@
      "$6234",
      "bounds test before dispatch"
     ]
+   ],
+   "K5": [
+    [
+     "$6110",
+     "C1[(uint16_t)(v3 + (uint8_t)(v2 + 1) - C1_ORG)]"
+    ],
+    [
+     "$6110",
+     "C1[(uint16_t)(v3 + v2 - C1_ORG)]"
+    ]
    ]
   },
   "emomyst": {
    "D1": [
     [
      "$1000",
-     "C0 $1000-$1005 (6 B): rd@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1, wr@$1000"
+     "C0 $1000-$1005 (6 B): C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ],
     [
      "$1015",
-     "C0 $1015-$101B (7 B): rd@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1, wr@$1000"
+     "C0 $1015-$101B (7 B): C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ],
     [
      "$10A5",
-     "C0 $10A5-$1166 (194 B): C0@$1000, C0@$1400, R2@$1000, R2@$1003, R2@$124D, R2@$1400, R2@$1537, R2@$16D6, R2@$17BA, R2@$17E5, R2@$1802, R2@$19AB, R2@$1A00, R2@$1A2D, R2@$1A42, R2@$1A59, R2@$1A65, R2@$1AB4, R2@$1B31, R3@$1000, R3@$124D, R3@$16D6, R3@$19AB, R3@$1B2A, rd@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1, wr@$1000"
+     "C0 $10A5-$1166 (194 B): C0@$1000, C0@$1400, CGEN_IX@$1000, R2@$1000, R2@$1003, R2@$124D, R2@$1400, R2@$1537, R2@$16D6, R2@$17BA, R2@$17E5, R2@$1802, R2@$19AB, R2@$1A00, R2@$1A2D, R2@$1A42, R2@$1A59, R2@$1A65, R2@$1AB4, R2@$1B31, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ],
     [
      "$1186",
-     "C0 $1186-$118F (10 B): C0@$1400, R3@$124D, R3@$16D6, R3@$19AB, R3@$1B2A, rd@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1, wr@$1000"
+     "C0 $1186-$118F (10 B): C0@$1000, C0@$1400, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ],
     [
      "$11AA",
-     "C0 $11AA-$11AA (1 B): rd@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1, wr@$1000"
+     "C0 $11AA-$11AA (1 B): C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ],
     [
      "$11C4",
-     "C0 $11C4-$1223 (96 B): rd@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1, wr@$1000"
+     "C0 $11C4-$1223 (96 B): C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ],
     [
      "$1243",
-     "C0 $1243-$124B (9 B): rd@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1, wr@$1000"
+     "C0 $1243-$124B (9 B): C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ],
     [
      "$124D",
-     "C0 $124D-$182F (1507 B): C0@$1802, rd@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1, wr@$1000"
+     "C0 $124D-$182F (1507 B): C0@$1000, C0@$1802, CGEN_IX@$1000, R46@$1000, R47@$1000, R47@$17C8, R48@$1000, R48@$17C8, R49@$1000, R49@$17C8, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ],
     [
      "$1939",
-     "C0 $1939-$19F1 (185 B): C0@$1003, C0@$1400, C0@$1537, C0@$16D6, C0@$1802, C0@$1A00, R50@$1400, R51@$19AB, rd@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1, wr@$1000"
+     "C0 $1939-$19F1 (185 B): C0@$1000, C0@$1003, C0@$1400, C0@$1537, C0@$16D6, C0@$1802, C0@$1A00, CGEN_IX@$1000, R50@$1400, R51@$19AB, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ],
     [
      "$1A00",
-     "C0 $1A00-$1A14 (21 B): C0@$1400, C0@$1A00, rd@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1, wr@$1000"
+     "C0 $1A00-$1A14 (21 B): C0@$1000, C0@$1400, C0@$1A00, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ],
     [
      "$1A16",
-     "C0 $1A16-$1A6F (90 B): C0@$1400, C0@$19AB, C0@$1A00, rd@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1, wr@$1000"
+     "C0 $1A16-$1A6F (90 B): C0@$1000, C0@$1400, C0@$19AB, C0@$1A00, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ],
     [
      "$1AAE",
-     "C0 $1AAE-$1B54 (167 B): C0@$19AB, C0@$1A00, rd@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1, wr@$1000"
+     "C0 $1AAE-$1B54 (167 B): C0@$1000, C0@$19AB, C0@$1A00, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163, rdC0@$124D, rdC0@$1400, rdC0@$1537, rdC0@$16D6, rdC0@$17C8, rdC0@$19AB, rdC0@$19D3, rdC0@$19DB, rdC0@$1A42, rdC0@$1AC1"
     ]
    ],
    "D5": [
+    [
+     "$10CC",
+     "S_C9: operand of $10CB, stored by $10AB"
+    ],
+    [
+     "$10CD",
+     "S_CA: operand of $10CB, stored by $10B4"
+    ],
+    [
+     "$10DB",
+     "S_D8: operand of $10DA, stored by $10AE"
+    ],
+    [
+     "$10DC",
+     "S_D9: operand of $10DA, stored by $10B7"
+    ],
+    [
+     "$111F",
+     "S_11C: operand of $111E, stored by $10A5"
+    ],
     [
      "$1164",
      "S_161: operand of $1163, stored by $10ED"
@@ -1023,46 +1121,6 @@
      "S_7B3: operand of $17B5, stored by $17A6"
     ],
     [
-     "$17C2",
-     "S_7BF: operand of $17C1, stored by indexed or indirect stores"
-    ],
-    [
-     "$17C3",
-     "S_7C0: operand of $17C1, stored by indexed or indirect stores"
-    ],
-    [
-     "$17C5",
-     "S_7C2: operand of $17C4, stored by indexed or indirect stores"
-    ],
-    [
-     "$17C6",
-     "S_7C3: operand of $17C4, stored by indexed or indirect stores"
-    ],
-    [
-     "$17CF",
-     "S_7CC: operand of $17CE, stored by indexed or indirect stores"
-    ],
-    [
-     "$17D0",
-     "S_7CD: operand of $17CE, stored by indexed or indirect stores"
-    ],
-    [
-     "$17D3",
-     "S_7D0: operand of $17D2, stored by indexed or indirect stores"
-    ],
-    [
-     "$17D4",
-     "S_7D1: operand of $17D2, stored by indexed or indirect stores"
-    ],
-    [
-     "$17D7",
-     "S_7D4: operand of $17D6, stored by indexed or indirect stores"
-    ],
-    [
-     "$17D8",
-     "S_7D5: operand of $17D6, stored by indexed or indirect stores"
-    ],
-    [
      "$19D1",
      "S_9CE: operand of $19CF, stored by $19C9"
     ],
@@ -1086,71 +1144,15 @@
    "A1": [
     [
      "$1000",
-     "codechk(v18, v16)"
+     "rdC0(R47[0] | ((uint16_t)R47[1] << 8), v21)"
     ],
     [
      "$1000",
-     "rd((R3[0x3D] | ((uint16_t)R3[0x3E] << 8)) + R63[v1])"
+     "rdC0(R48[0] | ((uint16_t)R48[1] << 8), v21)"
     ],
     [
      "$1000",
-     "rd((R3[0x4C] | ((uint16_t)R3[0x4D] << 8)) + (uint8_t)(R63[v1] + 1))"
-    ],
-    [
-     "$1000",
-     "rd(1 + v7)"
-    ],
-    [
-     "$1000",
-     "rd(R0_ORG + (R0[0] | ((uint16_t)R0[1] << 8)))"
-    ],
-    [
-     "$1000",
-     "rd(S_7BF | ((uint16_t)S_7C0 << 8))"
-    ],
-    [
-     "$1000",
-     "rdC0(S_7CC | ((uint16_t)S_7CD << 8), v22)"
-    ],
-    [
-     "$1000",
-     "rdC0(S_7D0 | ((uint16_t)S_7D1 << 8), v22)"
-    ],
-    [
-     "$1000",
-     "rdC0(S_7D4 | ((uint16_t)S_7D5 << 8), v22)"
-    ],
-    [
-     "$1000",
-     "wr(1 + (((uint16_t)v2 << 8) | v3), v4 + v5)"
-    ],
-    [
-     "$1000",
-     "wr(1 + (R0[0] | ((uint16_t)R0[1] << 8)), v14)"
-    ],
-    [
-     "$1000",
-     "wr(1 + v7, v8)"
-    ],
-    [
-     "$1000",
-     "wr(R0_ORG + (R0[0] | ((uint16_t)R0[1] << 8)), (uint16_t)((((uint16_t)rd((R3[0x4C] | ((uint16_t)R3[0x4D] << 8)) + (uint8_t)(R63[v1] + 1)) << 8) | v4) + (((uint16_t)R3[0x14] << 8) | v5)) >> 8)"
-    ],
-    [
-     "$1000",
-     "wr(R0_ORG + (R0[0] | ((uint16_t)R0[1] << 8)), v11)"
-    ],
-    [
-     "$1000",
-     "wr(R2_ORG + 0x35 + v26, v32 + 1)"
-    ],
-    [
-     "$1000",
-     "wr(R2_ORG + 0x48 + v26, v25)"
-    ],
-    [
-     "$1000",
-     "wr(v18, v16)"
+     "rdC0(R49[0] | ((uint16_t)R49[1] << 8), v21)"
     ],
     [
      "$1163",
@@ -1402,15 +1404,15 @@
     ],
     [
      "$17C8",
-     "rdC0(S_7CC | ((uint16_t)S_7CD << 8), v2)"
+     "rdC0(R47[0] | ((uint16_t)R47[1] << 8), v2)"
     ],
     [
      "$17C8",
-     "rdC0(S_7D0 | ((uint16_t)S_7D1 << 8), v2)"
+     "rdC0(R48[0] | ((uint16_t)R48[1] << 8), v2)"
     ],
     [
      "$17C8",
-     "rdC0(S_7D4 | ((uint16_t)S_7D5 << 8), v2)"
+     "rdC0(R49[0] | ((uint16_t)R49[1] << 8), v2)"
     ],
     [
      "$19AB",
@@ -1451,26 +1453,24 @@
      "trap(0) deopt"
     ],
     [
-     "$17C4",
-     "trap(2) deopt"
-    ],
-    [
-     "$17C7",
-     "trap(3) deopt"
-    ],
-    [
      "$1947",
-     "trap(4) deopt"
+     "trap(2) deopt"
     ]
    ],
    "C3": [
     [
-     "$1000",
-     "13 decision points, 12 original branches"
-    ],
-    [
      "$19AB",
      "8 decision points, 6 original branches"
+    ]
+   ],
+   "K5": [
+    [
+     "$1000",
+     "C0[(uint16_t)((uint16_t)(1 + v9) - C0_ORG)]"
+    ],
+    [
+     "$1000",
+     "C0[(uint16_t)((uint16_t)(1 + v9) - C0_ORG)]"
     ]
    ]
   },
@@ -1951,120 +1951,86 @@
    ]
   },
   "fuzz-indx-0": {
-   "D1": [
+   "D2": [
     [
-     "$1000",
-     "C0 $1000-$10BC (189 B): rdC0@$1055, wr@$1055"
-    ]
-   ],
-   "A1": [
-    [
-     "$1055",
-     "codechk(v5, v6 + 0x22)"
+     "$0042",
+     "R0 $0042-$0046 (5 B): R0@$1055"
     ],
     [
-     "$1055",
-     "rdC0(v5, 0)"
-    ],
-    [
-     "$1055",
-     "wr(v5, v6 + 0x22)"
+     "$0049",
+     "R0 $0049-$004D (5 B): R0@$1055"
     ]
    ],
    "C1": [
     [
      "$1000",
      "trap(0) deopt"
-    ],
+    ]
+   ],
+   "K5": [
     [
-     "$109D",
-     "trap(2) deopt"
-    ],
-    [
-     "$109F",
-     "trap(3) deopt"
+     "$1055",
+     "C0[(uint16_t)(v5 - C0_ORG)]"
     ]
    ]
   },
   "fuzz-indx-1": {
-   "D1": [
+   "D2": [
     [
-     "$1000",
-     "C0 $1000-$10A6 (167 B): rdC0@$1055, wr@$1055"
-    ]
-   ],
-   "A1": [
-    [
-     "$1055",
-     "codechk(v5, v6 + 0x1A)"
+     "$0000",
+     "R0 $0000-$003F (64 B): R0@$1055"
     ],
     [
-     "$1055",
-     "rdC0(v5, 0)"
+     "$0042",
+     "R0 $0042-$0046 (5 B): R0@$1055"
     ],
     [
-     "$1055",
-     "wr(v5, v6 + 0x1A)"
+     "$0049",
+     "R0 $0049-$004D (5 B): R0@$1055"
+    ],
+    [
+     "$0050",
+     "R0 $0050-$00FF (176 B): R0@$1055"
     ]
    ],
    "C1": [
     [
      "$1000",
      "trap(0) deopt"
-    ],
+    ]
+   ],
+   "K5": [
     [
-     "$10A1",
-     "trap(2) deopt"
-    ],
-    [
-     "$10A3",
-     "trap(3) deopt"
+     "$1055",
+     "C0[(uint16_t)(v4 - C0_ORG)]"
     ]
    ]
   },
   "fuzz-indx-2": {
-   "D1": [
+   "D2": [
     [
-     "$1000",
-     "C0 $1000-$10AB (172 B): rdC0@$1055, wr@$1055"
-    ]
-   ],
-   "A1": [
-    [
-     "$1055",
-     "codechk(v4, v5 + 0x2C)"
+     "$0042",
+     "R0 $0042-$0046 (5 B): R0@$1055"
     ],
     [
-     "$1055",
-     "rdC0(v4, 0)"
-    ],
-    [
-     "$1055",
-     "wr(v4, v5 + 0x2C)"
+     "$0049",
+     "R0 $0049-$004D (5 B): R0@$1055"
     ]
    ],
    "C1": [
     [
      "$1000",
      "trap(0) deopt"
-    ],
+    ]
+   ],
+   "K5": [
     [
-     "$10A0",
-     "trap(2) deopt"
-    ],
-    [
-     "$10A2",
-     "trap(3) deopt"
+     "$1055",
+     "C0[(uint16_t)(v4 - C0_ORG)]"
     ]
    ]
   },
   "fuzz-jam-0": {
-   "A1": [
-    [
-     "$103D",
-     "rd(0x31F0)"
-    ]
-   ],
    "C1": [
     [
      "$1000",
@@ -2077,12 +2043,6 @@
    ]
   },
   "fuzz-jam-1": {
-   "A1": [
-    [
-     "$103D",
-     "rd(0x31F0)"
-    ]
-   ],
    "C1": [
     [
      "$1000",
@@ -2095,12 +2055,6 @@
    ]
   },
   "fuzz-jam-2": {
-   "A1": [
-    [
-     "$103D",
-     "rd(0x31F0)"
-    ]
-   ],
    "C1": [
     [
      "$1000",
