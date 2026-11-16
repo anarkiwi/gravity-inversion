@@ -40,7 +40,12 @@ TUNE := $(notdir $(CURDIR))
 
 all: $(B)/gen.prg
 
-$(B)/gen/$(TUNE).c $(B)/gen/$(TUNE).h $(B)/gen/cgen_trap.c &: $(PSID) $(ROOT)/tools/transliterate.py
+# The installed lifter's identity, rewritten only when it changes: a pin or wheel change
+# regenerates the C.
+$(B)/lifter.stamp: FORCE
+	$(PY) $(ROOT)/tools/lifterstamp.py $@
+
+$(B)/gen/$(TUNE).c $(B)/gen/$(TUNE).h $(B)/gen/cgen_trap.c &: $(PSID) $(ROOT)/tools/transliterate.py $(B)/lifter.stamp
 	mkdir -p $(B)/gen
 	$(PY) $(ROOT)/tools/transliterate.py $< $(B)/gen/$(TUNE).c --header $(B)/gen/$(TUNE).h
 
@@ -64,4 +69,5 @@ endif
 clean:
 	rm -rf $(B)
 
-.PHONY: all check fixture clean
+.PHONY: all check fixture clean FORCE
+FORCE:

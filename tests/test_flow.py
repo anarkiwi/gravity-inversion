@@ -204,13 +204,6 @@ def fixture_sidwizard(tmp_path_factory):
     return out, json.loads((out / "sidwizard" / "row.json").read_text(encoding="utf-8"))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="init's operand relocator stores through a zero-page pointer loaded from a "
-    "table of operand addresses in the song data; the stores' addresses are unknown "
-    "while the table may be one of their targets, so the table is not constant to the "
-    "analysis and the stores go through wr() and codechk()",
-)
 def test_no_dispatch(sidwizard):
     """No access of the SID-Wizard fixture's translation goes through `wr` or `codechk`."""
     assert not {"wr", "codechk"} & set(sidwizard[1]["residual"])

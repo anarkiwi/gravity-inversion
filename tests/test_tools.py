@@ -1,14 +1,16 @@
-"""Tests for tools/disasm.py, tools/survey.py and tools/sizes.py on a real PSID."""
+"""Tests for tools/disasm.py, tools/survey.py, tools/sizes.py and tools/lifterstamp.py."""
 
 import hashlib
 import json
 import os
 import subprocess
 import re
+import shutil
 
 import pytest
 
 import disasm
+import lifterstamp
 import mutate
 import sidtrace
 import sizes
@@ -147,3 +149,43 @@ def test_sizes(tmp_path, capsys):
         (constructs.ROOT / constructs.load("commando")["psid"]).read_bytes()
     )[3]
     assert 0 < insns < len(image)
+
+
+def test_lifter_stamp(tmp_path):
+    """common.mk regenerates a tune's C when the lifter's identity changes, not otherwise."""
+    assert lifterstamp.identity(("jennings",)).startswith("jennings ")
+    assert ".so " in lifterstamp.identity(("deity-informant",))
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    shutil.copy(constructs.ROOT / "common.mk", tmp_path)
+    shutil.copy(constructs.ROOT / "tools" / "lifterstamp.py", tools)
+    (tools / "transliterate.py").write_text(
+        "import sys\n"
+        "for p in (sys.argv[2], sys.argv[4], 'build/gen/cgen_trap.c'):\n"
+        "    open(p, 'w').close()\n"
+        "open('lifts', 'a').write('.')\n",
+        encoding="ascii",
+    )
+    tune = tmp_path / "tunes" / "t"
+    tune.mkdir(parents=True)
+    (tune / "t.sid").write_bytes(b"")
+    (tune / "Makefile").write_text(
+        "PSID = t.sid\nGEN := 1\ninclude ../../common.mk\n", encoding="ascii"
+    )
+    stamp = tune / "build" / "lifter.stamp"
+
+    def lifts():
+        subprocess.run(["make", "-s", "build/gen/t.c"], cwd=tune, check=True)
+        return len((tune / "lifts").read_text())
+
+    assert lifts() == 1
+    assert stamp.read_text() == lifterstamp.identity()
+    assert lifts() == 1
+    stamp.write_text("deity-informant 0\n")
+    os.utime(stamp, ns=(0, 0))
+    assert lifts() == 2
+    assert stamp.read_text() == lifterstamp.identity()
+    assert lifts() == 2
+    assert not lifterstamp.write(stamp, lifterstamp.identity())
+    lifterstamp.main([str(tmp_path / "s" / "lifter.stamp")])
+    assert (tmp_path / "s" / "lifter.stamp").read_text() == lifterstamp.identity()
