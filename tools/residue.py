@@ -47,10 +47,7 @@ UNDETECTABLE = {
 GUARD_KINDS = frozenset(("entry", "objchk", "window", "jam"))
 #: Traps of a tune whose guards an earlier guard implies where trap_info does not find it:
 #: {(tune, trap pc): the derivation}.
-IMPLIED = {
-    ("ghouls", 0x61DD): "by init's song guard: $7316 CMP #$0B / BPL takes A in $0B-$1F "
-    "(of songs 0-$1F) to $731D SBC #$0A / TAX, X in 1-$15",
-}
+IMPLIED: dict[tuple[str, int], str] = {}
 #: Extents of an `index` guard's table that end the data it indexes.
 DATA_ENDS = frozenset(("loaded", "object", "code", "column"))
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")

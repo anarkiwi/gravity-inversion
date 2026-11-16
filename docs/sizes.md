@@ -14,14 +14,14 @@ count.
 | original instructions | instruction bytes of jennings' listing of the PSID image, computed transfers resolved through constant tables |
 | original footprint | the image's non-instruction bytes and the RAM outside the image the run writes (I/O and the stack excluded), from jennings coverage |
 
-Bytes; deity-informant 0.39.0, jennings 0.14.1, llvm-mos SDK v23.4.0, `-Os`.
+Bytes; deity-informant 0.39.6, jennings 0.14.1, llvm-mos SDK v23.4.0, `-Os`.
 
 | Tune | Original instructions | Hand code | Generated code | Original footprint | Hand data | Generated data | Hand top | Generated top |
 |---|---|---|---|---|---|---|---|---|
 | Commando | 926 | 1802 | 2269 | 1981 | 1964 | 2036 | `$1732` | `$194F` |
-| Incoherent | 1070 | 2733 | 2772 | 5861 | 5842 | 5894 | `$2A01` | `$2A52` |
-| Automatas | 1600 | 2505 | 2849 | 6563 | 6647 | 6746 | `$2C33` | `$2DC6` |
-| Ghouls | 3043 | 4106 | 4955 | 22901 | 24262 | 30482 | `$773C` | `$92B9` |
-| Emomyst | 2323 | 6179 | 7166 | 2961 | 2864 | 5538 | `$2BA9` | `$39D5` |
+| Incoherent | 1070 | 2733 | 2780 | 5861 | 5842 | 5894 | `$2A01` | `$2A5A` |
+| Automatas | 1600 | 2505 | 2835 | 6563 | 6647 | 6746 | `$2C33` | `$2DB8` |
+| Ghouls | 3043 | 4106 | 5418 | 22901 | 24262 | 30777 | `$773C` | `$95B1` |
+| Emomyst | 2323 | 6179 | 9200 | 2961 | 2864 | 5678 | `$2BA9` | `$425D` |
 
 Where the generated PRGs' bytes go is measured by ablation in [ablate.md](ablate.md).

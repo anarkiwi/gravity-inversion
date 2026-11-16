@@ -561,12 +561,18 @@
     "fn": "ins_ptn_fx",
     "form": "function, called and reached by goto done"
    },
-   "why": "A subroutine the code also enters by JMP and fall-through: the 6502 tail call.",
-   "lift": "function; jumps and fall-through become calls followed by return",
+   "why": "A subroutine the code also enters by JMP and fall-through: the 6502 tail call. In $1939, $1943 ends $193B BPL's vibrato amplitude arm and $196F the wave store $196C that the $1951 dispatch's sync, ring and gate arms join in its other arm; both jump to $19AB with nothing between, so the two paths join at one call.",
+   "lift": "function; jumps and fall-through become calls followed by return; $196F's call is $1943's, made once where the two paths join (shared)",
    "covered": false,
    "uncovered": "the song uses neither gate-off nor portamento note fx, which enter $19AB by jump; the patched variants reach them",
    "hand_differs": "the hand C reaches it from note_fx by goto done rather than as a call",
-   "transform": "T2"
+   "transform": "T2",
+   "shared": [
+    [
+     "$196F",
+     "$1943"
+    ]
+   ]
   },
   {
    "id": "arp-cell",
@@ -672,6 +678,42 @@
    "lift": "goto",
    "covered": false,
    "uncovered": "the song does not take every one of these edges",
+   "transform": "T7"
+  },
+  {
+   "id": "hard_restart.wf_arp",
+   "kind": "goto",
+   "edges": [
+    [
+     "$138C",
+     "$16D6"
+    ]
+   ],
+   "hand": {
+    "fn": "hard_restart",
+    "form": "set_ins(V(CUR_INS)); wf_arp()"
+   },
+   "why": "$1378, which $130B JMP, $134E BEQ and $136D BEQ join, reloads the instrument pointer and $138C jumps to $16D6, the waveform and arpeggio program, part-way into the sequence $1520 falls through ($1537 vibrato and slide, $15D1 filter, $1665 pulse width, then $16D6). No JSR targets $16D6 and it is the immediate post-dominator of no branch of $124D's procedure ($134E's and $136D's is the exit, past $1377 RTS).",
+   "lift": "goto",
+   "hand_differs": "the hand C calls wf_arp(), a function at no procedure entry; the rule makes the jump part-way into the shared sequence a goto",
+   "transform": "T7"
+  },
+  {
+   "id": "tick2.cnt_play2",
+   "kind": "goto",
+   "edges": [
+    [
+     "$142E",
+     "$1537"
+    ]
+   ],
+   "hand": {
+    "fn": "tick2",
+    "form": "cnt_play2() after the if/else if, the third arm returning"
+   },
+   "why": "$1424 (after $1421 JSR $19AB, no note) and $142E (after $142B JSR $1939, a note fx) both jump to $1537, the entry of the sequence $1520 falls into past the instrument load. The third arm ($1431, a note, and $1408, no instrument) reaches the exit sequence $17BA-$17C0 by $145C JMP, as $1537's path does by falling through $17B7, so $17BA, not $1537, is the immediate post-dominator of $1406, $141F and $1429: one of the two jumps into $1537 has no structured form, and the lift lays $1424's out as the fall-through. With $1939 inlined, the edge also carries the returns of its gate-off and portamento paths, each after its own call of $19AB, past the call its vibrato and wave paths share.",
+   "lift": "goto",
+   "hand_differs": "the hand C returns from the third arm (legato(), start_sound()) and calls cnt_play2(), a function at no procedure entry, after the other two",
    "transform": "T7"
   },
   {

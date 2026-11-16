@@ -78,8 +78,12 @@ class Checker:
             if self.mem[s] != JSR or word != c["target"]:
                 out.append(f"${s:04X} is not JSR ${c['target']:04X}")
             out += self.at(s)
-        for a in c.get("falls", []) + c.get("jumps", []):
+        entries = c.get("falls", []) + c.get("jumps", [])
+        for a in entries:
             out += self.edge(a, c["target"])
+        for j, s in c.get("shared", []):
+            if j not in entries or s not in entries + c.get("sites", []):
+                out.append(f"${j:04X} shares no listed entry ${s:04X}")
         return out
 
     def unrolled(self, c):
