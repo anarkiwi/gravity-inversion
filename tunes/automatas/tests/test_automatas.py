@@ -67,8 +67,7 @@ VARIANTS = {
 
 
 def _variant_cases():
-    """(name, kind): the generated C's SID model is init's on transliterate's C64, so the
-    8580 variant is the hand C's alone (test_generated_model_settled)."""
+    """(name, kind): the generated C on another chip is test_generated_model_probe's."""
     return [
         (n, k)
         for n in sorted(VARIANTS)
@@ -89,16 +88,18 @@ def test_variant_identical(name, kind, psid, tmp_path):
     assert sidtrace.diff(ref, got) is None
 
 
-def test_generated_model_settled(psid):
-    """Init's SID model probe runs on transliterate's C64 (a 6581) and its result is .h
-    state: on an 8580 the generated C plays as the original does on a 6581."""
-    machine = VARIANTS["sid8580"][1]
-    ref = sidtrace.trace_psid(psid, VARIANT_CALLS)
-    assert (
-        sidtrace.diff(ref, sidtrace.trace_psid(psid, VARIANT_CALLS, **machine))
-        is not None
-    )
-    got = sidtrace.trace_prg(PRGS["generated"], VARIANT_CALLS, **machine)
+MACHINES = {m.get("sid_model", "6581"): m for _, m in VARIANTS.values()}
+
+
+@pytest.mark.parametrize("model", sorted(MACHINES))
+def test_generated_model_probe(model, psid):
+    """Init's SID model probe runs in the generated C: on each chip it plays as the
+    original does on that chip, and the chips' plays differ."""
+    ref = sidtrace.trace_psid(psid, VARIANT_CALLS, **MACHINES[model])
+    for other in set(MACHINES) - {model}:
+        alt = sidtrace.trace_psid(psid, VARIANT_CALLS, **MACHINES[other])
+        assert sidtrace.diff(ref, alt) is not None
+    got = sidtrace.trace_prg(PRGS["generated"], VARIANT_CALLS, **MACHINES[model])
     assert sidtrace.diff(ref, got) is None
 
 

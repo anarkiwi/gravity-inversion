@@ -363,10 +363,11 @@ def fixture_player(tmp_path_factory):
 
 @pytest.mark.slow
 def test_player_exact(player):
-    """Every exact step keeps the player's SID writes; the dispatch shrinks."""
+    """Every exact step keeps the player's SID writes; the lift switches the branch offset
+    dispatch on its table index, a byte, so the byte switch leaves its code as it is."""
     rows = {r["step"]: r for r in player[1]["steps"]}
     assert all(r["verified"] for r in rows.values() if r["kind"] == "exact")
-    assert rows["byte switch"]["delta"] < 0
+    assert rows["byte switch"]["delta"] == 0
 
 
 @pytest.mark.slow
