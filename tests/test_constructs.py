@@ -1,6 +1,6 @@
 """The construct maps (tunes/*/constructs.json) against the originals and the generated C:
 each entry valid and covered as the map says, translated as the hand C does (cgen's provenance),
-or, run only by init (on the host), not in the generated C."""
+or, run only by a replayed init, not in the generated C."""
 
 import functools
 
@@ -10,15 +10,12 @@ from transliterate import transliterate
 import constructs
 
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
-REINDEXED = (
-    "the voice index STX $148D saves before the guarded pulse width stores $1275/$127C is "
-    "reloaded by LDX $148D, not forwarded, so the per-voice tests read state at an index only "
-    "its type bounds and print as separate statements, not one condition"
-)
 UNCHECKED = {"region", "inline_repeat", "unrolled_stores", "per_voice_paths"}
 MISSED = {
-    "commando:drum-condition": REINDEXED,
-    "commando:skydive-condition": REINDEXED,
+    "automatas:cutoff-shift-cell": (
+        "init is replayed, so the ASL or NOP it writes at $10D4 by SID model is a constant "
+        "after init: the C shifts by the replayed model's opcode, not by a cell"
+    ),
 }
 #: The keys of an entry naming its instructions.
 PCS = (
@@ -56,10 +53,10 @@ def pcs(c):
 @functools.cache
 def provenance(tune):
     """cgen's provenance of the tune's generated C, with the instructions the C translates
-    (`starts`)."""
+    (`starts`) and whether init is translated or replayed (`init`)."""
     m = constructs.load(tune)
     _, _, info = transliterate((constructs.ROOT / m["psid"]).read_bytes(), "t.h")
-    return {**info["provenance"], "starts": set(info["starts"])}
+    return {**info["provenance"], "starts": set(info["starts"]), "init": info["init"]}
 
 
 def _entries():
@@ -137,14 +134,15 @@ def test_map(tune):
 @pytest.mark.slow
 @pytest.mark.parametrize("tune,cid", _entries())
 def test_lifted(tune, cid):
-    """The generated C has the construct in the hand C's form; one only init runs has none
-    of its instructions there."""
+    """The generated C has the construct in the hand C's form; one only a replayed init runs
+    has none of its instructions there."""
     c = next(c for c in constructs.load(tune)["constructs"] if c["id"] == cid)
     _, covered, played = checked(tune)[cid]
-    if covered and not played:
-        assert not pcs(c) & provenance(tune)["starts"], c["hand"]
+    prov = provenance(tune)
+    if covered and not played and prov["init"] == "replayed":
+        assert not pcs(c) & prov["starts"], c["hand"]
     else:
-        assert lifted(c, provenance(tune)), c["hand"]
+        assert lifted(c, prov), c["hand"]
 
 
 def test_main(capsys):

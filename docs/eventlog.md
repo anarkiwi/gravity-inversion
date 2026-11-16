@@ -12,7 +12,8 @@ This writes `OUT/events.jsonl` and `OUT/summary.json`.
 ## Method
 
 1. **Song data.** `tools/transliterate.py` runs init on the host and lifts play from the state it
-   leaves (the `.h` holds that state, the `.c` the code). Song data is every byte the PSID loads
+   leaves (the `.h` holds that state, the `.c` the code); init is translated where exact, else
+   replayed from tables (`info["init"]`). Song data is every byte the PSID loads
    that is in no instruction the lift translates (`info["starts"]`) and that the original's run
    (init and the play calls) never writes: `eventlog.song_mask`, `eventlog.reference`. The bytes
    init sets are `.h` variables, not song data.
