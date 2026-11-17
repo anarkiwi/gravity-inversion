@@ -612,3 +612,29 @@ def test_opcode_flag(lift):
         residue.Site("C3", 0x1006, "3 decision points, 2 original branches")
     ]
     assert {c.lv: w for c, w in census.counted()}["S_0"] == "state"
+
+
+@pytest.mark.parametrize(
+    "values, sites",
+    [
+        ([0x60, 0xEA], [(0x1006, "3 decision points, 2 original branches")]),
+        (
+            [],
+            [
+                (0x1006, "2 decision points, 1 original branches"),
+                (0x1006, "opcode cell S_0 tested"),
+            ],
+        ),
+    ],
+)
+def test_opcode_values(lift, values, sites):
+    """An opcode cell with a finite value set in `state.opcodes` is a flag without an opcode
+    guard; one with no value set is still a C3 site."""
+    state = {
+        **INFO["state"],
+        "opcodes": {
+            str(0x1006): {"values": values, "name": "S_0", "enum": ["S_0_RTS"]}
+        },
+    }
+    census = residue.Census(lift._replace(info={**INFO, "state": state}))
+    assert [(s.pc, s.detail) for s in census.sites() if s.kind == "C3"] == sites

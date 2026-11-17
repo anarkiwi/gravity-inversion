@@ -14,7 +14,7 @@ count.
 | original instructions | instruction bytes of jennings' listing of the PSID image, computed transfers resolved through constant tables |
 | original footprint | the image's non-instruction bytes and the RAM outside the image the run writes (I/O and the stack excluded), from jennings coverage |
 
-Bytes; deity-informant 0.40.5, jennings 0.14.1, llvm-mos SDK v23.4.0, `-Os`.
+Bytes; deity-informant 0.40.9, jennings 0.14.1, llvm-mos SDK v23.4.0, `-Os`.
 
 | Tune | Original instructions | Hand code | Generated code | Original footprint | Hand data | Generated data | Hand top | Generated top |
 |---|---|---|---|---|---|---|---|---|
