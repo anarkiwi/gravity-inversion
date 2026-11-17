@@ -45,8 +45,9 @@ UNDETECTABLE = {
 }
 #: trap_info guard kinds that trap input the original's meaning does not define.
 GUARD_KINDS = frozenset(("entry", "objchk", "window", "jam"))
-#: trap_info's `implied_by` of a guard only the declared song range makes redundant.
-BY_ENTRY = ["entry"]
+#: The child holding a statement's condition, by statement kind.
+CONDITION = dict.fromkeys(("IfStmt", "WhileStmt", "ConditionalOperator"), 0)
+CONDITION.update(DoStmt=1, ForStmt=2)
 #: Statements after which control does not reach the next.
 LEAVES = frozenset(("ContinueStmt", "BreakStmt", "ReturnStmt", "GotoStmt"))
 #: Extents of an `index` guard's table that end the data it indexes.
@@ -138,7 +139,7 @@ def trap_class(meta):
     if meta is None:
         return "C1", "no trap_info"
     kind = meta["kind"]
-    if meta["implied_by"] == BY_ENTRY:
+    if meta["implied_by"] == ["entry"]:
         return GUARD, f"{kind} implied by the entry guard"
     if meta["implied_by"] is not None:
         by = ", ".join(f"trap({k})" for k in meta["implied_by"]) or "constants"
@@ -643,13 +644,11 @@ class Census:  # pylint: disable=too-many-instance-attributes
             for n, _ in nodes:
                 if n.get("kind") == "CallExpr" and costs.callee(n) == "trap":
                     k = cflow.constant(n["inner"][1])
-                    if k in out:
-                        continue
-                    if k not in traps:
+                    if k not in out and k not in traps:
                         out[k] = Site("C1", self._at(fn), f"trap({k}) untabled")
-                        continue
-                    kind, why = trap_class(meta.get(k))
-                    out[k] = Site(kind, traps[k][1], f"trap({k}) {why}")
+                    elif k not in out:
+                        kind, why = trap_class(meta.get(k))
+                        out[k] = Site(kind, traps[k][1], f"trap({k}) {why}")
         return list(out.values())
 
     def c2(self):
@@ -794,23 +793,18 @@ class Census:  # pylint: disable=too-many-instance-attributes
         }
 
     def _decisions(self, n, up=None):
-        """The atoms of the condition a statement or expression decides; a test with an arm
-        that traps has none, the statement after an `if` its arm when the `if`'s own arm
-        leaves."""
+        """The atoms of the condition a statement or expression decides; none for a test
+        with an arm that traps, the statement after an `if` whose arm leaves its arm too.
+        """
         kind, inner = n.get("kind"), n.get("inner", ())
         if kind == "SwitchStmt":
             return [inner[0]]
-        if kind == "IfStmt" and not any(_traps(s) for s in inner[1:] + _after(n, up)):
-            cond = inner[0]
-        elif kind in ("WhileStmt", "ConditionalOperator"):
-            cond = inner[0]
-        elif kind == "DoStmt":
-            cond = inner[1]
-        elif kind == "ForStmt" and len(inner) > 2 and inner[2]:
-            cond = inner[2]
-        else:
+        if kind == "IfStmt" and any(_traps(s) for s in inner[1:] + _after(n, up)):
             return []
-        return [a for a in cflow.atoms(cond) if cflow.constant(a) is None]
+        at = CONDITION.get(kind)
+        if at is None or at >= len(inner) or not inner[at]:
+            return []
+        return [a for a in cflow.atoms(inner[at]) if cflow.constant(a) is None]
 
     def sites(self):
         """Every residue site of the lift, sorted."""
@@ -828,21 +822,10 @@ def _traps(stmt):
 
 def _after(n, up):
     """The statement after an `if` without `else` whose arm leaves (none otherwise)."""
-    inner = n["inner"]
-    if len(inner) != 2 or not up or up.get("kind") != "CompoundStmt":
+    if len(n["inner"]) != 2 or cflow.last_stmt(n["inner"][1]).get("kind") not in LEAVES:
         return []
-    arm = _last(inner[1])
-    if arm.get("kind") not in LEAVES:
-        return []
-    rest = up["inner"][next(i for i, s in enumerate(up["inner"]) if s is n) + 1 :]
-    return rest[:1]
-
-
-def _last(stmt):
-    """A statement's last statement under compound statements."""
-    while stmt.get("kind") == "CompoundStmt" and stmt.get("inner"):
-        stmt = stmt["inner"][-1]
-    return stmt
+    rest = up["inner"] if up and up.get("kind") == "CompoundStmt" else []
+    return rest[next((i + 1 for i, s in enumerate(rest) if s is n), len(rest)) :][:1]
 
 
 def _dispatch_guard(n):

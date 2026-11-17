@@ -819,6 +819,13 @@ def first(stmt):
     return s
 
 
+def last_stmt(stmt):
+    """A statement's last statement under compound statements."""
+    while stmt.get("kind") == "CompoundStmt" and stmt.get("inner"):
+        stmt = stmt["inner"][-1]
+    return stmt
+
+
 def outer(parent, n):
     """The parent of a node above its parentheses and casts."""
     up = parent.get(n["id"], {})
