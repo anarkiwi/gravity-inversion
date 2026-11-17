@@ -25,3 +25,21 @@ Bytes; deity-informant 0.40.12, jennings 0.14.1, llvm-mos SDK v23.4.0, `-Os`.
 | Emomyst | 2323 | 6179 | 10111 | 2961 | 2864 | 5625 | `$2BA9` | `$45AA` |
 
 Where the generated PRGs' bytes go is measured by ablation in [ablate.md](ablate.md).
+
+## Byte ownership
+
+`tools/owners.py` translates each tune with deity-informant's `#line` markers (its cgen.md,
+*Translation cost*), builds it with `-g` and gives each `.text` byte of the translation to
+what the DWARF line table names for it (over every unit, as link-time optimization moves code
+between them): an original instruction, or an artifact of the lift.
+
+    python3 tools/owners.py commando incoherent automatas ghouls emomyst [--json]
+
+| Measure | Definition |
+|---|---|
+| B/insn per class | bytes per original instruction printed, over the instructions of each class: load/store (`LDA`, `STA`, ... not through a pointer), ALU (arithmetic, logic, compares, shifts, increments), branch (conditional branches, `JMP`, `JSR`, `RTS`, `RTI`, `BRK`), indirect (`(zp,X)`, `(zp),Y` accesses), other (register transfers, stack, flags) |
+| check, trap, access, copy, frame, runtime | bytes of each artifact: checks and their failure arms, `trap(k)` calls, access helpers, block arguments' copies, function frames, the runtime |
+| check sites | the check bytes of E2's checks past one per pointer definition ([residue.md](residue.md)) |
+| total | every byte of the translation |
+| original, hand | informational: the original's instruction bytes (above) and the hand C's bytes by its line table |
+

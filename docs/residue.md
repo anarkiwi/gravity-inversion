@@ -63,6 +63,8 @@ program's meaning: the accesses through it count where they are printed as resid
 | C1r redundant guard | a trap whose `trap_info` has `implied_by` set to more than the entry guard or is `proven` | the trap's pc | `trap(k)`, kind, what implies it |
 | C2 unstructured control | a goto edge of `info["provenance"]["gotos"]` that is no edge of the tune's construct map (`tunes/<tune>/constructs.json` `goto` entries from lifted code; any goto for a PSID or fuzz player); a function of no procedure of the original; an `io_write` whose address starts with a constant voice register of the tune (`VOICE_REGS`) | the edge's source; the function's entry; function entry | `goto` target; function; register |
 | C3 lift complexity | decision points that are no original branch: an atom of a condition naming an opcode cell that is no flag; and per function, the atoms beyond its original branches | the cell; function entry | the cell; `n decision points, m original branches` |
+| E1 duplicate emission | each printed copy of an original instruction past its first (`info["emission"]["copies"]`: a tail the structuring prints in place, a callee inlined at several sites, an instruction several lift nodes hold); separate instructions of the original are no copies | the instruction | `copy i of n` |
+| E2 redundant check | each check past one per pointer definition whose region the lift leaves unproven, and each trap path past one per check (`cost.redundant` over `info["emission"]["checks"]`) | the check's instruction | the check's kind and the definitions it checks |
 | C1g guard on invalid input (informational) | a trap every guard of which traps input the original's meaning does not define, or that only the entry guard implies (below) | the trap's pc (for a check hoisted to a pointer's definition, the store completing the pointer, `Program.slack`) | `trap(k)` and its kind |
 
 A **subscript by a machine address** is a subscript of held array `X` (a slice's macro
@@ -106,6 +108,14 @@ one of them (a folded function's atom for each copy's or a shared one), so a fun
 more atoms than branches has at least the difference of its own.
 
 cgen's traps take only `k`: no C restores machine state, so every A2 and A3 construct counts.
+
+E1 and E2 read deity-informant's `info["emission"]` (its cgen.md, *Translation cost*), whose
+ideal the program sets: each original instruction printed once, and one check per pointer
+definition (the instructions last writing a pointer's bytes, or an index register over a run
+of data, on a path to the access, from the code alone) that some access needs checked,
+covering every access through it (`p + y`, `y` a byte). Every check counts: the memory map's
+(`objchk`, `cgen_outj`), `rdCj`, `codechk`, a bounded access's test and the register guards
+of `index` traps.
 
 ### Traps
 

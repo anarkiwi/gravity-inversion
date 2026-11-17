@@ -2,8 +2,7 @@
 instead of the program's meaning, by kind (docs/residue.md).
 
 Detection reads the C's clang AST, the generated header and the original PSID; cgen's `info`
-attributes a site to the original's addresses (traps, gotos, switches, cells, functions) and
-classifies each trap by what it guards (`trap_info`).
+attributes sites to the original's addresses and classifies each trap (`trap_info`).
 """
 
 import argparse
@@ -29,13 +28,14 @@ from vagrant_moses.c64 import poweron_ram
 
 import cflow
 import costs
+import emission
 import fuzzplayer
 from constructs import ROOT, load, memory
 from disasm import coverage
 from sidtrace import psid_parts
 from transliterate import c64_init, transliterate
 
-KINDS = ("D1", "D2", "D3", "D4", "A1", "A2", "A3", "C1", "C1r", "C2", "C3")
+KINDS = ("D1", "D2", "D3", "D4", "A1", "A2", "A3", "C1", "C1r", "C2", "C3", "E1", "E2")
 #: The informational kind: traps guarding invalid input, listed but no residue.
 GUARD = "C1g"
 #: Kinds no site of which the generated C and `info` let the census attribute.
@@ -835,7 +835,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
     def sites(self):
         """Every residue site of the lift, sorted."""
         found = self.d1_d2() + self.d4() + self.a1() + self.a2() + self.a3()
-        found += self.c1() + self.c2() + self.c3()
+        found += self.c1() + self.c2() + self.c3() + emission.sites(self.info, Site)
         order = KINDS + (GUARD,)
         return sorted(found, key=lambda s: (order.index(s.kind), s.pc, s.detail))
 

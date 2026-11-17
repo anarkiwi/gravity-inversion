@@ -39,8 +39,9 @@ def c64_init(mem, pc, a):
     return io, stored
 
 
-def transliterate(psid, header):
-    """(c, h, info) of `psid` loaded over power-on RAM; the .c includes `header`."""
+def transliterate(psid, header, lines=False):
+    """(c, h, info) of `psid` loaded over power-on RAM; the .c includes `header`; `lines`:
+    with deity-informant's `#line` markers (docs/sizes.md, *Byte ownership*)."""
     load, init, play, image = psid_parts(psid)
     ram = bytearray(poweron_ram())
     ram[load : load + len(image)] = image
@@ -54,6 +55,7 @@ def transliterate(psid, header):
         init=0,
         songs=range(parse_sid_header(psid).songs),
         machine=c64_init,
+        lines=lines,
     )
     return c + HOST, h, info
 
