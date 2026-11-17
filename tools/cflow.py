@@ -42,6 +42,10 @@ BINARY = {
     ">=": operator.ge,
 }
 RET = "return"
+BREAKS = ("SwitchStmt", *LOOPS)
+LOGICAL = frozenset(("&&", "||", "!"))
+WRAPS = ("ParenExpr", *CASTS, "ConstantExpr")
+BODIES = ("IfStmt", "SwitchStmt", "CaseStmt", "DefaultStmt", "LabelStmt")
 
 
 class NotConstant(Exception):
@@ -119,6 +123,36 @@ def target(node):
             strip(node["inner"][0], ("ParenExpr",)).get("referencedDecl", {}).get("id")
         )
     return None
+
+
+def tail(parent, node):
+    """Whether control leaves the function right after a statement or expression (`parent`:
+    each node's parent; None: no call): it ends the body or is returned, or a `return` of no
+    computed value or a `break` of a statement in tail position follows it, through compound
+    statements, `if` and `switch` bodies, cases and labels."""
+    if node is None:
+        return False
+    up = parent.get(node["id"], {})
+    while up.get("kind") in WRAPS:
+        node, up = up, parent.get(up["id"], {})
+    kind = up.get("kind")
+    if kind == "CompoundStmt":
+        rest = up["inner"][[x["id"] for x in up["inner"]].index(node["id"]) + 1 :]
+        if rest and rest[0].get("kind") == "BreakStmt":
+            while up.get("kind") not in BREAKS:
+                up = parent[up["id"]]
+        elif rest:
+            ret = rest[0]
+            return ret.get("kind") == "ReturnStmt" and (
+                not ret.get("inner")
+                or strip(ret["inner"][0]).get("kind")
+                in ("DeclRefExpr", "IntegerLiteral")
+            )
+        return tail(parent, up)
+    if kind in BODIES:
+        cond = kind in BODIES[:3] and up["inner"][0]["id"] == node["id"]
+        return not cond and tail(parent, up)
+    return kind in ("FunctionDecl", "ReturnStmt")
 
 
 def is_byte(node):
@@ -747,3 +781,69 @@ def alike(a, b, ren, lits):
     return all(
         alike(x, y, ren, lits) for x, y in zip(a.get("inner", ()), b.get("inner", ()))
     )
+
+
+def leading(node):
+    """The constant an address expression starts with (`0xD407 + v1`: $D407), or None."""
+    node = strip(node, WRAPS)
+    while node.get("opcode") == "+" and constant(node) is None:
+        node = strip(node["inner"][0], WRAPS)
+    return constant(node)
+
+
+def or_leaves(n):
+    """Operands of an `|` expression and its nested `|`s, through casts."""
+    n = strip(n, WRAPS)
+    if n.get("opcode") == "|":
+        for x in n["inner"]:
+            yield from or_leaves(x)
+    else:
+        yield n
+
+
+def atoms(cond):
+    """Leaves of a condition's `&&`, `||` and `!` (through casts and a comma's value)."""
+    cond = strip(cond, WRAPS)
+    while cond.get("opcode") == ",":
+        cond = strip(cond["inner"][1], WRAPS)
+    if cond.get("opcode") in LOGICAL:
+        return [a for x in cond["inner"] for a in atoms(x)]
+    return [cond]
+
+
+def first(stmt):
+    """A statement's first statement under compound statements and casts."""
+    s = strip(stmt, WRAPS)
+    while s.get("kind") == "CompoundStmt" and s.get("inner"):
+        s = strip(s["inner"][0], WRAPS)
+    return s
+
+
+def outer(parent, n):
+    """The parent of a node above its parentheses and casts."""
+    up = parent.get(n["id"], {})
+    while up.get("kind") in WRAPS:
+        up = parent.get(up["id"], {})
+    return up
+
+
+def switch_of(parent, n):
+    """The switch whose condition or case label holds expression `n`, or None."""
+    prev, up = n, parent.get(n["id"])
+    while up is not None and up.get("kind") not in ("CompoundStmt", "FunctionDecl"):
+        if up.get("kind") == "SwitchStmt":
+            return up
+        if up.get("kind") == "CaseStmt":
+            if up["inner"][0]["id"] != prev["id"]:
+                return None
+            while up.get("kind") != "SwitchStmt":
+                up = parent[up["id"]]
+            return up
+        prev, up = up, parent.get(up["id"])
+    return None
+
+
+def header_list(header, name):
+    """Names of a comma-separated header #define."""
+    m = re.search(rf"^#define {name} +(.*)$", header.replace("\\\n", " "), re.M)
+    return [x.strip() for x in m[1].split(",")] if m else []
