@@ -243,8 +243,9 @@ class Census:  # pylint: disable=too-many-instance-attributes
         return None
 
     def _within(self, base, lo, hi):
-        """[lo, hi] clipped to the held array holding address `base` (16 bits outside)."""
-        for org, n in [(o, n) for _, o, n in self.held] + [
+        """[lo, hi] clipped to the held array (else the block) holding address `base` (16
+        bits outside)."""
+        for org, n in [h[1:] for h in self.held] + [
             b[:2] for b in self.blocks.values()
         ]:
             if org <= base < org + n:
@@ -252,12 +253,10 @@ class Census:  # pylint: disable=too-many-instance-attributes
         return cflow.clip(lo, hi)
 
     def _object_runs(self, j, fn, what, lo, hi):
-        """Reads of [lo, hi] a check of object `j` confines to its runs (all of [lo, hi]
-        when `j` is None)."""
-        spans = self.objects.get(j, [(lo, hi)])
+        """Reads of [lo, hi] confined to object `j`'s runs (all of it for no `j`)."""
         return [
             Access(fn, what, max(a, lo), min(b, hi), False)
-            for a, b in spans
+            for a, b in self.objects.get(j, [(lo, hi)])
             if max(a, lo) <= min(b, hi)
         ]
 
@@ -295,10 +294,8 @@ class Census:  # pylint: disable=too-many-instance-attributes
             lo, hi = max(lo, span[0]), min(hi, sum(span) - 1)
             return [Access(fn, name, lo, hi, False)] if lo <= hi else []
         if (m := BLOCK_READ.match(name or "")) and len(args) == 3:
-            lo, hi = cflow.clip(
-                *np.add(cflow.interval(args[0]), cflow.interval(args[1]))
-            )
-            return self._object_runs(int(m[1]), fn, name, lo, hi)
+            iv = np.add(cflow.interval(args[0]), cflow.interval(args[1]))
+            return self._object_runs(int(m[1]), fn, name, *cflow.clip(*iv))
         if name in DISPATCH - {"codechk"} and args:
             lo, hi = cflow.clip(*cflow.interval(args[0]))
             return [Access(fn, name, lo, hi, name in ("wr", "oob_wr"))]
@@ -532,7 +529,8 @@ class Census:  # pylint: disable=too-many-instance-attributes
         ]
 
     def _machine_index(self, node):
-        """Whether a subscript of a held array `X` (a slice's macro resolved) adds a non-constant 16-bit machine address less `X_ORG`, not an offset into `X`."""
+        """Whether a subscript of a held array `X` (a slice's macro resolved) adds a
+        non-constant 16-bit machine address less `X_ORG`, not an offset into `X`."""
         name = cflow.array_name(self.unit, node["inner"][0], self.defs)
         terms = cflow.terms(node["inner"][1])
         base = cflow.strip(node["inner"][0], WRAPS)
