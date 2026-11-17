@@ -100,7 +100,7 @@ __attribute__((noreturn)) void trap(uint16_t k);
 void io_write(uint16_t a, uint8_t v);
 uint8_t C0[C0_LEN];
 uint8_t R0[R0_LEN];
-uint8_t S_0 = 0, S_1 = 7, S_3 = 6, S_4 = 0x10, S_6 = 0, S_I1 = 0;
+uint8_t S_0 = 0, S_1 = 7, S_3 = 6, S_4 = 0x10, S_6 = 0, S_I1 = 0, S_I3 = 0x30;
 static uint8_t *cgen_var(uint16_t a) {
   switch ((uint16_t)(a - CODE_ORG)) {
   case 0x1:
@@ -119,9 +119,16 @@ uint8_t f1(uint8_t v2) {
   R0[2] = v2 | 0x30 | ((v2 == 0) << 1);
   return rd(0x3000 + v2);
 }
-void f2(void) { R0[2] = 0; }
-void f3(uint8_t v1) { R0[v1 & 1] = 0; }
 void f4(void) { R0[2] = 1; }
+void f5(void) { R0[2] = 1; }
+void f2(void) {
+  f5();
+  R0[2] = S_I3;
+}
+void f3(uint8_t v1) {
+  R0[v1 & 1] = 0;
+  f4();
+}
 void cgen_play(uint8_t a) {
   uint8_t v1 = C0[a & 1];
   R0[0] = v1;
@@ -195,6 +202,7 @@ INFO = {
             "f2": _fn(0x1008, [0x1008]),
             "f3": _fn(0x100B, [0x100B], index=True),
             "f4": _fn(0x100E, []),
+            "f5": _fn(0x100F, [0x1005]),
         },
         "gotos": [[0x100B, 0x1006]],
         "switches": [0x1010],
@@ -220,6 +228,7 @@ INFO = {
     "state": {
         "vars": {
             "S_I1": 0x1001,
+            "S_I3": 0x1003,
             "S_0": 0x1006,
             "S_1": 0x1007,
             "S_3": 0x1009,
@@ -227,7 +236,7 @@ INFO = {
             "S_6": 0x100C,
         }
     },
-    "starts": [0x1000, 0x1006, 0x1008, 0x100B, 0x100D, 0x1010],
+    "starts": [0x1000, 0x1002, 0x1006, 0x1008, 0x100B, 0x100D, 0x1010],
     "structure": {"functions": 5},
 }
 
@@ -276,13 +285,14 @@ def test_init_tables(found):
 
 def test_cells(lift):
     """Each instruction-byte cell has its role and the kind that counts it: an address
-    operand A1, a transfer operand A2, a tested opcode C3, a cell reached by address A1, an
-    immediate state."""
+    operand a dispatcher call reads A1, one the C reads as a variable state, a transfer
+    operand A2, a tested opcode C3, a cell reached by address A1, an immediate state."""
     got = {
         c.lv: (c.role, c.insn, c.reached, w) for c, w in residue.Census(lift).counted()
     }
     assert got == {
         "S_I1": ("immediate", 0x1000, False, "state"),
+        "S_I3": ("address", 0x1002, False, "state"),
         "S_0": ("opcode", 0x1006, False, "C3"),
         "S_1": ("immediate", 0x1006, True, "A1"),
         "S_3": ("address", 0x1008, True, "A1"),
@@ -292,9 +302,10 @@ def test_cells(lift):
 
 
 def test_address_dispatch(found):
-    """A1: dispatcher calls (the call through the pointer operand cells counted at their
+    """A1: dispatcher calls (the call through the address operand cells at their
     instruction, play's copy of f1's call once, in f1), the subscript by a machine address
-    (not the constant one), the pointer operand and the immediate cgen_var reaches."""
+    (not the constant one) and the cells cgen_var reaches; an address operand cell the C
+    reads as a pointer variable (S_I3) is none."""
     assert sorted(found["A1"]) == [
         (0x1006, "oob_rd(v1)"),
         (0x1006, "rd(0x3000)"),
@@ -303,7 +314,8 @@ def test_address_dispatch(found):
             "subscript by address C0[(uint16_t)((((uint16_t)C0[1] << 8) | v1) - C0_ORG)]",
         ),
         (0x1007, "S_1 reached by address"),
-        (0x1008, "pointer operand of $1008: S_3, S_4"),
+        (0x1008, "rd(S_3 | (S_4 << 8))"),
+        (0x1009, "S_3 reached by address"),
         (0x100D, "rd(0x3000 + v2)"),
     ]
 
@@ -369,12 +381,14 @@ def test_implied_table(lift, monkeypatch):
 
 def test_control(found):
     """C2 is every goto without a construct map and each function at no procedure entry (a
-    JSR target, a computed JSR's target and an instance function are procedures); C3 the
-    opcode cell test and the decision points beyond the function's original branches, the
-    bounds test before oob_rd none."""
+    JSR target, a computed JSR's target and an instance function are procedures; f4 is
+    called in tail position but returns by no RTS, f5 returns by RTS but is called before
+    a store); C3 the opcode cell test and the decision points beyond the function's
+    original branches, the bounds test before oob_rd none."""
     assert found["C2"] == [
         (0x100B, "goto $1006"),
         (0x100E, "function f4 at no procedure entry"),
+        (0x100F, "function f5 at no procedure entry"),
     ]
     assert found["C3"] == [
         (0x1006, "2 decision points, 1 original branches"),
@@ -434,3 +448,129 @@ def test_report_and_manifest(tmp_path, monkeypatch, capsys):
     )
     assert residue.main(["t", "--cells"]) == 0
     assert "$1007 S_1: immediate of $1006 -> A1" in capsys.readouterr().out
+
+
+def _with_fn(name, **fields):
+    """INFO with provenance function `name` given `fields`."""
+    fns = INFO["provenance"]["functions"]
+    prov = {**INFO["provenance"], "functions": {**fns, name: {**fns[name], **fields}}}
+    return {**INFO, "provenance": prov}
+
+
+def test_computed_jsr_dispatch(lift):
+    """A function entered at a computed JSR is its dispatch when every JSR reaching it has
+    its target set; a branch reaching it too leaves it at no procedure entry."""
+    edge = [0x1010, 0x1010]
+    info = _with_fn("f4", entry=0x1010, calls=[edge])
+    assert (0x1010, "function f4 at no procedure entry") not in _found(
+        lift._replace(info=info)
+    )["C2"]
+    info = _with_fn("f4", entry=0x1010, calls=[edge, [0x100B, 0x1010]])
+    assert (0x1010, "function f4 at no procedure entry") in _found(
+        lift._replace(info=info)
+    )["C2"]
+
+
+def test_tail_called_procedure(lift):
+    """A function returning by RTS that the C calls only in tail position is a procedure
+    (f4, called last in f3); one called before more work is not (f5)."""
+    c2 = _found(lift._replace(info=_with_fn("f4", pcs=[0x1005])))["C2"]
+    assert c2 == [
+        (0x100B, "goto $1006"),
+        (0x100F, "function f5 at no procedure entry"),
+    ]
+
+
+TAILS = """#include <stdint.h>
+uint8_t g(uint8_t v1);
+void h(void);
+uint8_t t(uint8_t v1) {
+  switch (v1) {
+  case 1: {
+    g(1);
+    break;
+  }
+  case 2:
+    g(2);
+  case 3:
+    return g(3);
+  }
+  while (v1) {
+    g(4);
+    v1--;
+  }
+  if (v1) {
+    g(5);
+    return v1;
+  }
+  uint8_t v2 = g(6);
+  g(7);
+  return v2 + 1;
+}
+void u(uint8_t v1) {
+  if (v1) {
+    h();
+  } else {
+    v1 = 0;
+    L1:
+      h();
+  }
+}
+void w(uint8_t v1) {
+  switch (v1) {
+  case 1: {
+    h();
+    break;
+  }
+  default:
+    break;
+  }
+}
+"""
+
+
+def test_tail_position(tmp_path):
+    """A call is in tail position when control leaves the function after it: ending the
+    body through `if` arms and labels, before a `return` of no computed value or the
+    `return` of the call, or a `break` of a switch that ends the body; not in a loop, a
+    declaration, before more statements or a case it falls through to."""
+    (tmp_path / "t.c").write_text(TAILS, encoding="ascii")
+    tree = costs.ast(tmp_path / "t.c", [tmp_path])
+    parent = cflow.Unit(TAILS, tree, {}).parent
+    got = [
+        (name, cflow.tail(parent, n))
+        for name, d in costs.functions(tree)
+        for n, _ in costs.walk(d)
+        if n.get("kind") == "CallExpr"
+    ]
+    assert got == [
+        ("t", x) for x in (False, False, True, False, True, False, False)
+    ] + [
+        ("u", True),
+        ("u", True),
+        ("w", True),
+    ]
+
+
+def test_opcode_flag(lift):
+    """An opcode cell an opcode guard bounds is a flag: its test is no site, an atom and an
+    original branch of its function, the cell state."""
+    traps = {
+        **INFO["trap_info"],
+        4: _trap(
+            "opcode",
+            [
+                {
+                    **_guard("opcode"),
+                    "addr": (0x1006, 0x1006),
+                    "ok": [(0x69, 0x69), (0xE9, 0xE9)],
+                }
+            ],
+            proven=True,
+        ),
+    }
+    census = residue.Census(lift._replace(info={**INFO, "trap_info": traps}))
+    assert [s for s in census.sites() if s.kind == "C3"] == [
+        residue.Site("C3", 0x1006, "3 decision points, 2 original branches")
+    ]
+    assert {c.lv: w for c, w in census.counted()}["S_0"] == "state"

@@ -7,10 +7,10 @@
  },
  "causes": {
   "automatas": {
-   "A1": "each row copy's operand pointers (the V1_f21, V1_f3C/f3D, V1_f4A/f4B and V1_f58/f59 cells of $1149, $1164, $1172, $1180 and their copies at $11D1-$1208 and $1259-$1290), advanced by its row's length and read through span C2's bounds-checked reader; the pattern pointer R1 and the pointers loaded from it, read through the same reader by the six copies at $12BE: their values are bounded to a byte, not to a table",
+   "A1": "the reads through each row copy's operand pointers (the V1_f21, V1_f3C/f3D, V1_f4A/f4B and V1_f58/f59 cells of $1149, $1164, $1172, $1180 and their copies at $11D1-$1208 and $1259-$1290), advanced by its row's length, through span C2's bounds-checked reader at each copy's instruction; the pattern pointer R1 and the pointers loaded from it, read through the same reader by the six copies at $12BE: their values are bounded to a byte, not to a table",
    "C1": "$10D4 the opcode cell init's SID model probe ($D41B, the store at $14F9) sets to ASL A or NOP, holding another opcode: a deopt the lift could translate by the probe's result",
    "C1g": "init's song guard: A outside the PSID header's songs (by construction)",
-   "C3": "patched opcode cells tested against their opcodes (ADC or SBC) instead of selecting the operation by the state that patches them; play switches on the opcode cell $10D4 (ASL A or NOP) init's SID model probe sets instead of on the probe's result",
+   "C3": "patched opcode cells tested against their opcodes, ADC or SBC ($10B8, $10BF) and RTS ($10D8), instead of selecting the operation by the state that patches them; no opcode guard bounds their values",
    "D1": "span C1 $1554-$1713 holds play's code $168C-$1713, which the reads at $0FE3 and $1022 (the note reads at $1426/$143F) indexed by a note byte reach; span C0 $1020-$1083 holds the voice copies' gate bit and mask bytes ($1020-$1021 at the copies' $31 stride), constant after init and read at $12BE by voice index, and the copies' code $1022-$1049 and $1053-$107A between them"
   },
   "commando": {
@@ -20,10 +20,10 @@
    "D1": "span C0 starts at R1's origin $1368, init's code $1368-$139D, which the song pointers' bounds-checked reads reach"
   },
   "emomyst": {
-   "A1": "init's voice setup at $17C8 reads through the voice pointers $17CF/$17D3/$17D7 (R47-R49) and init's helper at $1163 through its own patched operand (S_161/S_162, the pointer operand site), through span C0's bounds-checked reader; play's song pointers, the operands the relocator leaves constant (K_*) and those play patches (S_*) are read through it too; init's relocator subscripts span C0 by the 16-bit operand addresses its relocation table lists less C0_ORG, and patches the pointer operands $10CB/$10DA it reads that table through; play's patched immediates (S_1FF-S_9ED), held in span C0 where the song pointers' reads reach, are found through cgen_var",
+   "A1": "init's voice setup at $17C8 reads through the voice pointers $17CF/$17D3/$17D7 (R47-R49) and init's helper at $1163 through its own patched operand (S_161/S_162, the call counted at $1163), through span C0's bounds-checked reader; play's song pointers, the operands the relocator leaves constant (K_*) and those play patches (S_*) are read through it too; init's relocator subscripts span C0 by the 16-bit operand addresses its relocation table lists less C0_ORG, and patches the pointer operands $10CB/$10DA it reads that table through, cells cgen_var finds as it does $1163's; play's patched immediates (S_1FF-S_9ED), held in span C0 where the song pointers' reads reach, are found through cgen_var",
    "A2": "the effect dispatches $19CF and $1A13 lift as switches over the effect index, but the stores of each handler's address byte into the JMPs' operands (S_9CE, S_A11) stay: the cells lie where span C0's reads reach, so the C keeps the code address bytes as values",
    "C1g": "init's song guard: A outside the PSID header's songs (by construction); $1947 an effect byte past its table's extent (the code after it)",
-   "C2": "shared tails entered by JMP and fall-through, lifted as functions: $1537 (the JMPs at $1424/$142E), $16D6 ($138C), $17BA ($145C/$151D), $17E5 ($1AC6), $1802 ($1ABA), $1B31 ($1B4F); and the effect handlers the dispatch JMPs $19CF/$1A13 reach ($1A23, $1A2D, $1A3E, $1A42, $1A59, $1A65, $1AC1), tail-jumped from the JSR'd routine $19AB, each a function the switch calls",
+   "C2": "shared tails entered by JMP and fall-through that return by no RTS of their own, lifted as functions: $1537 (the JMPs at $1424/$142E), $16D6 ($138C), $17E5 ($1AC6); and the effect handlers the dispatch JMP $19CF reaches that are no tail call: $1AC1, returning by no RTS, and $1A59, which $1AC1's function calls before $17E5's",
    "C3": "a shared handler tail retests the dispatch selector (v5 == 0x24, 0x2A) after the switch",
    "D1": "span C0 $1000-$24A1 holds the whole image: init's relocator reads and patches the operands its relocation table lists by subscripts of C0 with their 16-bit addresses, and play's song pointers are bounds-checked reads of C0, so init's and play's code ($1000-$1B54, one site per set of accesses reaching it) is held; the effect offset table at $1A03 inside the code is read at $1A00 by a byte index, whose interval reaches the code after it"
   },
@@ -85,8 +85,7 @@
   "incoherent": {
    "A1": "the sequence and pattern pointers read through span C1's bounds-checked reader; the sequence reads at $0996 subscript span C1 by the 16-bit sequence pointer from the tables at $09C9/$09CE plus the position byte, and the pattern reads by the pointer R0[0..1] plus an offset, each a machine address less C1_ORG, not an 8-bit index",
    "C1g": "init's song guard: A outside the PSID header's songs (by construction); $0ABE a song byte indexing the 5-entry table $0C5F past its extent (the next object); $0AC7 one indexing the 24-entry table $12CA past its extent (a byte another column reads)",
-   "C1r": "$09B8 the song byte indexing the 16-entry table $0C4F: the lift proves the index inside the table (trap_info proven), so its guard is redundant",
-   "C2": "shared code lifted as functions entered at no procedure: $085E (f14) the tail the branch $085A and the fall-through past $085C share; $0A65 (f4) the computed JSR $0A65 with its handler $0809, a function entered at the JSR, which $0A71's computed JSR also calls; $0C1A (f3) the tail $092F's JMP and $0C17's fall-through share"
+   "C1r": "$09B8 the song byte indexing the 16-entry table $0C4F: the lift proves the index inside the table (trap_info proven), so its guard is redundant"
   }
  },
  "sites": {
@@ -222,20 +221,6 @@
      "$09B8",
      "trap(2) index proven"
     ]
-   ],
-   "C2": [
-    [
-     "$085E",
-     "function f14 at no procedure entry"
-    ],
-    [
-     "$0A65",
-     "function f4 at no procedure entry"
-    ],
-    [
-     "$0C1A",
-     "function f3 at no procedure entry"
-    ]
    ]
   },
   "automatas": {
@@ -252,51 +237,51 @@
    "A1": [
     [
      "$1149",
-     "pointer operand of $1149: V1_f21[0]"
+     "rdC2(((uint16_t)v6 << 8) | V1_f21[v1], 0)"
     ],
     [
      "$1164",
-     "pointer operand of $1164: V1_f3C[0], V1_f3D[0]"
+     "rdC2(((uint16_t)V1_f3D[v1] << 8) | V1_f3C[v1], 1)"
     ],
     [
      "$1172",
-     "pointer operand of $1172: V1_f4A[0], V1_f4B[0]"
+     "rdC2(((uint16_t)V1_f4B[v1] << 8) | V1_f4A[v1], v10)"
     ],
     [
      "$1180",
-     "pointer operand of $1180: V1_f58[0], V1_f59[0]"
+     "rdC2(((uint16_t)V1_f59[v1] << 8) | V1_f58[v1], v11)"
     ],
     [
      "$11D1",
-     "pointer operand of $11D1: V1_f21[1]"
+     "rdC2(((uint16_t)v6 << 8) | V1_f21[v1], 0)"
     ],
     [
      "$11EC",
-     "pointer operand of $11EC: V1_f3C[1], V1_f3D[1]"
+     "rdC2(((uint16_t)V1_f3D[v1] << 8) | V1_f3C[v1], 1)"
     ],
     [
      "$11FA",
-     "pointer operand of $11FA: V1_f4A[1], V1_f4B[1]"
+     "rdC2(((uint16_t)V1_f4B[v1] << 8) | V1_f4A[v1], v10)"
     ],
     [
      "$1208",
-     "pointer operand of $1208: V1_f58[1], V1_f59[1]"
+     "rdC2(((uint16_t)V1_f59[v1] << 8) | V1_f58[v1], v11)"
     ],
     [
      "$1259",
-     "pointer operand of $1259: V1_f21[2]"
+     "rdC2(((uint16_t)v6 << 8) | V1_f21[v1], 0)"
     ],
     [
      "$1274",
-     "pointer operand of $1274: V1_f3C[2], V1_f3D[2]"
+     "rdC2(((uint16_t)V1_f3D[v1] << 8) | V1_f3C[v1], 1)"
     ],
     [
      "$1282",
-     "pointer operand of $1282: V1_f4A[2], V1_f4B[2]"
+     "rdC2(((uint16_t)V1_f4B[v1] << 8) | V1_f4A[v1], v10)"
     ],
     [
      "$1290",
-     "pointer operand of $1290: V1_f58[2], V1_f59[2]"
+     "rdC2(((uint16_t)V1_f59[v1] << 8) | V1_f58[v1], v11)"
     ],
     [
      "$12BE",
@@ -373,10 +358,6 @@
     [
      "$10BF",
      "opcode cell S_DC tested"
-    ],
-    [
-     "$10D4",
-     "opcode cell S_F1 tested"
     ],
     [
      "$10D8",
@@ -617,12 +598,20 @@
      "subscript by address C0[(uint16_t)((uint16_t)(2 + (R0[0] | ((uint16_t)R0[1] << 8))) - C0_ORG)]"
     ],
     [
-     "$10CB",
-     "pointer operand of $10CB: S_C9, S_CA"
+     "$10CC",
+     "S_C9 reached by address"
     ],
     [
-     "$10DA",
-     "pointer operand of $10DA: S_D8, S_D9"
+     "$10CD",
+     "S_CA reached by address"
+    ],
+    [
+     "$10DB",
+     "S_D8 reached by address"
+    ],
+    [
+     "$10DC",
+     "S_D9 reached by address"
     ],
     [
      "$111F",
@@ -630,7 +619,15 @@
     ],
     [
      "$1163",
-     "pointer operand of $1163: S_161, S_162"
+     "rdC0(S_161 | ((uint16_t)S_162 << 8), v1)"
+    ],
+    [
+     "$1164",
+     "S_161 reached by address"
+    ],
+    [
+     "$1165",
+     "S_162 reached by address"
     ],
     [
      "$1202",
@@ -1033,48 +1030,16 @@
      "function f12 at no procedure entry"
     ],
     [
-     "$17BA",
-     "function f5 at no procedure entry"
-    ],
-    [
      "$17E5",
      "function f9 at no procedure entry"
-    ],
-    [
-     "$1802",
-     "function f24 at no procedure entry"
-    ],
-    [
-     "$1A23",
-     "function f15 at no procedure entry"
-    ],
-    [
-     "$1A2D",
-     "function f14 at no procedure entry"
-    ],
-    [
-     "$1A3E",
-     "function f16 at no procedure entry"
-    ],
-    [
-     "$1A42",
-     "function f17 at no procedure entry"
     ],
     [
      "$1A59",
      "function f20 at no procedure entry"
     ],
     [
-     "$1A65",
-     "function f19 at no procedure entry"
-    ],
-    [
      "$1AC1",
      "function f18 at no procedure entry"
-    ],
-    [
-     "$1B31",
-     "function f23 at no procedure entry"
     ]
    ],
    "C3": [

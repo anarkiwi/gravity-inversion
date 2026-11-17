@@ -8,6 +8,7 @@ classifies each trap by what it guards (`trap_info`).
 
 import argparse
 import concurrent.futures
+import functools
 import importlib.metadata
 import json
 import multiprocessing
@@ -77,10 +78,10 @@ INIT_TABLES = {
 }
 BRANCHES = frozenset(op for op, (_, mode) in OPCODES.items() if mode == "rel")
 JSR = 0x20
-LOGICAL = frozenset(("&&", "||", "!"))
+RTS = 0x60
 COMPARE = frozenset(("==", "!=", "<", "<=", ">", ">="))
 ADDRESS_OPS = frozenset(("+", "-", "|", "&", ">>", "<<"))
-WRAPS = frozenset(("ParenExpr", "ImplicitCastExpr", "CStyleCastExpr", "ConstantExpr"))
+WRAPS = cflow.WRAPS
 LOCAL = re.compile(r"\bv\d+\b")
 
 
@@ -184,12 +185,6 @@ def runs(mask):
     return [(int(a), int(b) - 1) for a, b in zip(edges[::2], edges[1::2])]
 
 
-def header_list(header, name):
-    """Names of a comma-separated header #define."""
-    m = re.search(rf"^#define {name} +(.*)$", header.replace("\\\n", " "), re.M)
-    return [x.strip() for x in m[1].split(",")] if m else []
-
-
 class Access(NamedTuple):
     """A memory access of a tune function: who, what, the address interval, its direction."""
 
@@ -224,9 +219,10 @@ class Census:  # pylint: disable=too-many-instance-attributes
         }
         self.held = [
             (a, self.defs[f"{a}_ORG"], self.defs[f"{a}_LEN"])
-            for a in header_list(lf.header, "CGEN_ARRAYS")
+            for a in cflow.header_list(lf.header, "CGEN_ARRAYS")
         ]
         self._accesses = self._cells = None
+        self._via = set()
 
     def _at(self, fn):
         """Original entry of a C function."""
@@ -302,8 +298,8 @@ class Census:  # pylint: disable=too-many-instance-attributes
                         out += self._subscript(fn, n)
                     elif n.get("kind") == "CallExpr":
                         out += self._call(fn, n)
-            dst = header_list(self.lf.header, "CGEN_CP_DST")
-            for d, n in zip(dst, header_list(self.lf.header, "CGEN_CP_LEN")):
+            dst = cflow.header_list(self.lf.header, "CGEN_CP_DST")
+            for d, n in zip(dst, cflow.header_list(self.lf.header, "CGEN_CP_LEN")):
                 m = re.fullmatch(r"(\w+) \+ (\w+)", d)
                 if m and f"{m[1]}_ORG" in self.defs and int(n, 0):
                     lo = self.defs[f"{m[1]}_ORG"] + int(m[2], 0)
@@ -333,7 +329,8 @@ class Census:  # pylint: disable=too-many-instance-attributes
             out[name] = m
         return out
 
-    def _post_init(self):
+    @functools.cached_property
+    def post_init(self):
         """Memory after init of the first song on sidtrace's C64."""
         mem = bytearray(poweron_ram())
         _, _, _, image = psid_parts(self.lf.psid)
@@ -350,7 +347,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
         """Bytes of the lift's instructions and of those init executes."""
         mask = np.zeros(0x10000, bool)
         for mem, starts in (
-            (self._post_init(), self.info["starts"]),
+            (self.post_init, self.info["starts"]),
             (self.image, np.flatnonzero(cov.flags & EXEC)),
         ):
             for s in starts:
@@ -394,7 +391,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
     def cells(self):
         """[Cell] of each promoted variable on a byte of one of the lift's instructions."""
         if self._cells is None:
-            mem = self._post_init()
+            mem = self.post_init
             owner = {}
             for s in self.info["starts"]:
                 for a in range(s, s + int(LEN[mem[s]])):
@@ -416,7 +413,11 @@ class Census:  # pylint: disable=too-many-instance-attributes
         c3 = {s.detail.split()[2] for s in sites if s.detail.startswith("opcode cell")}
         out = []
         for c in self.cells():
-            if c.role == "address" or (c.reached and c.role != "transfer"):
+            if (
+                c.role != "transfer"
+                and c.reached
+                or (c.role == "address" and c.insn in self._via)
+            ):
                 where = "A1"
             elif c.role == "transfer":
                 where = "A2" if c.insn in a2 else "state"
@@ -436,11 +437,11 @@ class Census:  # pylint: disable=too-many-instance-attributes
             if c.get("kind") == "CaseStmt"
         }
 
-    def _cell_sites(self, kind, roles, what):
-        """One site per instruction whose operand cells have one of `roles`."""
+    def _cell_sites(self, kind, role, what):
+        """One site per instruction whose operand cells have `role`."""
         per = {}
         for c in self.cells():
-            if c.role in roles:
+            if c.role == role:
                 per.setdefault(c.insn, []).append(c.lv)
         return [
             Site(kind, s, f"{what} of ${s:04X}: {', '.join(lvs)}")
@@ -479,10 +480,13 @@ class Census:  # pylint: disable=too-many-instance-attributes
         return out
 
     def a1(self):
-        """Address dispatch: calls of cgen's dispatchers, subscripts by a 16-bit machine
-        address, pointer operand cells (a call through one is that cell's instruction) and
-        cells reached by address."""
-        pointers = {c.lv.split("[")[0] for c in self.cells() if c.role == "address"}
+        """Address dispatch: calls of cgen's dispatchers (one through address operand cells
+        at each of their instructions), subscripts by a 16-bit machine address and cells
+        reached by address."""
+        pointers = {}
+        for c in self.cells():
+            if c.role == "address":
+                pointers.setdefault(c.lv.split("[")[0], set()).add(c.insn)
         per_fn = {}
         for fn, nodes in self.nodes.items():
             for n, _ in nodes:
@@ -491,23 +495,22 @@ class Census:  # pylint: disable=too-many-instance-attributes
                     costs.callee(n) in DISPATCH
                     or costs.CHECKED.match(costs.callee(n) or "")
                 ):
-                    if len(n["inner"]) > 1 and pointers & cflow.names(n["inner"][1]):
-                        continue
                     what = norm(self.unit.src(n))
+                    names = cflow.names(n["inner"][1]) if len(n["inner"]) > 1 else set()
+                    pcs = set().union(*(pointers.get(v, ()) for v in names))
+                    self._via |= pcs
+                    per_fn.setdefault(fn, []).extend(
+                        Site("A1", pc, what) for pc in sorted(pcs or {self._at(fn)})
+                    )
                 elif kind == "ArraySubscriptExpr" and self._machine_index(n):
                     what = "subscript by address " + norm(self.unit.src(n))
-                else:
-                    continue
-                per_fn.setdefault(fn, []).append(Site("A1", self._at(fn), what))
-        out = self._once(per_fn)
-        out += self._cell_sites("A1", ("address",), "pointer operand")
-        counted = {c.insn for c in self.cells() if c.role in ("address", "transfer")}
-        out += [
+                    per_fn.setdefault(fn, []).append(Site("A1", self._at(fn), what))
+        transfers = {c.insn for c in self.cells() if c.role == "transfer"}
+        return self._once(per_fn) + [
             Site("A1", c.at, f"{c.lv} reached by address")
             for c in self.cells()
-            if c.reached and c.insn not in counted
+            if c.reached and c.insn not in transfers
         ]
-        return out
 
     def _machine_index(self, node):
         """Whether a subscript of a held array `X` adds a non-constant 16-bit machine address
@@ -579,7 +582,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
             for n, _ in nodes:
                 if self._machine_literal(n) is None:
                     continue
-                sw = self._switch_of_literal(n)
+                sw = cflow.switch_of(self.unit.parent, n)
                 if sw is not None:
                     switches[sw["id"]] = sw
                     continue
@@ -608,23 +611,8 @@ class Census:  # pylint: disable=too-many-instance-attributes
                     )
                 )
         switched = {s.pc for s in out if s.detail.startswith("switch over")}
-        cells = self._cell_sites("A2", ("transfer",), "transfer operand")
+        cells = self._cell_sites("A2", "transfer", "transfer operand")
         return sorted(out | {s for s in cells if s.pc not in switched})
-
-    def _switch_of_literal(self, n):
-        """The switch whose condition or case label holds a literal, or None."""
-        prev, up = n, self.unit.parent.get(n["id"])
-        while up is not None and up.get("kind") not in ("CompoundStmt", "FunctionDecl"):
-            if up.get("kind") == "SwitchStmt":
-                return up
-            if up.get("kind") == "CaseStmt":
-                if up["inner"][0]["id"] != prev["id"]:
-                    return None
-                while up.get("kind") != "SwitchStmt":
-                    up = self.unit.parent[up["id"]]
-                return up
-            prev, up = up, self.unit.parent.get(up["id"])
-        return None
 
     def a3(self):
         """The status register packed as a byte: an `|` of the constant bits $30 with
@@ -632,22 +620,18 @@ class Census:  # pylint: disable=too-many-instance-attributes
         per_fn = {}
         for fn, nodes in self.nodes.items():
             for n, _ in nodes:
-                if n.get("opcode") != "|" or self._outer(n).get("opcode") == "|":
+                if (
+                    n.get("opcode") != "|"
+                    or cflow.outer(self.unit.parent, n).get("opcode") == "|"
+                ):
                     continue
-                leaves = list(_or_leaves(n))
+                leaves = list(cflow.or_leaves(n))
                 if any(cflow.constant(x) == 0x30 for x in leaves) and any(
                     cflow.strip(x, WRAPS).get("opcode") == "<<" for x in leaves
                 ):
                     site = Site("A3", self._at(fn), norm(self.unit.src(n)))
                     per_fn.setdefault(fn, []).append(site)
         return self._once(per_fn)
-
-    def _outer(self, n):
-        """The parent of a node above its parentheses and casts."""
-        up = self.unit.parent.get(n["id"], {})
-        while up.get("kind") in WRAPS:
-            up = self.unit.parent.get(up["id"], {})
-        return up
 
     def c1(self):
         """Each trap of the C once, by what it stands for (`trap_info`): a translatable
@@ -682,7 +666,11 @@ class Census:  # pylint: disable=too-many-instance-attributes
         out += [
             Site("C2", f["entry"], f"function {n} at no procedure entry")
             for n, f in sorted(prov["functions"].items(), key=lambda x: x[1]["entry"])
-            if n in self.nodes and not f["index"] and f["entry"] not in procs
+            if n in self.nodes
+            and not f["index"]
+            and f["entry"] not in procs
+            and not self._jsr_dispatch(f)
+            and not self._tail_called(n, f)
         ]
         if self.tune is None:
             return out
@@ -690,7 +678,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
         for fn, nodes in self.nodes.items():
             for n, _ in nodes:
                 if n.get("kind") == "CallExpr" and costs.callee(n) == "io_write":
-                    a = _leading(n["inner"][1])
+                    a = cflow.leading(n["inner"][1])
                     if a in regs:
                         out.append(
                             Site(
@@ -705,12 +693,37 @@ class Census:  # pylint: disable=too-many-instance-attributes
         target `info["jumps"]` gives a JSR whose operand the program writes."""
         out = {self.init, self.play}
         jumps = {int(k): v for k, v in self.info["jumps"].items()}
-        for mem in (self.image, self._post_init()):
+        for mem in (self.image, self.post_init):
             for s in self.info["starts"]:
                 if int(mem[s]) == JSR:
                     out.add(int(mem[s + 1]) | int(mem[s + 2]) << 8)
                     out.update(jumps.get(s, ()))
         return out
+
+    def _jsr_dispatch(self, f):
+        """Whether a function is the dispatch of a computed JSR over its targets: entered at
+        that JSR, every JSR reaching it with the same target set (`info["jumps"]`)."""
+        mem, e = self.post_init, f["entry"]
+        targets = {int(k): set(v) for k, v in self.info["jumps"].items()}
+        edges = [s for s, t in f["calls"] if t == e] or [None]
+        return int(mem[e]) == JSR and all(
+            s is not None
+            and int(mem[s]) == JSR
+            and targets.get(s) == targets.get(e, ())
+            for s in edges
+        )
+
+    def _tail_called(self, name, f):
+        """Whether a function returning by RTS is called, and only in tail position."""
+        calls = [
+            n
+            for nodes in self.nodes.values()
+            for n, _ in nodes
+            if n.get("kind") == "CallExpr" and costs.callee(n) == name
+        ]
+        return any(int(self.post_init[p]) == RTS for p in f["pcs"]) and all(
+            cflow.tail(self.unit.parent, n) for n in calls or [None]
+        )
 
     def _mapped_gotos(self):
         """The construct map's goto edges from the lifted code (none without a map)."""
@@ -733,24 +746,30 @@ class Census:  # pylint: disable=too-many-instance-attributes
         opcode_cells = {
             lv for lv, a in self.info["state"]["vars"].items() if a in starts
         }
+        flags = self._flag_cells()
         prov = self.info["provenance"]["functions"]
         jumps = {int(k) for k in self.info["jumps"]}
         out = []
         for fn, nodes in self.nodes.items():
-            atoms = 0
+            atoms = tested = 0
             for n, _ in nodes:
                 for atom in self._decisions(n):
                     names = cflow.names(atom)
-                    if names & opcode_cells:
-                        cell = sorted(names & opcode_cells)[0]
+                    cells = sorted(names & opcode_cells)
+                    if cells and not set(cells) <= flags:
+                        cell = next(c for c in cells if c not in flags)
                         a = self.info["state"]["vars"][cell]
                         out.append(Site("C3", a, f"opcode cell {cell} tested"))
+                    elif cells:
+                        atoms, tested = atoms + 1, tested + 1
                     elif not _dispatch_guard(n):
                         atoms += 1
             if fn not in prov:
                 continue
             pcs = prov[fn]["pcs"]
-            branches = sum(int(self.image[p]) in BRANCHES or p in jumps for p in pcs)
+            branches = tested + sum(
+                int(self.image[p]) in BRANCHES or p in jumps for p in pcs
+            )
             if atoms > branches:
                 out.append(
                     Site(
@@ -760,6 +779,22 @@ class Census:  # pylint: disable=too-many-instance-attributes
                     )
                 )
         return out
+
+    def _flag_cells(self):
+        """The opcode cells whose value set `info` bounds: each an `opcode` guard checks
+        (trap_info), its `ok` the values the C takes as the program's, a trap the rest.
+        """
+        guarded = [
+            g["addr"]
+            for t in self.info.get("trap_info", {}).values()
+            for g in t["guards"]
+            if g["kind"] == "opcode" and g.get("addr") and g.get("ok")
+        ]
+        return {
+            lv
+            for lv, a in self.info["state"]["vars"].items()
+            if any(lo <= a <= hi for lo, hi in guarded)
+        }
 
     def _decisions(self, n):
         """The atoms of the condition a statement or expression decides; a test with an arm
@@ -777,7 +812,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
             cond = inner[2]
         else:
             return []
-        return [a for a in _atoms(cond) if cflow.constant(a) is None]
+        return [a for a in cflow.atoms(cond) if cflow.constant(a) is None]
 
     def sites(self):
         """Every residue site of the lift, sorted."""
@@ -787,45 +822,10 @@ class Census:  # pylint: disable=too-many-instance-attributes
         return sorted(found, key=lambda s: (order.index(s.kind), s.pc, s.detail))
 
 
-def _leading(node):
-    """The constant an address expression starts with (`0xD407 + v1`: $D407), or None."""
-    node = cflow.strip(node, WRAPS)
-    while node.get("opcode") == "+" and cflow.constant(node) is None:
-        node = cflow.strip(node["inner"][0], WRAPS)
-    return cflow.constant(node)
-
-
-def _or_leaves(n):
-    n = cflow.strip(n, WRAPS)
-    if n.get("opcode") == "|":
-        for x in n["inner"]:
-            yield from _or_leaves(x)
-    else:
-        yield n
-
-
-def _atoms(cond):
-    """Leaves of a condition's `&&`, `||` and `!` (through casts and a comma's value)."""
-    cond = cflow.strip(cond, WRAPS)
-    while cond.get("opcode") == ",":
-        cond = cflow.strip(cond["inner"][1], WRAPS)
-    if cond.get("opcode") in LOGICAL:
-        return [a for x in cond["inner"] for a in _atoms(x)]
-    return [cond]
-
-
 def _traps(stmt):
     """Whether a statement starts with a trap call."""
-    s = _first(stmt)
+    s = cflow.first(stmt)
     return s.get("kind") == "CallExpr" and costs.callee(s) == "trap"
-
-
-def _first(stmt):
-    """A statement's first statement under compound statements and casts."""
-    s = cflow.strip(stmt, WRAPS)
-    while s.get("kind") == "CompoundStmt" and s.get("inner"):
-        s = cflow.strip(s["inner"][0], WRAPS)
-    return s
 
 
 def _dispatch_guard(n):
@@ -834,7 +834,8 @@ def _dispatch_guard(n):
     if n.get("kind") not in ("IfStmt", "ConditionalOperator"):
         return False
     return any(
-        _first(a).get("kind") == "CallExpr" and costs.callee(_first(a)) in DISPATCH
+        cflow.first(a).get("kind") == "CallExpr"
+        and costs.callee(cflow.first(a)) in DISPATCH
         for a in n["inner"][1:]
     )
 

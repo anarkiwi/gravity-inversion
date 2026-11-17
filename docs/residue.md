@@ -37,7 +37,8 @@ instructions (`info["starts"]`, lengths from the memory init leaves). Its role i
 in the instruction: the opcode, an immediate, a **transfer** operand (a branch offset, a `JMP`
 or `JSR` operand) or an **address** operand (any other mode). It is **reached by address**
 when `cgen_var` finds it (a case of its switch). A cell's own value is program state; it is
-residue only through the role below.
+residue only through the role below. An address operand cell is a pointer variable, the
+program's meaning: the accesses through it count where they are printed as residue.
 
 | Kind | Site | Address | Detail |
 |---|---|---|---|
@@ -45,13 +46,13 @@ residue only through the role below.
 | D2 unwritten memory held | the held array bytes outside the loaded image and the I/O page that init writes for no song and no store's interval meets; one site per array and set of accesses | the first byte | array, runs, bytes, the accesses |
 | D3 hull gaps | not detectable (*Attribution `info` lacks*) | | |
 | D4 replayed init | a non-empty `CGEN_IO`, `CGEN_LIT` or `CGEN_CP` table: init's effect replayed, not translated | init's entry | entry count |
-| A1 address dispatch | a call of `rd`, `wr`, `rdCj`, `oob_rd`, `oob_wr`, `codechk` or `cgen_rd`; a subscript by a machine address; each instruction with an address operand cell (a pointer: the program advances it by its stores); a cell reached by address that is neither an address nor a transfer operand | function entry; the instruction; the cell | the call or subscript; `pointer operand of $pc: cells`; `cell reached by address` |
+| A1 address dispatch | a call of `rd`, `wr`, `rdCj`, `oob_rd`, `oob_wr`, `codechk` or `cgen_rd`; a subscript by a machine address; a cell reached by address of an instruction with no transfer operand cell | function entry, or each instruction whose address operand cells the call's address reads; the cell | the call or subscript; `cell reached by address` |
 | A2 machine addresses as values | a literal spelled `CODE_ORG` or `IMG_ORG`: one site per switch whose condition or case labels hold one, else per (function, use, address) of the `+`/`-` expression around it; each instruction with a transfer operand cell and no such switch | a switch: the printed switch (`info["provenance"]["switches"]`) whose computed jump's targets (`info["jumps"]`) hold the cases with the fewest others, if one; else function entry; the instruction | `switch over n code addresses`, `compared`/`stored`/`argument`/`value` and the address, or `transfer operand of $pc: cells` |
 | A3 status register as a value | a maximal `\|` expression one of whose operands is the constant `0x30` and another a `<<` | function entry | the expression |
 | C1 translatable deopt | a trap of `info["traps"]` whose `trap_info` is neither C1r nor C1g, or untabled | the trap's pc; function entry if untabled | `trap(k)` and its kind |
 | C1r redundant guard | a trap whose `trap_info` has `implied_by` set or is `proven`, or one `IMPLIED` records | the trap's pc | `trap(k)`, kind, what implies it |
 | C2 unstructured control | a goto edge of `info["provenance"]["gotos"]` that is no edge of the tune's construct map (`tunes/<tune>/constructs.json` `goto` entries from lifted code; any goto for a PSID or fuzz player); a function of no procedure of the original; an `io_write` whose address starts with a constant voice register of the tune (`VOICE_REGS`) | the edge's source; the function's entry; function entry | `goto` target; function; register |
-| C3 lift complexity | decision points that are no original branch: an atom of a condition naming an opcode cell; and per function, the atoms beyond its original branches | the cell; function entry | the cell; `n decision points, m original branches` |
+| C3 lift complexity | decision points that are no original branch: an atom of a condition naming an opcode cell that is no flag; and per function, the atoms beyond its original branches | the cell; function entry | the cell; `n decision points, m original branches` |
 | C1g guard on invalid input (informational) | a trap every guard of which traps input the original's meaning does not define (below) | the trap's pc | `trap(k)` and its kind |
 
 A **subscript by a machine address** is a subscript of held array `X` whose index (with the
@@ -65,8 +66,22 @@ A function is a **procedure** of the original when its entry is init, play or th
 `JSR` of the lift's instructions (its operand in the loaded image or as init leaves it, or each
 target `info["jumps"]` gives for a `JSR` whose operand the program writes), or when it is an
 instance function (`index`: the copies of an unrolled body, [constructs.md](constructs.md)'s
-*Rule*). Any other function (a shared tail entered by `JMP`, a branch or fall-through; a
-dispatch arm a computed `JMP` reaches) cuts the original's procedure where it has no boundary.
+*Rule*). A function entered at a `JSR` whose operand the program writes is the procedure that
+dispatches over its targets when every `JSR` reaching it (`calls`) has the same target set
+(`info["jumps"]`). A function whose `pcs` hold an `RTS` and that the C calls only in tail
+position (the call is returned, or ends the body, or a `return` of no computed value or a
+`break` of a statement in tail position follows it, through compound statements, `if` and
+`switch` bodies, cases and labels) is a procedure the original enters by a tail call: the C
+returns where its `RTS` does, whether a `JMP`, a computed `JMP`'s arm, a branch or a
+fall-through enters it. Any other function (a shared tail the C does not call in tail
+position, or one that returns by no `RTS` of its own) cuts the original's procedure where it
+has no boundary.
+
+An opcode cell is a **flag** when `info` bounds the values the program writes to it: an
+`opcode` guard of `trap_info` checks it (`addr`), its `ok` the values the C takes as the
+program's own and a trap (C1) the rest. Testing a flag is the original's decision, an atom
+and an original branch of its function. An opcode cell of unknown values is a site: the C
+would interpret opcodes.
 
 C3's atoms are the leaves of `&&`, `\|\|` and `!` (through casts and a comma's value) of each
 `if`, `while`, `do`, `for` and `?:` condition, non-constant, and one per `switch`; a test with
@@ -119,7 +134,7 @@ causes name the rest, which are lift residue.
 
 - A data address stored as a pointer's seed (`R0[0] = (uint8_t)(R4_ORG)`, `S_C9 =
   (uint8_t)(R63_ORG + 0xAB)`) is no site of its own: the pointer counts where it is used (a
-  subscript by a machine address, a dispatcher call, a pointer operand cell). Only
+  subscript by a machine address, a dispatcher call). Only
   `CODE_ORG`/`IMG_ORG` literals are A2. A dispatcher call with `Rk_ORG + c` in its address
   (`rdC0(R3_ORG + 0x52B, v)`) is one A1 site as a call.
 - A computed device register address (`io_write(0xD402 + v, ...)`, a register of a voice
@@ -131,7 +146,7 @@ causes name the rest, which are lift residue.
 ## Attribution `info` lacks
 
 - Each printed operation's original instruction (a C source range to pc map): A1 (other than
-  pointer operand cells and calls through them, and cells reached by address), A2 (other than
+  calls through address operand cells, and cells reached by address), A2 (other than
   switches and transfer operand cells), A3, C3 sites name their function's entry. A function
   whose instructions all lie in another's (`pcs`) is inlined there; the other's A1 and A3
   sites equal to its own up to the names of locals (`v<n>`) are its copies, counted once.
@@ -143,3 +158,9 @@ causes name the rest, which are lift residue.
   bytes inside an access's hull that its address set lacks) is not detected.
 - Each folded copy's instructions (`copy_pcs`): C3 compares a folded function's atoms with
   all its copies' branches.
+- The value set of an opcode cell no `opcode` guard checks: such a cell's test is a C3 site
+  although the lift may know its values (they are no `info` key; the C's own stores to a cell
+  `cgen_var` reaches are not all its writes).
+- Which instruction consumes a pushed status byte (a push to pull pairing of the stack, and
+  each A3 expression's `PHP`, `BRK` or interrupt): A3 counts every composed status byte,
+  a `PLP`/`RTI` round trip and one the program reads as data alike.
