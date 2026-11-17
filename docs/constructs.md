@@ -28,7 +28,7 @@ its form in the generated C too.
 | `loop` | back edge `back` → `head` | a loop |
 | `call` | `JSR` `sites` → `target` | a function called per site |
 | `fall_call` | `JSR` sites and a fall-through (`falls`) into `target` | one function; the fall-through is a call then return |
-| `tail_call` | `JMP`s, branches or fall-throughs into a `JSR` target | a call then return |
+| `tail_call` | `JMP`s, branches or fall-throughs into a `JSR` target (`shared`: `[jump, entry]`, a jump whose path joins the entry's with nothing between) | a call then return; a shared jump's is the entry's call, made once where the paths join |
 | `multi_entry_loop` | a cycle entered by `edges` at two points, `back` -> `head` (`copies`: the same loop in other instances) | one loop with an entry selector |
 | `unrolled` | `copies` of one body, operands at strides (`inserted`: instructions only some copies have) | one function with an instance index |
 | `smc` | `writer` stores into `cell`, a byte of `reader` | a variable (`lift` `variable`); none where the transfer it targets is a switch over the index the store's value is read by (`no variable: ...`) |
@@ -62,10 +62,10 @@ acyclic structure exists, and tail calls must be cut before either. The steps, i
 | T4 | dominator tree per procedure (back edges, including fall-through back edges of rotated loops entered at their test) | natural loops: back edge `continue`, the exit to the loop's follow `break`, exits to the procedure's exit `return` | 24 |
 | T5 | chains of conditional branches sharing a target, each falling into the next | one `&&`/`\|\|` condition, to a fixpoint | 4 |
 | T6 | post-dominator tree of the reduced graph | a branch whose arms rejoin at its immediate post-dominator becomes if/else; a multiway branch on one selector a switch | 7 |
-| T7 | none | every remaining edge is a goto: a branch past a joined block, an entry part-way into a shared sequence, a loop's second exit | 39 |
+| T7 | none | every remaining edge is a goto: a branch past a joined block, an entry part-way into a shared sequence, a loop's second exit | 41 |
 
 Four entries are readability choices the hand C makes (naming a single-entry region, extracting
-repeated inline code) and are not lifted. Twenty-one entries record where the hand C departs from
+repeated inline code) and are not lifted. Twenty-three entries record where the hand C departs from
 the procedure (`hand_differs`): a loop back edge written as a goto, nested copy loops written as
 one, a shared suffix outlined as a helper, gotos into a subroutine, gotos at joins with a
 structured form, and flags or outlined helpers where an edge has none. There the rule wins: the

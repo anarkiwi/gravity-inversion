@@ -71,9 +71,10 @@ def lifted(c, prov):  # pylint: disable=too-many-return-statements
     if k == "multi_entry_loop":
         return c["head"] in prov["loops"] and not {tuple(e) for e in c["edges"]} & gotos
     if k in ("call", "fall_call", "tail_call"):
+        shared = {j for j, _ in c.get("shared", [])}
         sites = c.get("sites", []) + c.get("falls", []) + c.get("jumps", [])
         calls = {s for s, t in _calls(prov, c["target"]) if t == c["target"]}
-        return set(sites) <= calls
+        return set(sites) - shared <= calls and not shared & calls
     if k == "unrolled":
         return any(
             f["index"] and set(c["copies"]) <= set(f["copies"])

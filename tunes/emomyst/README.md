@@ -76,6 +76,10 @@ idiom: `$19AB` is a subroutine the code also enters by `JMP` and fall-through.
 
 The hand C ends `filter_prg` at `$1665` and returns; `$1665` is no procedure entry, so the
 filter step's exits past `$1649-$1662` (`$1618`, `$1621`, `$1629`) are gotos in the generated C.
+Likewise the hand C calls `cnt_play2` (`$1537`) and `wf_arp` (`$16D6`), entries part-way into the
+sequence `$1520` falls through: `$138C JMP $16D6` enters it past the vibrato, filter and pulse
+steps, and of `tick2`'s two jumps to `$1537` (`$1424`, `$142E`) one is a goto, since its third arm
+reaches the exit sequence `$17BA` that post-dominates the branches instead.
 
 ## Verification
 
