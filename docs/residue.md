@@ -20,17 +20,27 @@ counts it. Code-size constructs (K1-K6) are no machine model and are reported by
 ## Kinds
 
 Tune code is every function of the `.c` with an entry in `info["provenance"]["functions"]`,
-and `cgen_init` (the PSID's init address); cgen's runtime (`rd`, `wr`, `rdCj`, `oob_*`,
-`codechk`, `cgen_var`, ...) is not. A site's address is exact where the kind's definition
+and `cgen_init` (the PSID's init address); cgen's runtime (`rd`, `wr`, `rdCj`, `B<b>c<j>`,
+`cgen_out<j>`, `oob_*`, `codechk`, `cgen_var`, ...) is not. A site's address is exact where the kind's definition
 gives one; otherwise it is the original entry of the tune function holding the construct,
 and the detail names the construct by its C text.
 
 An access's **interval** is the hull of the addresses its C expression can take, each variable
 over its C type: a subscript of a header array (`R*`, `C*`, a region slice, `CGEN_IX`) its base's
-origin plus the index's interval, within the held array holding the base; `rdCj(p, y)` the
-interval of `p + y` within span `Cj`; `rd`/`wr`/`oob_rd`/`oob_wr` that of their address; each
-`CGEN_CP_DST` entry its destination and `CGEN_CP_LEN` bytes. The held arrays are
-`CGEN_ARRAYS`.
+origin plus the index's interval, within the held array (else the block) holding the base;
+`rdCj(p, y)` the interval of `p + y` within span `Cj`; `rd`/`wr`/`oob_rd`/`oob_wr` that of
+their address; each `CGEN_CP_DST` entry its destination and `CGEN_CP_LEN` bytes. The held
+arrays are `CGEN_ARRAYS`.
+
+A **block** `B<b>` (`info["blocks"]`, `B<b>_ORG`, `B<b>_LEN`, stored by `CGEN_STORAGE`) holds
+the image's bytes; the held arrays and regions are **slices** of it (`#define C1 (B0 + (C1_ORG -
+B0_ORG))`, `R<k>` likewise), each named by its macro as the C spells it. A block's
+**padding** (`padding`, inclusive runs) is zero bytes no slice holds; it is no D1 or D2 byte.
+A read of the block itself is past a machine check: `B<b>[(uint16_t)(p - B<b>_ORG)]` in the arm
+of an `if` testing `cgen_out<j>(p, k)`, or the checked block read `B<b>c<j>(p, y, k)`. Either
+reaches only the runs of object `j` (`CGEN_OBJ<j>_LO` and `_LIM`, or `_ORG` and `_LIM`: each
+run from `lo` to `lo + lim`); a block read with no such check reaches its interval. A block
+read is no A1 site; its check's trap is classified as any other (C1g for `objchk`).
 
 A **cell** is a promoted variable (`info["state"]["vars"]`) on a byte of one of the lift's
 instructions (`info["starts"]`, lengths from the memory init leaves). Its role is the byte's
@@ -53,14 +63,15 @@ program's meaning: the accesses through it count where they are printed as resid
 | C1r redundant guard | a trap whose `trap_info` has `implied_by` set to more than the entry guard or is `proven` | the trap's pc | `trap(k)`, kind, what implies it |
 | C2 unstructured control | a goto edge of `info["provenance"]["gotos"]` that is no edge of the tune's construct map (`tunes/<tune>/constructs.json` `goto` entries from lifted code; any goto for a PSID or fuzz player); a function of no procedure of the original; an `io_write` whose address starts with a constant voice register of the tune (`VOICE_REGS`) | the edge's source; the function's entry; function entry | `goto` target; function; register |
 | C3 lift complexity | decision points that are no original branch: an atom of a condition naming an opcode cell that is no flag; and per function, the atoms beyond its original branches | the cell; function entry | the cell; `n decision points, m original branches` |
-| C1g guard on invalid input (informational) | a trap every guard of which traps input the original's meaning does not define, or that only the entry guard implies (below) | the trap's pc | `trap(k)` and its kind |
+| C1g guard on invalid input (informational) | a trap every guard of which traps input the original's meaning does not define, or that only the entry guard implies (below) | the trap's pc (for a check hoisted to a pointer's definition, the store completing the pointer, `Program.slack`) | `trap(k)` and its kind |
 
-A **subscript by a machine address** is a subscript of held array `X` whose index (with the
-offset of a pointer base `X + o`) is a sum with a non-constant term and the term `- X_ORG`:
-the C forms the 16-bit machine address and converts it to an offset of `X` (`C1[v7 + v6 -
-C1_ORG]`, `CGEN_IX(C1, p - C1_ORG, y)`), where an object offset (`R0[0x22 + v5]`) is none. A
-dispatcher call whose address reads an address operand cell (`rdC2(V1_f3D[v1] << 8 |
-V1_f3C[v1], y)`) translates that cell's instruction and is counted there, at its pc and per copy.
+A **subscript by a machine address** is a subscript of held array `X` (a slice's macro
+resolved; a block or region slice is none) whose index (with the offset of a pointer base `X +
+o`) is a sum with a non-constant term and the term `- X_ORG`: the C forms the 16-bit machine
+address and converts it to an offset of `X` (`C1[v7 + v6 - C1_ORG]`, `CGEN_IX(C1, p - C1_ORG,
+y)`), where an object offset (`R0[0x22 + v5]`) is none. A dispatcher call whose address reads
+an address operand cell (`rdC2(V1_f3D[v1] << 8 | V1_f3C[v1], y)`) translates that cell's
+instruction and is counted there, at its pc and per copy.
 
 A function is a **procedure** of the original when its entry is init, play or the target of a
 `JSR` of the lift's instructions (its operand in the loaded image or as init leaves it, or each

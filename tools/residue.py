@@ -81,6 +81,8 @@ COMPARE = frozenset(("==", "!=", "<", "<=", ">", ">="))
 ADDRESS_OPS = frozenset(("+", "-", "|", "&", ">>", "<<"))
 WRAPS = cflow.WRAPS
 LOCAL = re.compile(r"\bv\d+\b")
+BLOCK_READ = re.compile(r"B\d+c(\d+)$")
+OBJECT_CHECK = re.compile(r"cgen_out(\d+)$")
 
 
 class Site(NamedTuple):
@@ -174,17 +176,6 @@ def generate(psid, out):
     return Lift(psid, c, h, info, tree, cflow.Unit(c, tree, cflow.regions(defs)), defs)
 
 
-def norm(text):
-    """C text with its whitespace collapsed."""
-    return " ".join(text.split())
-
-
-def runs(mask):
-    """[(first, last)] of the runs of True in a boolean array."""
-    edges = np.flatnonzero(np.diff(np.concatenate(([0], mask.view(np.int8), [0]))))
-    return [(int(a), int(b) - 1) for a, b in zip(edges[::2], edges[1::2])]
-
-
 class Access(NamedTuple):
     """A memory access of a tune function: who, what, the address interval, its direction."""
 
@@ -193,10 +184,6 @@ class Access(NamedTuple):
     lo: int
     hi: int
     store: bool
-
-
-def _clip(lo, hi):
-    return max(lo, 0), min(hi, 0xFFFF)
 
 
 class Census:  # pylint: disable=too-many-instance-attributes
@@ -221,6 +208,11 @@ class Census:  # pylint: disable=too-many-instance-attributes
             (a, self.defs[f"{a}_ORG"], self.defs[f"{a}_LEN"])
             for a in cflow.header_list(lf.header, "CGEN_ARRAYS")
         ]
+        self.blocks = {
+            f"B{b}": (k["org"], k["len"], k["padding"])
+            for b, k in self.info.get("blocks", {}).items()
+        }
+        self.objects = cflow.objects(lf.header, self.defs)
         self._accesses = self._cells = None
         self._via = set()
 
@@ -251,11 +243,22 @@ class Census:  # pylint: disable=too-many-instance-attributes
         return None
 
     def _within(self, base, lo, hi):
-        """[lo, hi] clipped to the held array holding address `base` (16 bits outside)."""
-        for _, org, n in self.held:
+        """[lo, hi] clipped to the held array (else the block) holding address `base` (16
+        bits outside)."""
+        for org, n in [h[1:] for h in self.held] + [
+            b[:2] for b in self.blocks.values()
+        ]:
             if org <= base < org + n:
                 return max(lo, org), min(hi, org + n - 1)
-        return _clip(lo, hi)
+        return cflow.clip(lo, hi)
+
+    def _object_runs(self, j, fn, what, lo, hi):
+        """Reads of [lo, hi] confined to object `j`'s runs (all of it for no `j`)."""
+        return [
+            Access(fn, what, max(a, lo), min(b, hi), False)
+            for a, b in self.objects.get(j, [(lo, hi)])
+            if max(a, lo) <= min(b, hi)
+        ]
 
     def _subscript(self, fn, node):
         p = self._base(node["inner"][0])
@@ -263,7 +266,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
             return []
         i = cflow.interval(node["inner"][1])
         lo, hi = self._within(p[0], p[0] + i[0], p[1] + i[1])
-        what = norm(self.unit.src(node["inner"][0])).strip("()")
+        what = cflow.norm(self.unit.src(node["inner"][0])).strip("()")
         par = self.unit.parent.get(node["id"], {})
         lhs = par.get("inner", [{}])[0].get("id") == node["id"]
         store = lhs and (
@@ -271,6 +274,13 @@ class Census:  # pylint: disable=too-many-instance-attributes
             or par.get("opcode") in cflow.ASSIGNS
         )
         reads = not (store and par.get("opcode") == "=")
+        if (
+            cflow.array_name(self.unit, node["inner"][0], self.defs) in self.blocks
+            and not store
+        ):
+            return self._object_runs(
+                cflow.guard(self.unit.parent, node, OBJECT_CHECK), fn, what, lo, hi
+            )
         out = [Access(fn, what, lo, hi, True)] if store else []
         return out + ([Access(fn, what, lo, hi, False)] if reads else [])
 
@@ -280,11 +290,14 @@ class Census:  # pylint: disable=too-many-instance-attributes
         if costs.CHECKED.match(name or "") and len(args) == 2:
             p, y = cflow.interval(args[0]), cflow.interval(args[1])
             span = self.defs[f"{name[2:]}_ORG"], self.defs[f"{name[2:]}_LEN"]
-            lo, hi = _clip(p[0] + y[0], p[1] + y[1])
+            lo, hi = cflow.clip(p[0] + y[0], p[1] + y[1])
             lo, hi = max(lo, span[0]), min(hi, sum(span) - 1)
             return [Access(fn, name, lo, hi, False)] if lo <= hi else []
+        if (m := BLOCK_READ.match(name or "")) and len(args) == 3:
+            iv = np.add(cflow.interval(args[0]), cflow.interval(args[1]))
+            return self._object_runs(int(m[1]), fn, name, *cflow.clip(*iv))
         if name in DISPATCH - {"codechk"} and args:
-            lo, hi = _clip(*cflow.interval(args[0]))
+            lo, hi = cflow.clip(*cflow.interval(args[0]))
             return [Access(fn, name, lo, hi, name in ("wr", "oob_wr"))]
         return []
 
@@ -326,6 +339,9 @@ class Census:  # pylint: disable=too-many-instance-attributes
         for name, org, n in self.held:
             m = np.zeros(0x10000, bool)
             m[org : org + n] = True
+            for _, _, padding in self.blocks.values():
+                for lo, hi in padding:
+                    m[lo : hi + 1] = False
             out[name] = m
         return out
 
@@ -369,7 +385,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
         for name, m in self._held_mask().items():
             for kind, mask in (("D1", m & code), ("D2", m & unwritten)):
                 cause = {}
-                for lo, hi in runs(mask):
+                for lo, hi in cflow.runs(mask):
                     cause.setdefault(self._readers(lo, hi), []).append((lo, hi))
                 for who, rs in cause.items():
                     n = sum(hi - lo + 1 for lo, hi in rs)
@@ -495,7 +511,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
                     costs.callee(n) in DISPATCH
                     or costs.CHECKED.match(costs.callee(n) or "")
                 ):
-                    what = norm(self.unit.src(n))
+                    what = cflow.norm(self.unit.src(n))
                     names = cflow.names(n["inner"][1]) if len(n["inner"]) > 1 else set()
                     pcs = set().union(*(pointers.get(v, ()) for v in names))
                     self._via |= pcs
@@ -503,7 +519,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
                         Site("A1", pc, what) for pc in sorted(pcs or {self._at(fn)})
                     )
                 elif kind == "ArraySubscriptExpr" and self._machine_index(n):
-                    what = "subscript by address " + norm(self.unit.src(n))
+                    what = "subscript by address " + cflow.norm(self.unit.src(n))
                     per_fn.setdefault(fn, []).append(Site("A1", self._at(fn), what))
         transfers = {c.insn for c in self.cells() if c.role == "transfer"}
         return self._once(per_fn) + [
@@ -513,25 +529,27 @@ class Census:  # pylint: disable=too-many-instance-attributes
         ]
 
     def _machine_index(self, node):
-        """Whether a subscript of a held array `X` adds a non-constant 16-bit machine address
-        less `X_ORG`, not an offset into `X`."""
-        base = cflow.strip(node["inner"][0], WRAPS)
+        """Whether a subscript of a held array `X` (a slice's macro resolved) adds a
+        non-constant 16-bit machine address less `X_ORG`, not an offset into `X`."""
+        name = cflow.array_name(self.unit, node["inner"][0], self.defs)
         terms = cflow.terms(node["inner"][1])
-        if base.get("opcode") in ("+", "-"):
+        base = cflow.strip(node["inner"][0], WRAPS)
+        if name is None and base.get("opcode") in ("+", "-"):
             terms += cflow.terms(base)
-        arrays = [t for _, t in terms if "*" in t["type"]["qualType"]]
+            name = next(
+                (
+                    t["referencedDecl"]["name"]
+                    for _, t in terms
+                    if "*" in t["type"]["qualType"]
+                    and f"{t.get('referencedDecl', {}).get('name')}_ORG" in self.defs
+                ),
+                None,
+            )
         terms = [(s, t) for s, t in terms if "*" not in t["type"]["qualType"]]
-        if base.get("kind") == "DeclRefExpr":
-            arrays.append(base)
-        org = next(
-            (
-                self.defs.get(f"{a['referencedDecl']['name']}_ORG")
-                for a in arrays
-                if a.get("kind") == "DeclRefExpr"
-            ),
-            None,
-        )
-        if org is None or all(cflow.constant(t) is not None for _, t in terms):
+        if name not in {a for a, _, _ in self.held}:
+            return False
+        org = self.defs[f"{name}_ORG"]
+        if all(cflow.constant(t) is not None for _, t in terms):
             return False
         return any(s < 0 and cflow.constant(t) == org for s, t in terms)
 
@@ -594,7 +612,9 @@ class Census:  # pylint: disable=too-many-instance-attributes
                     else:
                         break
                 v = cflow.constant(inner)
-                addr = f"${v:04X}" if v is not None else norm(self.unit.src(inner))
+                addr = (
+                    f"${v:04X}" if v is not None else cflow.norm(self.unit.src(inner))
+                )
                 out.add(Site("A2", self._at(fn), f"{use} {addr}"))
             for sw in switches.values():
                 cases = {
@@ -629,7 +649,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
                 if any(cflow.constant(x) == 0x30 for x in leaves) and any(
                     cflow.strip(x, WRAPS).get("opcode") == "<<" for x in leaves
                 ):
-                    site = Site("A3", self._at(fn), norm(self.unit.src(n)))
+                    site = Site("A3", self._at(fn), cflow.norm(self.unit.src(n)))
                     per_fn.setdefault(fn, []).append(site)
         return self._once(per_fn)
 
@@ -757,7 +777,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
                         out.append(Site("C3", a, f"opcode cell {cell} tested"))
                     elif cells:
                         atoms, tested = atoms + 1, tested + 1
-                    elif not _dispatch_guard(n):
+                    elif not cflow.arm_calls(n, DISPATCH):
                         atoms += 1
             if fn not in prov:
                 continue
@@ -804,7 +824,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
         if kind == "SwitchStmt":
             return [inner[0]]
         if kind == "IfStmt" and any(
-            _traps(s) for s in inner[1:] + cflow.after_if(n, up)
+            cflow.calls(s, ("trap",)) for s in inner[1:] + cflow.after_if(n, up)
         ):
             return []
         at = CONDITION.get(kind)
@@ -818,24 +838,6 @@ class Census:  # pylint: disable=too-many-instance-attributes
         found += self.c1() + self.c2() + self.c3()
         order = KINDS + (GUARD,)
         return sorted(found, key=lambda s: (order.index(s.kind), s.pc, s.detail))
-
-
-def _traps(stmt):
-    """Whether a statement starts with a trap call."""
-    s = cflow.first(stmt)
-    return s.get("kind") == "CallExpr" and costs.callee(s) == "trap"
-
-
-def _dispatch_guard(n):
-    """Whether an `if` or conditional has an arm that is a dispatcher call (a bounds test
-    before it)."""
-    if n.get("kind") not in ("IfStmt", "ConditionalOperator"):
-        return False
-    return any(
-        cflow.first(a).get("kind") == "CallExpr"
-        and costs.callee(cflow.first(a)) in DISPATCH
-        for a in n["inner"][1:]
-    )
 
 
 def fuzz_psid(name):

@@ -441,7 +441,7 @@ def test_intervals(lift):
     subs = [n for n, _ in costs.walk(play) if n.get("kind") == "ArraySubscriptExpr"]
     got = [cflow.interval(s["inner"][1]) for s in subs]
     assert (0, 1) in got and (0, 3) in got and (0, 0) in got
-    assert residue.runs(np.array([0, 1, 1, 0, 1], bool)) == [(1, 2), (4, 4)]
+    assert cflow.runs(np.array([0, 1, 1, 0, 1], bool)) == [(1, 2), (4, 4)]
 
 
 def test_report_and_manifest(tmp_path, monkeypatch, capsys):
@@ -638,3 +638,103 @@ def test_opcode_values(lift, values, sites):
     }
     census = residue.Census(lift._replace(info={**INFO, "state": state}))
     assert [(s.pc, s.detail) for s in census.sites() if s.kind == "C3"] == sites
+
+
+BLOCK_HEADER = """#define CODE_ORG 0x1006
+#define B0_ORG 0x1008
+#define B0_LEN 16
+#define C0_ORG 0x100B
+#define C0_LEN 8
+#define R1_ORG 0x100E
+#define R1_LEN 2
+#define R0_ORG 0x3000
+#define R0_LEN 4
+#define CGEN_OBJ0_LO 0x100C, 0x1013
+#define CGEN_OBJ0_LIM 0x1, 0x0
+#define CGEN_OBJ1_ORG 0x100B
+#define CGEN_OBJ1_LIM 0x2
+#define C0 (B0 + (C0_ORG - B0_ORG))
+#define R1 (C0 + (R1_ORG - C0_ORG))
+#define CGEN_ARRAYS R0, C0
+"""
+
+BLOCK_SOURCE = """#include <stdint.h>
+#include "gen.h"
+__attribute__((noreturn)) void trap(uint16_t k);
+uint8_t cgen_out0(uint16_t p, uint8_t k);
+uint8_t B0c0(uint16_t p, uint8_t y, uint8_t k);
+uint8_t B0[B0_LEN];
+uint8_t R0[R0_LEN];
+void cgen_play(uint16_t v1, uint8_t v2) {
+  if (!cgen_out0(v1, 0)) {
+    R0[0] = B0[(uint16_t)(v1 - B0_ORG)];
+  } else {
+    trap(9);
+  }
+  R0[1] = B0c0(v1, v2, 10);
+  R0[2] = C0[(uint16_t)(v1 - C0_ORG)];
+  R0[3] = R1[(uint16_t)(v1 - R1_ORG)];
+}
+"""
+
+
+@pytest.fixture(scope="module", name="block")
+def fixture_block(tmp_path_factory, lift):
+    """A lift whose arrays are slices of one block `B0`, with objects and padding."""
+    out = tmp_path_factory.mktemp("block")
+    (out / "gen.c").write_text(BLOCK_SOURCE, encoding="ascii")
+    (out / "gen.h").write_text(BLOCK_HEADER, encoding="ascii")
+    tree = costs.ast(out / "gen.c", [out])
+    defs, _ = cflow.parse_header(BLOCK_HEADER)
+    unit = cflow.Unit(BLOCK_SOURCE, tree, cflow.regions(defs))
+    info = {
+        **INFO,
+        "blocks": {"0": {"org": 0x1008, "len": 16, "padding": [(0x1010, 0x1010)]}},
+        "traps": {9: ("deopt", 0x1004)},
+        "trap_info": {9: _trap("objchk", [{**_guard("objchk"), "at": 0x1009}])},
+    }
+    return residue.Census(
+        residue.Lift(lift.psid, BLOCK_SOURCE, BLOCK_HEADER, info, tree, unit, defs)
+    )
+
+
+def test_objects():
+    """A `cgen_out<j>` object runs from each `_LO` (or the one `_ORG`) to it plus `_LIM`."""
+    defs, _ = cflow.parse_header(BLOCK_HEADER)
+    assert cflow.objects(BLOCK_HEADER, defs) == {
+        0: [(0x100C, 0x100D), (0x1013, 0x1013)],
+        1: [(0x100B, 0x100D)],
+    }
+
+
+def test_block_reads(block):
+    """A block read past its object check (`cgen_out<j>`, or a checked block read
+    `B<b>c<j>`) reaches only the object's runs; a slice (`C0`, the region `R1`) from its
+    origin to its held array's end."""
+    got = sorted((a.what, a.lo, a.hi) for a in block.accesses() if not a.store)
+    assert got == [
+        ("B0", 0x100C, 0x100D),
+        ("B0", 0x1013, 0x1013),
+        ("B0c0", 0x100C, 0x100D),
+        ("B0c0", 0x1013, 0x1013),
+        ("C0", 0x100B, 0x1012),
+        ("R1", 0x100E, 0x1012),
+    ]
+
+
+def test_block_sites(block):
+    """A1 is the subscript of the held slice `C0` by an address less `C0_ORG`: no block
+    read (`B0`, `B0c0`) nor region subscript (`R1`); D1 leaves the block's padding out; a
+    hoisted check's C1g lies at its trap's instruction, the store completing the pointer.
+    """
+    sites = block.sites()
+    assert [(s.pc, s.detail) for s in sites if s.kind == "A1"] == [
+        (0x1006, "subscript by address C0[(uint16_t)(v1 - C0_ORG)]")
+    ]
+    assert [(s.pc, s.detail) for s in sites if s.kind == "D1"] == [
+        (0x100B, "C0 $100B-$100D (3 B): B0@$1006, B0c0@$1006, C0@$1006"),
+        (0x1011, "C0 $1011-$1012 (2 B): C0@$1006, R1@$1006"),
+    ]
+    assert [(s.pc, s.detail) for s in sites if s.kind == residue.GUARD] == [
+        (0x1004, "trap(9) objchk")
+    ]
