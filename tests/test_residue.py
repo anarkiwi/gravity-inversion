@@ -43,7 +43,7 @@ def test_sites_match_manifest(name, tmp):
 @pytest.mark.parametrize("name", residue.TUNES)
 def test_mapped_gotos_generated(name, tmp):
     """Each goto edge of the construct map from the lifted code is a goto of the C (the C's
-    other gotos are C2 sites)."""
+    other gotos are goto sites)."""
     c = _census(name, tmp)
     gotos = {tuple(e) for e in c.info["provenance"]["gotos"]}
     assert c._mapped_gotos() <= gotos  # pylint: disable=protected-access
@@ -51,7 +51,7 @@ def test_mapped_gotos_generated(name, tmp):
 
 def test_manifest_causes():
     """Every kind a group has residue or informational sites of has its cause written, and
-    only those; informational sites are C1g alone."""
+    only those; informational sites are invalid-input-guard alone."""
     present = {}
     for name in MANIFEST["sites"]:
         present.setdefault(residue.group(name), set()).update(
@@ -195,6 +195,7 @@ def _trap(kind, guards, implied=None, proven=False):
 
 
 INFO = {
+    "emission": {"copies": {}, "checks": [], "traps": {}, "defs": []},
     "provenance": {
         "functions": {
             "cgen_play": _fn(0x1006, [0x1006, 0x1008, 0x100B, 0x100D]),
@@ -268,45 +269,51 @@ def fixture_found(lift):
 
 
 def test_held_code_and_unwritten_memory(found):
-    """D1 is C0's instruction bytes, its two runs one site for their one set of accesses; D2
-    the R0 byte past the image that init, the C's stores and init's copies leave unwritten.
-    """
-    assert found["D1"] == [
+    """code-as-data is C0's instruction bytes, its two runs one site for their one set of
+    accesses; unwritten-held the R0 byte past the image that init, the C's stores and init's
+    copies leave unwritten."""
+    assert found["code-as-data"] == [
         (0x100B, "C0 $100B-$100D, $1010-$1012 (6 B): C0@$1006, rd@$1006")
     ]
-    assert found["D2"] == [(0x3003, "R0 $3003 (1 B): R0@$1006, rd@$1006, rd@$100D")]
+    assert found["unwritten-held"] == [
+        (0x3003, "R0 $3003 (1 B): R0@$1006, rd@$1006, rd@$100D")
+    ]
 
 
 def test_init_tables(found):
-    """D4 counts each init table at init's entry; no cell is a kind of its own."""
-    assert found["D4"] == [(0x1000, "1 block copies"), (0x1000, "2 I/O writes")]
-    assert "D5" not in found
+    """replayed-init counts each init table at init's entry; no cell is a kind of its own."""
+    assert found["replayed-init"] == [
+        (0x1000, "1 block copies"),
+        (0x1000, "2 I/O writes"),
+    ]
+    assert set(found) <= {*residue.KINDS, residue.GUARD}
 
 
 def test_cells(lift):
     """Each instruction-byte cell has its role and the kind that counts it: an address
-    operand a dispatcher call reads A1, one the C reads as a variable state, a transfer
-    operand A2, a tested opcode C3, a cell reached by address A1, an immediate state."""
+    operand a dispatcher call reads address-dispatch, one the C reads as a variable state, a
+    transfer operand address-value, a tested opcode extra-decisions, a cell reached by
+    address address-dispatch, an immediate state."""
     got = {
         c.lv: (c.role, c.insn, c.reached, w) for c, w in residue.Census(lift).counted()
     }
     assert got == {
         "S_I1": ("immediate", 0x1000, False, "state"),
         "S_I3": ("address", 0x1002, False, "state"),
-        "S_0": ("opcode", 0x1006, False, "C3"),
-        "S_1": ("immediate", 0x1006, True, "A1"),
-        "S_3": ("address", 0x1008, True, "A1"),
-        "S_4": ("address", 0x1008, False, "A1"),
-        "S_6": ("transfer", 0x100B, False, "A2"),
+        "S_0": ("opcode", 0x1006, False, "extra-decisions"),
+        "S_1": ("immediate", 0x1006, True, "address-dispatch"),
+        "S_3": ("address", 0x1008, True, "address-dispatch"),
+        "S_4": ("address", 0x1008, False, "address-dispatch"),
+        "S_6": ("transfer", 0x100B, False, "address-value"),
     }
 
 
 def test_address_dispatch(found):
-    """A1: dispatcher calls (the call through the address operand cells at their
+    """address-dispatch: dispatcher calls (the call through the address operand cells at their
     instruction, play's copy of f1's call once, in f1), the subscript by a machine address
     (not the constant one) and the cells cgen_var reaches; an address operand cell the C
     reads as a pointer variable (S_I3) is none."""
-    assert sorted(found["A1"]) == [
+    assert sorted(found["address-dispatch"]) == [
         (0x1006, "oob_rd(v1)"),
         (0x1006, "rd(0x3000)"),
         (
@@ -321,15 +328,15 @@ def test_address_dispatch(found):
 
 
 def test_machine_values(found):
-    """A2: a code address compared, a switch over code addresses at its computed jump, the
-    branch offset cell; A3 the packed status byte, play's copy of f1's once and its own.
-    """
-    assert found["A2"] == [
+    """address-value: a code address compared, a switch over code addresses at its computed
+    jump, the branch offset cell; flags-value the packed status byte, play's copy of f1's
+    once and its own."""
+    assert found["address-value"] == [
         (0x1006, "compared $1009"),
         (0x100B, "transfer operand of $100B: S_6"),
         (0x1010, "switch over 2 code addresses"),
     ]
-    assert found["A3"] == [
+    assert found["flags-value"] == [
         (0x1006, "v1 | 0x30 | ((v1 == 0) << 1)"),
         (0x100D, "v2 | 0x30 | ((v2 == 0) << 1)"),
     ]
@@ -342,23 +349,23 @@ def test_switched_transfer_cell(lift):
         "jumps": {0x100B: [0x1007, 0x1008]},
         "provenance": {**INFO["provenance"], "switches": [0x100B]},
     }
-    assert _found(lift._replace(info=info))["A2"] == [
+    assert _found(lift._replace(info=info))["address-value"] == [
         (0x1006, "compared $1009"),
         (0x100B, "switch over 2 code addresses"),
     ]
 
 
 def test_traps(found):
-    """Each trap once by trap_info: implied or proven C1r; every guard on invalid input C1g;
-    a deopt kind, an extent ending at a target, a mixed trap with a deopt guard, no
-    trap_info or untabled C1."""
-    assert found["C1"] == [
+    """Each trap once by trap_info: implied or proven implied-guard; every guard on invalid
+    input invalid-input-guard; a deopt kind, an extent ending at a target, a mixed trap with
+    a deopt guard, no trap_info or untabled deopt."""
+    assert found["deopt"] == [
         (0x1002, "trap(7) mixed"),
         (0x1005, "trap(8) no trap_info"),
         (0x1006, "trap(5) untabled"),
         (0x100B, "trap(1) index"),
     ]
-    assert found["C1r"] == [
+    assert found["implied-guard"] == [
         (0x1006, "trap(4) opcode proven"),
         (0x1008, "trap(3) index implied by trap(2)"),
     ]
@@ -369,25 +376,28 @@ def test_traps(found):
 
 
 def test_implied_by_entry():
-    """A trap only the entry guard implies is C1g, named by the entry guard; one other traps
-    or constants imply is C1r."""
+    """A trap only the entry guard implies is invalid-input-guard, named by the entry guard;
+    one other traps or constants imply is implied-guard."""
     assert residue.trap_class(_trap("index", [_guard("index")], implied=["entry"])) == (
         residue.GUARD,
         "index implied by the entry guard",
     )
-    assert residue.trap_class(_trap("index", [], implied=["entry", 3]))[0] == "C1r"
+    assert (
+        residue.trap_class(_trap("index", [], implied=["entry", 3]))[0]
+        == "implied-guard"
+    )
     assert residue.trap_class(_trap("entry", [], implied=[])) == (
-        "C1r",
+        "implied-guard",
         "entry implied by constants",
     )
-    assert residue.trap_class(_trap("index", [_guard("index")]))[0] == "C1"
+    assert residue.trap_class(_trap("index", [_guard("index")]))[0] == "deopt"
 
 
 def test_machine_objchk():
-    """An objchk guard of the machine model's rule (`def` machine) is C1g."""
+    """An objchk guard of the machine model's rule (`def` machine) is invalid-input-guard."""
     g = dict(_guard("objchk"), **{"def": "machine"})
     assert residue.trap_class(_trap("objchk", [g])) == (residue.GUARD, "objchk")
-    assert residue.trap_class(_trap("mixed", [g, _guard("index")]))[0] == "C1"
+    assert residue.trap_class(_trap("mixed", [g, _guard("index")]))[0] == "deopt"
 
 
 def _ref(name):
@@ -418,17 +428,17 @@ def test_guard_after_leaving_arm():
 
 
 def test_control(found):
-    """C2 is every goto without a construct map and each function at no procedure entry (a
-    JSR target, a computed JSR's target and an instance function are procedures; f4 is
-    called in tail position but returns by no RTS, f5 returns by RTS but is called before
-    a store); C3 the opcode cell test and the decision points beyond the function's
-    original branches, the bounds test before oob_rd none."""
-    assert found["C2"] == [
-        (0x100B, "goto $1006"),
+    """goto is every goto without a construct map and stray-function each function at no
+    procedure entry (a JSR target, a computed JSR's target and an instance function are
+    procedures; f4 is called in tail position but returns by no RTS, f5 returns by RTS but
+    is called before a store); extra-decisions the opcode cell test and the decision points
+    beyond the function's original branches, the bounds test before oob_rd none."""
+    assert found["goto"] == [(0x100B, "goto $1006")]
+    assert found["stray-function"] == [
         (0x100E, "function f4 at no procedure entry"),
         (0x100F, "function f5 at no procedure entry"),
     ]
-    assert found["C3"] == [
+    assert found["extra-decisions"] == [
         (0x1006, "2 decision points, 1 original branches"),
         (0x1006, "opcode cell S_0 tested"),
     ]
@@ -445,28 +455,30 @@ def test_intervals(lift):
 
 
 def test_report_and_manifest(tmp_path, monkeypatch, capsys):
-    """The CLI prints sites by kind, D3 as undetectable and C1g as informational; the
-    manifest keeps written causes, leaves a new kind's empty and records C1g apart from
-    the residue."""
-    site = residue.Site("A1", 0x1006, "rd(0x3000)")
+    """The CLI prints sites by kind, hull-gap as undetectable and invalid-input-guard as
+    informational; the manifest keeps written causes, leaves a new kind's empty and records
+    invalid-input-guard apart from the residue."""
+    site = residue.Site("address-dispatch", 0x1006, "rd(0x3000)")
     guard = residue.Site(residue.GUARD, 0x1000, "trap(0) entry")
     lines = residue.report("t", [site, guard], [])
-    assert "  A1: 1" in lines and "    $1006 rd(0x3000)" in lines
-    assert "  C1g: 1 (informational, not residue)" in lines
-    assert any(line.startswith("  D3: not detectable") for line in lines)
-    old = {"causes": {"fuzz-loop": {"A1": "why"}}}
+    assert "  address-dispatch: 1" in lines and "    $1006 rd(0x3000)" in lines
+    assert "  invalid-input-guard: 1 (informational, not residue)" in lines
+    assert any(line.startswith("  hull-gap: not detectable") for line in lines)
+    old = {"causes": {"fuzz-loop": {"address-dispatch": "why"}}}
     new = residue.manifest({"fuzz-loop-0": [site], "commando": [site, guard]}, old)
     assert new["causes"] == {
-        "commando": {"A1": "", "C1g": ""},
-        "fuzz-loop": {"A1": "why"},
+        "commando": {"address-dispatch": "", "invalid-input-guard": ""},
+        "fuzz-loop": {"address-dispatch": "why"},
     }
-    assert new["informational"] == {"commando": {"C1g": [["$1000", "trap(0) entry"]]}}
+    assert new["informational"] == {
+        "commando": {"invalid-input-guard": [["$1000", "trap(0) entry"]]}
+    }
     assert residue.recorded(new, "commando") == {
-        "A1": [["$1006", "rd(0x3000)"]],
-        "C1g": [["$1000", "trap(0) entry"]],
+        "address-dispatch": [["$1006", "rd(0x3000)"]],
+        "invalid-input-guard": [["$1000", "trap(0) entry"]],
     }
     assert residue.diff(new["sites"]["commando"], {}) == (
-        [("A1", "$1006", "rd(0x3000)")],
+        [("address-dispatch", "$1006", "rd(0x3000)")],
         [],
     )
     path = tmp_path / "m.json"
@@ -476,16 +488,20 @@ def test_report_and_manifest(tmp_path, monkeypatch, capsys):
     )
     assert residue.main(["--write-manifest"]) == 0
     assert json.loads(path.read_text())["sites"] == {
-        "commando": {"A1": [["$1006", "rd(0x3000)"]]}
+        "commando": {"address-dispatch": [["$1006", "rd(0x3000)"]]}
     }
-    assert residue.main(["commando", "--json", "--kind", "A1"]) == 0
-    assert '"A1"' in capsys.readouterr().out
+    assert residue.main(["commando", "--json", "--kind", "address-dispatch"]) == 0
+    assert '"address-dispatch"' in capsys.readouterr().out
     cell = residue.Cell("S_1", 0x1007, 0x1006, "immediate", True)
     monkeypatch.setattr(
-        residue, "run_all", lambda names, jobs, out, cells: {"t": [(cell, "A1")]}
+        residue,
+        "run_all",
+        lambda names, jobs, out, cells: {"t": [(cell, "address-dispatch")]},
     )
     assert residue.main(["t", "--cells"]) == 0
-    assert "$1007 S_1: immediate of $1006 -> A1" in capsys.readouterr().out
+    assert (
+        "$1007 S_1: immediate of $1006 -> address-dispatch" in capsys.readouterr().out
+    )
 
 
 def _with_fn(name, **fields):
@@ -502,21 +518,27 @@ def test_computed_jsr_dispatch(lift):
     info = _with_fn("f4", entry=0x1010, calls=[edge])
     assert (0x1010, "function f4 at no procedure entry") not in _found(
         lift._replace(info=info)
-    )["C2"]
+    )["stray-function"]
     info = _with_fn("f4", entry=0x1010, calls=[edge, [0x100B, 0x1010]])
     assert (0x1010, "function f4 at no procedure entry") in _found(
         lift._replace(info=info)
-    )["C2"]
+    )["stray-function"]
 
 
-def test_tail_called_procedure(lift):
-    """A function returning by RTS that the C calls only in tail position is a procedure
-    (f4, called last in f3); one called before more work is not (f5)."""
-    c2 = _found(lift._replace(info=_with_fn("f4", pcs=[0x1005])))["C2"]
-    assert c2 == [
-        (0x100B, "goto $1006"),
-        (0x100F, "function f5 at no procedure entry"),
-    ]
+def test_shared_tail(lift):
+    """A function returning by RTS that code outside it enters only by a branch or falling
+    through is a shared tail of the original (f1 at $100D past BNE $100B, its JSR left out of
+    the lift); one with no RTS is not, nor one no code outside it enters."""
+
+    def stray(starts, **fields):
+        info = {**_with_fn("f1", **fields), "starts": starts, "jumps": {}}
+        site = (0x100D, "function f1 at no procedure entry")
+        return site in _found(lift._replace(info=info))["stray-function"]
+
+    starts = [s for s in INFO["starts"] if s != 0x1010]
+    assert not stray(starts, pcs=[0x100D])
+    assert stray(starts, pcs=[0x100E])
+    assert stray([s for s in starts if s != 0x100B], pcs=[0x100D])
 
 
 TAILS = """#include <stdint.h>
@@ -608,8 +630,10 @@ def test_opcode_flag(lift):
         ),
     }
     census = residue.Census(lift._replace(info={**INFO, "trap_info": traps}))
-    assert [s for s in census.sites() if s.kind == "C3"] == [
-        residue.Site("C3", 0x1006, "3 decision points, 2 original branches")
+    assert [s for s in census.sites() if s.kind == "extra-decisions"] == [
+        residue.Site(
+            "extra-decisions", 0x1006, "3 decision points, 2 original branches"
+        )
     ]
     assert {c.lv: w for c, w in census.counted()}["S_0"] == "state"
 
@@ -629,7 +653,7 @@ def test_opcode_flag(lift):
 )
 def test_opcode_values(lift, values, sites):
     """An opcode cell with a finite value set in `state.opcodes` is a flag without an opcode
-    guard; one with no value set is still a C3 site."""
+    guard; one with no value set is still an extra-decisions site."""
     state = {
         **INFO["state"],
         "opcodes": {
@@ -637,7 +661,9 @@ def test_opcode_values(lift, values, sites):
         },
     }
     census = residue.Census(lift._replace(info={**INFO, "state": state}))
-    assert [(s.pc, s.detail) for s in census.sites() if s.kind == "C3"] == sites
+    assert [
+        (s.pc, s.detail) for s in census.sites() if s.kind == "extra-decisions"
+    ] == sites
 
 
 BLOCK_HEADER = """#define CODE_ORG 0x1006
@@ -723,15 +749,15 @@ def test_block_reads(block):
 
 
 def test_block_sites(block):
-    """A1 is the subscript of the held slice `C0` by an address less `C0_ORG`: no block
-    read (`B0`, `B0c0`) nor region subscript (`R1`); D1 leaves the block's padding out; a
-    hoisted check's C1g lies at its trap's instruction, the store completing the pointer.
-    """
+    """address-dispatch is the subscript of the held slice `C0` by an address less `C0_ORG`:
+    no block read (`B0`, `B0c0`) nor region subscript (`R1`); code-as-data leaves the
+    block's padding out; a hoisted check's invalid-input-guard lies at its trap's
+    instruction, the store completing the pointer."""
     sites = block.sites()
-    assert [(s.pc, s.detail) for s in sites if s.kind == "A1"] == [
+    assert [(s.pc, s.detail) for s in sites if s.kind == "address-dispatch"] == [
         (0x1006, "subscript by address C0[(uint16_t)(v1 - C0_ORG)]")
     ]
-    assert [(s.pc, s.detail) for s in sites if s.kind == "D1"] == [
+    assert [(s.pc, s.detail) for s in sites if s.kind == "code-as-data"] == [
         (0x100B, "C0 $100B-$100D (3 B): B0@$1006, B0c0@$1006, C0@$1006"),
         (0x1011, "C0 $1011-$1012 (2 B): C0@$1006, R1@$1006"),
     ]

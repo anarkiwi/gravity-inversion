@@ -1,141 +1,272 @@
 {
  "pins": {
-  "deity-informant": "0.40.12",
+  "deity-informant": "0.40.13",
   "vagrant-moses": "0.17.0",
   "jennings": "0.14.1",
   "pysidtracker": "0.63.0"
  },
  "causes": {
   "automatas": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction); $1146 the row reads' operand pointer at $1149, checked at the store completing it, outside the loaded object it points into (objchk); $1690-$1748 the pointer reads whose addresses the machine model bounds to the loaded object they point into (objchk, def machine), trapping an address outside it",
-   "D1": "span C1 $14CB-$1713 holds play's code $14CB-$1553 and $168C-$1713, which the reads at $0FE3 and $1022 (the note reads at $1426/$143F) indexed by a note byte reach through C1 and the song data slice R33 inside it, and $14CB-$1553 where the loaded object's runs meet it, read past its check by the row reads at $112A (B0, B0c0); span C0 $101F-$1083 holds the voice copies' gate bit and mask bytes ($1020-$1021 at the copies' $31 stride), constant after init and read at $12BE by voice index, and the copies' code $1022-$1049 and $1053-$107A between them, which the reads at $0FE3 and $1022 reach too"
+   "code-as-data": "span C1 $14CB-$1713 holds play's code $14CB-$1553 and $168C-$1713, which the reads at $0FE3 and $1022 (the note reads at $1426/$143F) indexed by a note byte reach through C1 and the song data slice R33 inside it, and $14CB-$1553 where the loaded object's runs meet it, read past its check by the row reads at $112A (B0, B0c0); span C0 $101F-$1083 holds the voice copies' gate bit and mask bytes ($1020-$1021 at the copies' $31 stride), constant after init and read at $12BE by voice index, and the copies' code $1022-$1049 and $1053-$107A between them, which the reads at $0FE3 and $1022 reach too",
+   "duplicate-check": "the memory map's per-read objchk (fused checked reads B0c0 among them) of reads through one pointer value, checked again at each offset",
+   "duplicate-code": "Instructions held by more than one C function (code init's lift and play's lift both print, or a procedure's fall-through held per procedure) and instructions the structuring prints in more than one place in one function (a shared tail or tail call printed in place per edge into it).",
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction); $1146 the row reads' operand pointer at $1149, checked at the store completing it, outside the loaded object it points into (objchk); $1690-$1748 the pointer reads whose addresses the machine model bounds to the loaded object they point into (objchk, def machine), trapping an address outside it"
   },
   "commando": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction); $1212 and $1275 the pulse width stores into the instrument row an instrument byte selects, past the loaded program's end; $1078-$1145, $117F-$118B, $120C and $1241-$125F the pointer reads whose addresses the machine model bounds to the loaded object they point into (objchk, def machine), trapping an address outside it",
-   "D1": "span C0 starts at R1's origin $1368, init's code $1368-$139D, which the song pointers' reads (CGEN_IX subscripts of C0) reach"
+   "code-as-data": "span C0 starts at R1's origin $1368, init's code $1368-$139D, which the song pointers' reads (CGEN_IX subscripts of C0) reach",
+   "duplicate-check": "the memory map's per-read objchk and the index guards of reads through one pointer value or one index register definition over the song data run, checked again at each read",
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction); $1212 and $1275 the pulse width stores into the instrument row an instrument byte selects, past the loaded program's end; $1078-$1145, $117F-$118B, $120C and $1241-$125F the pointer reads whose addresses the machine model bounds to the loaded object they point into (objchk, def machine), trapping an address outside it"
   },
   "emomyst": {
-   "A1": "init's voice setup at $17C8 reads through the voice pointers $17CF/$17D3/$17D7 (R46-R48) and init's helper at $1163 through its own patched operand (S_162 with the byte at R3[0xD5], the call counted at $1163), through span C0's bounds-checked reader; init's relocator subscripts span C0 by the 16-bit operand addresses its relocation table lists less C0_ORG; play's patched immediates (S_C9-S_9ED), held in span C0 where the relocator's subscripts reach, are found through cgen_var",
-   "A2": "the effect dispatches $19CF and $1A13 lift as switches over the effect index, but the stores of each handler's address byte into the JMPs' operands (S_9CE, S_A11) stay: the cells lie where span C0's reads reach, so the C keeps the code address bytes as values",
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction); $1947 an effect byte past its table's extent (the code after it); $1255-$175A, $1A46 and $1B22-$1B4C the pointer reads whose addresses the machine model bounds to the loaded object they point into (objchk, def machine), trapping an address outside it",
-   "C3": "a shared handler tail retests the dispatch selector (v5 == 0x24, 0x2A) after the switch",
-   "D1": "span C0 $1000-$24A1 holds the whole image: init's relocator reads and patches the operands its relocation table lists by subscripts of C0 with their 16-bit addresses, and init's voice pointers and its helper's patched operand are bounds-checked reads of C0, while play's song and pattern pointer reads, checked against the loaded object (B0, B0c1), meet it where that object's runs lie in the code, so init's and play's code ($1000-$1B54, one site per set of accesses reaching it) is held; the effect offset table at $1A03 inside the code is read at $1A00 by a byte index, whose interval reaches the code after it"
+   "address-dispatch": "init's voice setup at $17C8 reads through the voice pointers $17CF/$17D3/$17D7 (R46-R48) and init's helper at $1163 through its own patched operand (S_162 with the byte at R3[0xD5], the call counted at $1163), through span C0's bounds-checked reader; init's relocator subscripts span C0 by the 16-bit operand addresses its relocation table lists less C0_ORG; play's patched immediates (S_C9-S_9ED), held in span C0 where the relocator's subscripts reach, are found through cgen_var",
+   "address-value": "the effect dispatches $19CF and $1A13 lift as switches over the effect index, but the stores of each handler's address byte into the JMPs' operands (S_9CE, S_A11) stay: the cells lie where span C0's reads reach, so the C keeps the code address bytes as values",
+   "code-as-data": "span C0 $1000-$24A1 holds the whole image: init's relocator reads and patches the operands its relocation table lists by subscripts of C0 with their 16-bit addresses, and init's voice pointers and its helper's patched operand are bounds-checked reads of C0, while play's song and pattern pointer reads, checked against the loaded object (B0, B0c1), meet it where that object's runs lie in the code, so init's and play's code ($1000-$1B54, one site per set of accesses reaching it) is held; the effect offset table at $1A03 inside the code is read at $1A00 by a byte index, whose interval reaches the code after it",
+   "duplicate-check": "the memory map's per-read objchk (fused checked reads B0c1) of the song and pattern pointers at each Y offset, and of reads indexed by one Y definition over the song data run, each pointer value checked again at every read",
+   "duplicate-code": "Instructions held by more than one C function (code init's lift and play's lift both print, or a procedure's fall-through held per procedure) and instructions the structuring prints in more than one place in one function (a shared tail or tail call printed in place per edge into it).",
+   "extra-decisions": "a shared handler tail retests the dispatch selector (v5 == 0x24, 0x2A) after the switch",
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction); $1947 an effect byte past its table's extent (the code after it); $1255-$175A, $1A46 and $1B22-$1B4C the pointer reads whose addresses the machine model bounds to the loaded object they point into (objchk, def machine), trapping an address outside it"
   },
   "fuzz-brk": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-decimal": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-fallthrough": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-indx": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-inlineargs": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-jam": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction); the JAM opcode the motif places (by construction)"
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction); the JAM opcode the motif places (by construction)"
   },
   "fuzz-jsr3": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-loop": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-rmw": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-rti": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-skip": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-smc": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction)",
-   "D1": "each copy reads its own code byte (C0[K2[k]]): span C0 holds the copies' code between the three bytes read"
+   "code-as-data": "each copy reads its own code byte (C0[K2[k]]): span C0 holds the copies' code between the three bytes read",
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-stackswitch": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "fuzz-unrolled": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction)",
-   "D2": "one state field per voice at the copies' stride held as a run over the three copies: the bytes between the copies' fields are held and never written"
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction)",
+   "unwritten-held": "one state field per voice at the copies' stride held as a run over the three copies: the bytes between the copies' fields are held and never written"
   },
   "fuzz-vflag": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction)"
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction)"
   },
   "ghouls": {
-   "A1": "init's copy loop at $2999 subscripts span C1 by its 16-bit copy pointers ($FA/$FB, $FC/$FD) less C1_ORG; init's song setup at $6110 reads the song list and record through the pointers it loads (the record pointer at $96/$97) through span C1's bounds-checked reader and subscripts C1 by the 16-bit address it assembles less C1_ORG",
-   "A2": "play's command dispatch at $6234 reads each voice copy's handler address bytes from the split tables at $6C37/$6C76 by the copy's offset and a command byte $80-$94: the reads lie in the song data R36 ($6CB7 on), but the instructions' base operands lie below it, so the C spells them as CODE_ORG offsets less R36_ORG",
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction) ($6110); $299B a song's copy selector (from $2A1A/$2A25) past the ten copy pointer pairs at $29E7/$29FB (the next object) and $61FC the song number less $0A indexing the song list pointers past their extent (a byte another column reads), each implied by the entry guard; $6362 a voice's song pointer outside the song data $6CB7-$9E07 it points into (objchk); $6368 a song command byte outside $80-$94 indexing the command table past its extent (the next object); $6AC3 and $6ACA the pointer reads whose addresses the machine model bounds to the loaded object they point into (objchk, def machine), trapping an address outside it",
-   "D1": "span C1 $2980-$A013 holds init's code ($2980-$29E6, $6110-$6122, $6153-$622D, $7316-$733E) and play's ($6234-$6CB6 runs): init's copy loop stores through its 16-bit copy pointers into C1, its song setup reads the song list and records through C1's bounds-checked reader and subscripts C1 by the 16-bit addresses it loads, and the song pointers' CGEN_IX subscripts of C1 by the 16-bit pointer at $6234 reach it; the per-voice cells init clears that are not promoted are held as regions inside it"
+   "address-dispatch": "init's copy loop at $2999 subscripts span C1 by its 16-bit copy pointers ($FA/$FB, $FC/$FD) less C1_ORG; init's song setup at $6110 reads the song list and record through the pointers it loads (the record pointer at $96/$97) through span C1's bounds-checked reader and subscripts C1 by the 16-bit address it assembles less C1_ORG",
+   "address-value": "play's command dispatch at $6234 reads each voice copy's handler address bytes from the split tables at $6C37/$6C76 by the copy's offset and a command byte $80-$94: the reads lie in the song data R36 ($6CB7 on), but the instructions' base operands lie below it, so the C spells them as CODE_ORG offsets less R36_ORG",
+   "code-as-data": "span C1 $2980-$A013 holds init's code ($2980-$29E6, $6110-$6122, $6153-$622D, $7316-$733E) and play's ($6234-$6CB6 runs): init's copy loop stores through its 16-bit copy pointers into C1, its song setup reads the song list and records through C1's bounds-checked reader and subscripts C1 by the 16-bit addresses it loads, and the song pointers' CGEN_IX subscripts of C1 by the 16-bit pointer at $6234 reach it; the per-voice cells init clears that are not promoted are held as regions inside it",
+   "duplicate-check": "objchk and bounds-checked rdC reads through one pointer value or index register definition already checked",
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction) ($6110); $299B a song's copy selector (from $2A1A/$2A25) past the ten copy pointer pairs at $29E7/$29FB (the next object) and $61FC the song number less $0A indexing the song list pointers past their extent (a byte another column reads), each implied by the entry guard; $6362 a voice's song pointer outside the song data $6CB7-$9E07 it points into (objchk); $6368 a song command byte outside $80-$94 indexing the command table past its extent (the next object); $6AC3 and $6ACA the pointer reads whose addresses the machine model bounds to the loaded object they point into (objchk, def machine), trapping an address outside it"
   },
   "incoherent": {
-   "C1g": "init's song guard: A outside the PSID header's songs (by construction); $0AC7 a song byte indexing the 24-entry table $12CA past its extent (a byte another column reads); $0B84-$0BEE the pointer reads whose addresses the machine model bounds to the loaded object they point into (objchk, def machine), trapping an address outside it"
+   "duplicate-check": "the memory map's per-read objchk of reads through one zero-page pointer value, checked again at each read",
+   "duplicate-code": "Instructions held by more than one C function (code init's lift and play's lift both print, or a procedure's fall-through held per procedure) and instructions the structuring prints in more than one place in one function (a shared tail or tail call printed in place per edge into it).",
+   "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction); $0AC7 a song byte indexing the 24-entry table $12CA past its extent (a byte another column reads); $0B84-$0BEE the pointer reads whose addresses the machine model bounds to the loaded object they point into (objchk, def machine), trapping an address outside it"
   }
  },
  "sites": {
   "commando": {
-   "D1": [
+   "code-as-data": [
     [
      "$1368",
      "R1 $1368-$139D (54 B): CGEN_IX@$1003"
     ]
+   ],
+   "duplicate-check": [
+    [
+     "$10C9",
+     "objchk of $00F2 by $109A, $00F3 by $109F"
+    ],
+    [
+     "$10DA",
+     "objchk of $00F2 by $109A, $00F3 by $109F"
+    ],
+    [
+     "$1145",
+     "objchk of $00F2 by $109A, $00F3 by $109F"
+    ],
+    [
+     "$1212",
+     "index of Y in $1368 by $1209"
+    ],
+    [
+     "$1258",
+     "objchk of Y in $1368 by $1223"
+    ],
+    [
+     "$1275",
+     "index of Y in $1368 by $1223"
+    ]
    ]
   },
-  "incoherent": {},
+  "incoherent": {
+   "duplicate-code": [
+    [
+     "$0A65",
+     "copy 2 of 2"
+    ]
+   ],
+   "duplicate-check": [
+    [
+     "$0BA6",
+     "objchk of $0002 by $0B7A, $0003 by $0B7F"
+    ],
+    [
+     "$0BB6",
+     "objchk of $0002 by $0B7A, $0003 by $0B7F"
+    ],
+    [
+     "$0BBE",
+     "objchk of $0002 by $0B7A, $0003 by $0B7F"
+    ],
+    [
+     "$0BEE",
+     "objchk of $0002 by $0B7A, $0003 by $0B7F"
+    ]
+   ]
+  },
   "automatas": {
-   "D1": [
+   "code-as-data": [
     [
      "$1022",
-     "C0 $1022-$1049, $1053-$107A (80 B): C0@$0FE3, C0@$1022, C0@$12BE"
+     "C0 $1022-$1049, $1053-$107A (80 B): B0c2@$112A, C0@$12BE"
     ],
     [
      "$14CB",
-     "C1 $14CB-$1553 (137 B): B0@$112A, B0c0@$112A, R33@$0FE3, R33@$1022"
+     "C1 $14CB-$1553 (137 B): B0c0@$112A, B0c2@$112A, R33@$12BE"
     ],
     [
      "$168C",
-     "C1 $168C-$1713 (136 B): C1@$0FE3, C1@$1022, R33@$0FE3, R33@$1022"
+     "C1 $168C-$1713 (136 B): B0c2@$112A, C1@$12BE, R33@$12BE"
+    ]
+   ],
+   "duplicate-code": [
+    [
+     "$1128",
+     "copy 2 of 2"
+    ],
+    [
+     "$11B0",
+     "copy 2 of 2"
+    ],
+    [
+     "$1238",
+     "copy 2 of 2"
+    ]
+   ],
+   "duplicate-check": [
+    [
+     "$169A",
+     "objchk of $00FC by $12DB, $00FC by $130C, $00FC by $133D, $00FC by $136E, $00FC by $139F, $00FC by $13D0, $00FB by $168C"
+    ],
+    [
+     "$16A2",
+     "objchk of $00FC by $12DB, $00FC by $130C, $00FC by $133D, $00FC by $136E, $00FC by $139F, $00FC by $13D0, $00FB by $168C"
+    ],
+    [
+     "$16AC",
+     "objchk of $00FC by $12DB, $00FC by $130C, $00FC by $133D, $00FC by $136E, $00FC by $139F, $00FC by $13D0, $00FB by $168C"
+    ],
+    [
+     "$16B8",
+     "objchk of $00FC by $12DB, $00FC by $130C, $00FC by $133D, $00FC by $136E, $00FC by $139F, $00FC by $13D0, $00FB by $168C"
+    ],
+    [
+     "$16C4",
+     "objchk of $00FC by $12DB, $00FC by $130C, $00FC by $133D, $00FC by $136E, $00FC by $139F, $00FC by $13D0, $00FB by $168C"
+    ],
+    [
+     "$16D4",
+     "objchk of $00FC by $12DB, $00FC by $130C, $00FC by $133D, $00FC by $136E, $00FC by $139F, $00FC by $13D0, $00FB by $168C"
+    ],
+    [
+     "$16E0",
+     "objchk of $00FC by $12DB, $00FC by $130C, $00FC by $133D, $00FC by $136E, $00FC by $139F, $00FC by $13D0, $00FB by $168C"
+    ],
+    [
+     "$16EB",
+     "objchk of $00FC by $12DB, $00FC by $130C, $00FC by $133D, $00FC by $136E, $00FC by $139F, $00FC by $13D0, $00FB by $168C"
+    ],
+    [
+     "$16F5",
+     "objchk of $00FC by $12DB, $00FC by $130C, $00FC by $133D, $00FC by $136E, $00FC by $139F, $00FC by $13D0, $00FB by $168C"
+    ],
+    [
+     "$1703",
+     "objchk of $00FC by $12DB, $00FC by $130C, $00FC by $133D, $00FC by $136E, $00FC by $139F, $00FC by $13D0, $00FB by $168C"
+    ],
+    [
+     "$172F",
+     "objchk of $00FC by $12DB, $00FC by $130C, $00FC by $133D, $00FC by $136E, $00FC by $139F, $00FC by $13D0, $00FB by $168C"
+    ],
+    [
+     "$173A",
+     "objchk of $00FC by $12DB, $00FC by $130C, $00FC by $133D, $00FC by $136E, $00FC by $139F, $00FC by $13D0, $00FB by $168C"
+    ],
+    [
+     "$1745",
+     "objchk of $00FC by $12DB, $00FC by $130C, $00FC by $133D, $00FC by $136E, $00FC by $139F, $00FC by $13D0, $00FB by $168C"
+    ],
+    [
+     "$1748",
+     "objchk of $00FC by $12DB, $00FC by $130C, $00FC by $133D, $00FC by $136E, $00FC by $139F, $00FC by $13D0, $00FB by $168C"
     ]
    ]
   },
   "ghouls": {
-   "D1": [
+   "code-as-data": [
     [
      "$2980",
-     "C1 $2980-$29E6 (103 B): B0c1@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R1@$2999, rdC1@$6110"
+     "C1 $2980-$29E6 (103 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R1@$2999, rdC1@$6110"
     ],
     [
      "$6110",
-     "C1 $6110-$6122 (19 B): B0c1@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, rdC1@$6110"
+     "C1 $6110-$6122 (19 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, rdC1@$6110"
     ],
     [
      "$6153",
-     "C1 $6153-$622D (219 B): B0c1@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R1@$6110, rdC1@$6110"
+     "C1 $6153-$622D (219 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R1@$6110, rdC1@$6110"
     ],
     [
      "$6234",
-     "C1 $6234-$6A04 (2001 B): C1@$2999, C1@$6110, CGEN_IX@$6234, R12@$6110, R14@$6110, R17@$6110, R1@$6110, R20@$6110, R22@$6110, R25@$6110, R26@$6110, R26@$6234, R27@$6110, R27@$6234, R28@$6110, R28@$6234, R29@$6110, R29@$6234, R30@$6110, R30@$6234, R4@$6110, R6@$6110, R9@$6110, rdC1@$6110"
+     "C1 $6234-$6A04 (2001 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R12@$6110, R14@$6110, R17@$6110, R1@$6110, R20@$6110, R22@$6110, R25@$6110, R26@$6110, R26@$6234, R27@$6110, R27@$6234, R28@$6110, R28@$6234, R29@$6110, R29@$6234, R30@$6110, R30@$6234, R4@$6110, R6@$6110, R9@$6110, rdC1@$6110"
     ],
     [
      "$6A0B",
-     "C1 $6A0B-$6B1E (276 B): C1@$2999, C1@$6110, CGEN_IX@$6234, R31@$6234, rdC1@$6110"
+     "C1 $6A0B-$6B1E (276 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R31@$6234, rdC1@$6110"
     ],
     [
      "$6B31",
-     "C1 $6B31-$6BD9, $6BDC-$6BF4, $6BF7-$6C0F, $6C12-$6CB6 (384 B): C1@$2999, C1@$6110, C1@$6234, CGEN_IX@$6234, R32@$6234, rdC1@$6110"
+     "C1 $6B31-$6BD9, $6BDC-$6BF4, $6BF7-$6C0F, $6C12-$6CB6 (384 B): B0c3@$6234, C1@$2999, C1@$6110, C1@$6234, CGEN_IX@$6234, R32@$6234, rdC1@$6110"
     ],
     [
      "$7316",
-     "C1 $7316-$733E (41 B): B0c1@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R36@$6110, R36@$6234, rdC1@$6110"
+     "C1 $7316-$733E (41 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R36@$6110, R36@$6234, rdC1@$6110"
     ]
    ],
-   "A1": [
+   "address-dispatch": [
     [
      "$2999",
      "subscript by address C1[(uint16_t)((R0[0xFA] | ((uint16_t)R0[0xFB] << 8)) + v8 - C1_ORG)]"
@@ -169,7 +300,7 @@
      "subscript by address C1[(uint16_t)((((uint16_t)v10 << 8) | v9) - C1_ORG)]"
     ]
    ],
-   "A2": [
+   "address-value": [
     [
      "$6234",
      "value CODE_ORG + 0xA03 + v7 + v50 - R36_ORG"
@@ -178,44 +309,58 @@
      "$6234",
      "value CODE_ORG + 0xA42 + v7 + v50 - R36_ORG"
     ]
+   ],
+   "duplicate-check": [
+    [
+     "$61EF",
+     "rdC of $0096 by $61E0, $0097 by $61E5, $0096 by $61F1, $0097 by $61F1, $0096 by $61F6, $0097 by $61F6, $0096 by $620A, $0097 by $620A, $0096 by $620E, $0097 by $620E, $0096 by $621D, $0097 by $621D, $0096 by $621F, $0097 by $621F, $0096 by $6221, $0097 by $6221, $0096 by $6223, $0096 by $6225, $0097 by $6225, $0096 by $6227, $0097 by $6227, $0096 by $6229, $0097 by $6229"
+    ],
+    [
+     "$61F4",
+     "rdC of $0096 by $61E0, $0097 by $61E5, $0096 by $61F1, $0097 by $61F1, $0096 by $61F6, $0097 by $61F6, $0096 by $620A, $0097 by $620A, $0096 by $620E, $0097 by $620E, $0096 by $621D, $0097 by $621D, $0096 by $621F, $0097 by $621F, $0096 by $6221, $0097 by $6221, $0096 by $6223, $0096 by $6225, $0097 by $6225, $0096 by $6227, $0097 by $6227, $0096 by $6229, $0097 by $6229"
+    ],
+    [
+     "$6ACA",
+     "objchk of X in $6B1F by $6ABC, X in $6B1F by $6ADD, X in $6B1F by $6AFE"
+    ]
    ]
   },
   "emomyst": {
-   "D1": [
+   "code-as-data": [
     [
      "$1000",
-     "C0 $1000-$1005, $1015-$101B (13 B): B0@$124D, B0c1@$124D, B0c1@$1400, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1A55, C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163"
+     "C0 $1000-$1005, $1015-$101B (13 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$10A5",
-     "C0 $10A5-$1166 (194 B): B0@$124D, B0c1@$124D, B0c1@$1400, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1A55, C0@$1000, CGEN_IX@$1000, R2@$1000, R2@$1003, R2@$124D, R2@$1400, R2@$19AB, R2@$1A00, R2@$1A4D, R2@$1A55, R2@$1AB4, R2@$1B2A, rdC0@$1000, rdC0@$1163"
+     "C0 $10A5-$1166 (194 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R2@$1000, R2@$1003, R2@$124D, R2@$1400, R2@$1537, R2@$16D6, R2@$17BA, R2@$17E5, R2@$1802, R2@$19AB, R2@$1A00, R2@$1A59, R2@$1AB4, R2@$1B2A, R2@$1B31, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$1186",
-     "C0 $1186-$118F (10 B): C0@$1000, CGEN_IX@$1000, R2@$1400, R2@$1B2A, rdC0@$1000, rdC0@$1163"
+     "C0 $1186-$118F (10 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R2@$1400, R2@$1B2A, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$11AA",
-     "C0 $11AA, $11C4-$1223, $1243-$124B (106 B): C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163"
+     "C0 $11AA, $11C4-$1223, $1243-$124B (106 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$124D",
-     "C0 $124D-$182F (1507 B): B0@$124D, B0c1@$124D, B0c1@$1400, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1A55, C0@$1000, CGEN_IX@$1000, R45@$1000, R46@$1000, R46@$17C8, R47@$1000, R47@$17C8, R48@$1000, R48@$17C8, rdC0@$1000, rdC0@$1163"
+     "C0 $124D-$182F (1507 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R45@$1000, R46@$1000, R46@$17C8, R47@$1000, R47@$17C8, R48@$1000, R48@$17C8, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$1939",
-     "C0 $1939-$19F1 (185 B): C0@$1000, C0@$1003, C0@$124D, C0@$1400, CGEN_IX@$1000, R49@$1400, R50@$19AB, R63@$124D, R63@$1400, R63@$19AB, R63@$1A4D, R63@$1AB4, R64@$1A00, rdC0@$1000, rdC0@$1163"
+     "C0 $1939-$19F1 (185 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, C0@$1003, C0@$1537, C0@$16D6, CGEN_IX@$1000, R49@$1400, R50@$19AB, R63@$1400, R63@$16D6, R63@$1802, R64@$1A00, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$1A00",
-     "C0 $1A00-$1A14, $1A16-$1A6F (111 B): C0@$1000, CGEN_IX@$1000, R63@$1400, R63@$19AB, R63@$1A4D, R63@$1AB4, R64@$1A00, rdC0@$1000, rdC0@$1163"
+     "C0 $1A00-$1A14, $1A16-$1A6F (111 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R63@$1400, R63@$1802, R64@$1A00, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$1AAE",
-     "C0 $1AAE-$1B54 (167 B): C0@$1000, CGEN_IX@$1000, R63@$1400, R63@$19AB, R63@$1A4D, R63@$1AB4, R64@$1A00, R65@$19AB, rdC0@$1000, rdC0@$1163"
+     "C0 $1AAE-$1B54 (167 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R63@$1802, R64@$1A00, R65@$19AB, rdC0@$1000, rdC0@$1163"
     ]
    ],
-   "A1": [
+   "address-dispatch": [
     [
      "$1000",
      "rdC0(R46[0] | ((uint16_t)R46[1] << 8), v21)"
@@ -389,7 +534,7 @@
      "S_9ED reached by address"
     ]
    ],
-   "A2": [
+   "address-value": [
     [
      "$19CF",
      "transfer operand of $19CF: S_9CE"
@@ -399,10 +544,330 @@
      "transfer operand of $1A13: S_A11"
     ]
    ],
-   "C3": [
+   "extra-decisions": [
     [
      "$19AB",
-     "14 decision points, 12 original branches"
+     "8 decision points, 6 original branches"
+    ]
+   ],
+   "duplicate-code": [
+    [
+     "$13F5",
+     "copy 2 of 2"
+    ],
+    [
+     "$1424",
+     "copy 2 of 7"
+    ],
+    [
+     "$1424",
+     "copy 3 of 7"
+    ],
+    [
+     "$1424",
+     "copy 4 of 7"
+    ],
+    [
+     "$1424",
+     "copy 5 of 7"
+    ],
+    [
+     "$1424",
+     "copy 6 of 7"
+    ],
+    [
+     "$1424",
+     "copy 7 of 7"
+    ],
+    [
+     "$1459",
+     "copy 2 of 3"
+    ],
+    [
+     "$1459",
+     "copy 3 of 3"
+    ],
+    [
+     "$145C",
+     "copy 2 of 4"
+    ],
+    [
+     "$145C",
+     "copy 3 of 4"
+    ],
+    [
+     "$145C",
+     "copy 4 of 4"
+    ],
+    [
+     "$17C8",
+     "copy 2 of 2"
+    ],
+    [
+     "$17CA",
+     "copy 2 of 2"
+    ],
+    [
+     "$17CC",
+     "copy 2 of 2"
+    ],
+    [
+     "$17CE",
+     "copy 2 of 2"
+    ],
+    [
+     "$17D2",
+     "copy 2 of 2"
+    ],
+    [
+     "$17D6",
+     "copy 2 of 2"
+    ],
+    [
+     "$1943",
+     "copy 2 of 6"
+    ],
+    [
+     "$1943",
+     "copy 3 of 6"
+    ],
+    [
+     "$1943",
+     "copy 4 of 6"
+    ],
+    [
+     "$1943",
+     "copy 5 of 6"
+    ],
+    [
+     "$1943",
+     "copy 6 of 6"
+    ],
+    [
+     "$1A23",
+     "copy 2 of 2"
+    ],
+    [
+     "$1A2D",
+     "copy 2 of 2"
+    ],
+    [
+     "$1A3E",
+     "copy 2 of 3"
+    ],
+    [
+     "$1A3E",
+     "copy 3 of 3"
+    ],
+    [
+     "$1A42",
+     "copy 2 of 2"
+    ],
+    [
+     "$1A46",
+     "copy 2 of 2"
+    ],
+    [
+     "$1A49",
+     "copy 2 of 2"
+    ],
+    [
+     "$1A65",
+     "copy 2 of 2"
+    ],
+    [
+     "$1A6A",
+     "copy 2 of 2"
+    ],
+    [
+     "$1AB2",
+     "copy 2 of 3"
+    ],
+    [
+     "$1AB2",
+     "copy 3 of 3"
+    ]
+   ],
+   "duplicate-check": [
+    [
+     "$1281",
+     "objchk of Y in $1B55 by $1275"
+    ],
+    [
+     "$12A6",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$12C9",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$12D8",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$12E2",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$1341",
+     "objchk of Y in $1B55 by $1329, Y in $1B55 by $1334"
+    ],
+    [
+     "$135C",
+     "objchk of $0002 by $133F, $0003 by $1347"
+    ],
+    [
+     "$1384",
+     "objchk of Y in $1B55 by $1378"
+    ],
+    [
+     "$139F",
+     "objchk of Y in $1B55 by $1393"
+    ],
+    [
+     "$13B0",
+     "objchk of $0002 by $139D, $0003 by $13A5"
+    ],
+    [
+     "$1414",
+     "objchk of Y in $1B55 by $1403"
+    ],
+    [
+     "$1434",
+     "objchk of $0002 by $1412, $0003 by $141A"
+    ],
+    [
+     "$1461",
+     "objchk of $0002 by $1412, $0003 by $141A"
+    ],
+    [
+     "$147E",
+     "objchk of $0002 by $1412, $0003 by $141A"
+    ],
+    [
+     "$1499",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$14AC",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$14B8",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$14BB",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$152F",
+     "objchk of Y in $1B55 by $1520"
+    ],
+    [
+     "$15D7",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$15E4",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$1624",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$162C",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$163F",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$164A",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$1668",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$1675",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$1693",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$169B",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$16A5",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$16AB",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$16E6",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$16FB",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$1703",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$170C",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$1729",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$17DC",
+     "objchk of $0002 by $1412, $0003 by $141A"
+    ],
+    [
+     "$1980",
+     "objchk of $0002 by $1412, $0003 by $141A"
+    ],
+    [
+     "$19A4",
+     "objchk of $0002 by $1412, $0003 by $141A"
+    ],
+    [
+     "$19D3",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$1A46",
+     "objchk of Y in $1B55 by $1A45"
+    ],
+    [
+     "$1A57",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$1AD7",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$1AE2",
+     "objchk of $0002 by entry, $0003 by entry, $0002 by $127F, $0003 by $1287, $0002 by $133F, $0003 by $1347, $0002 by $1382, $0003 by $138A, $0002 by $139D, $0003 by $13A5, $0002 by $1412, $0003 by $141A, $0002 by $152D, $0003 by $1535"
+    ],
+    [
+     "$1B4C",
+     "objchk of Y in $1B55 by $1B4B"
     ]
    ]
   },
@@ -416,7 +881,7 @@
   "fuzz-fallthrough-1": {},
   "fuzz-fallthrough-2": {},
   "fuzz-unrolled-0": {
-   "D2": [
+   "unwritten-held": [
     [
      "$3021",
      "R0 $3021-$3026, $3028-$302D (12 B): R0@$103D"
@@ -424,7 +889,7 @@
    ]
   },
   "fuzz-unrolled-1": {
-   "D2": [
+   "unwritten-held": [
     [
      "$3041",
      "R2 $3041-$3046, $3048-$304D (12 B): R2@$103D"
@@ -436,7 +901,7 @@
    ]
   },
   "fuzz-unrolled-2": {
-   "D2": [
+   "unwritten-held": [
     [
      "$3061",
      "R3 $3061-$3066, $3068-$306D (12 B): R3@$103D"
@@ -444,7 +909,7 @@
    ]
   },
   "fuzz-smc-0": {
-   "D1": [
+   "code-as-data": [
     [
      "$105D",
      "C0 $105D-$1103 (167 B): C0@$103D"
@@ -452,7 +917,7 @@
    ]
   },
   "fuzz-smc-1": {
-   "D1": [
+   "code-as-data": [
     [
      "$103E",
      "C0 $103E-$10B6 (121 B): C0@$103F"
@@ -460,7 +925,7 @@
    ]
   },
   "fuzz-smc-2": {
-   "D1": [
+   "code-as-data": [
     [
      "$103E",
      "C0 $103E-$10C0 (131 B): C0@$103F"
@@ -500,7 +965,7 @@
  },
  "informational": {
   "commando": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -511,88 +976,52 @@
     ],
     [
      "$10AE",
-     "trap(8) objchk"
+     "trap(6) objchk"
     ],
     [
      "$10C9",
-     "trap(14) objchk"
+     "trap(10) objchk"
     ],
     [
      "$10DA",
-     "trap(13) objchk"
+     "trap(9) objchk"
     ],
     [
      "$110F",
-     "trap(15) objchk"
-    ],
-    [
-     "$1115",
-     "trap(16) objchk"
-    ],
-    [
-     "$111E",
-     "trap(18) objchk"
-    ],
-    [
-     "$1124",
-     "trap(19) objchk"
-    ],
-    [
-     "$112A",
-     "trap(20) objchk"
-    ],
-    [
-     "$1130",
-     "trap(21) objchk"
+     "trap(11) objchk"
     ],
     [
      "$1145",
-     "trap(22) objchk"
+     "trap(13) objchk"
     ],
     [
      "$117F",
      "trap(2) objchk"
     ],
     [
-     "$1185",
+     "$120C",
      "trap(4) objchk"
     ],
     [
-     "$118B",
-     "trap(5) objchk"
-    ],
-    [
-     "$120C",
-     "trap(6) objchk"
-    ],
-    [
      "$1212",
-     "trap(7) index"
+     "trap(5) index"
     ],
     [
      "$1241",
-     "trap(10) objchk"
-    ],
-    [
-     "$1245",
-     "trap(12) objchk"
+     "trap(8) objchk"
     ],
     [
      "$1258",
-     "trap(9) objchk"
-    ],
-    [
-     "$125F",
-     "trap(11) objchk"
+     "trap(7) objchk"
     ],
     [
      "$1275",
-     "trap(17) index"
+     "trap(12) index"
     ]
    ]
   },
   "incoherent": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$0800",
      "trap(0) entry"
@@ -606,36 +1035,28 @@
      "trap(3) objchk"
     ],
     [
-     "$0B97",
-     "trap(5) objchk"
-    ],
-    [
      "$0BA6",
      "trap(4) objchk"
     ],
     [
      "$0BB6",
-     "trap(6) objchk"
+     "trap(5) objchk"
     ],
     [
      "$0BBE",
-     "trap(8) objchk"
+     "trap(7) objchk"
     ],
     [
      "$0BEE",
-     "trap(7) objchk"
+     "trap(6) objchk"
     ]
    ]
   },
   "automatas": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$0FD0",
      "trap(0) entry"
-    ],
-    [
-     "$1146",
-     "trap(5) objchk"
     ],
     [
      "$1690",
@@ -663,11 +1084,11 @@
     ],
     [
      "$16D4",
-     "trap(17) objchk"
+     "trap(16) objchk"
     ],
     [
      "$16E0",
-     "trap(20) objchk"
+     "trap(18) objchk"
     ],
     [
      "$16EB",
@@ -682,33 +1103,25 @@
      "trap(13) objchk"
     ],
     [
-     "$170B",
-     "trap(16) objchk"
-    ],
-    [
-     "$171E",
-     "trap(18) objchk"
-    ],
-    [
      "$172F",
      "trap(15) objchk"
     ],
     [
      "$173A",
-     "trap(19) objchk"
+     "trap(17) objchk"
     ],
     [
      "$1745",
-     "trap(21) objchk"
+     "trap(19) objchk"
     ],
     [
      "$1748",
-     "trap(22) objchk"
+     "trap(20) objchk"
     ]
    ]
   },
   "ghouls": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$299B",
      "trap(0) index implied by the entry guard"
@@ -735,12 +1148,12 @@
     ],
     [
      "$6ACA",
-     "trap(9) objchk"
+     "trap(8) objchk"
     ]
    ]
   },
   "emomyst": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -759,23 +1172,19 @@
     ],
     [
      "$1338",
-     "trap(21) objchk"
+     "trap(13) objchk"
     ],
     [
      "$1341",
-     "trap(26) objchk"
-    ],
-    [
-     "$1349",
-     "trap(29) objchk"
+     "trap(15) objchk"
     ],
     [
      "$137B",
-     "trap(27) objchk"
+     "trap(16) objchk"
     ],
     [
      "$1384",
-     "trap(32) objchk"
+     "trap(18) objchk"
     ],
     [
      "$1396",
@@ -787,15 +1196,15 @@
     ],
     [
      "$140B",
-     "trap(44) objchk"
+     "trap(20) objchk"
     ],
     [
      "$1414",
-     "trap(45) objchk"
+     "trap(21) objchk"
     ],
     [
      "$149F",
-     "trap(51) objchk"
+     "trap(26) objchk"
     ],
     [
      "$1526",
@@ -807,48 +1216,48 @@
     ],
     [
      "$1731",
-     "trap(40) objchk"
+     "trap(47) objchk"
     ],
     [
      "$173B",
-     "trap(41) objchk"
+     "trap(48) objchk"
     ],
     [
      "$1753",
-     "trap(42) objchk"
+     "trap(49) objchk"
     ],
     [
      "$175A",
-     "trap(43) objchk"
+     "trap(50) objchk"
     ],
     [
      "$1947",
-     "trap(62) index"
+     "trap(55) index"
     ],
     [
      "$1A46",
-     "trap(66) objchk"
+     "trap(58) objchk"
     ],
     [
      "$1B22",
-     "trap(69) objchk"
+     "trap(61) objchk"
     ],
     [
      "$1B2D",
-     "trap(75) objchk"
+     "trap(67) objchk"
     ],
     [
      "$1B45",
-     "trap(71) objchk"
+     "trap(63) objchk"
     ],
     [
      "$1B4C",
-     "trap(70) objchk"
+     "trap(62) objchk"
     ]
    ]
   },
   "fuzz-loop-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -856,7 +1265,7 @@
    ]
   },
   "fuzz-loop-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -864,7 +1273,7 @@
    ]
   },
   "fuzz-loop-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -872,7 +1281,7 @@
    ]
   },
   "fuzz-jsr3-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -880,7 +1289,7 @@
    ]
   },
   "fuzz-jsr3-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -888,7 +1297,7 @@
    ]
   },
   "fuzz-jsr3-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -896,7 +1305,7 @@
    ]
   },
   "fuzz-fallthrough-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -904,7 +1313,7 @@
    ]
   },
   "fuzz-fallthrough-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -912,7 +1321,7 @@
    ]
   },
   "fuzz-fallthrough-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -920,7 +1329,7 @@
    ]
   },
   "fuzz-unrolled-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -928,7 +1337,7 @@
    ]
   },
   "fuzz-unrolled-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -936,7 +1345,7 @@
    ]
   },
   "fuzz-unrolled-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -944,7 +1353,7 @@
    ]
   },
   "fuzz-smc-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -952,7 +1361,7 @@
    ]
   },
   "fuzz-smc-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -960,7 +1369,7 @@
    ]
   },
   "fuzz-smc-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -968,7 +1377,7 @@
    ]
   },
   "fuzz-rti-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -976,7 +1385,7 @@
    ]
   },
   "fuzz-rti-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -984,7 +1393,7 @@
    ]
   },
   "fuzz-rti-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -992,7 +1401,7 @@
    ]
   },
   "fuzz-brk-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1000,7 +1409,7 @@
    ]
   },
   "fuzz-brk-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1008,7 +1417,7 @@
    ]
   },
   "fuzz-brk-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1016,7 +1425,7 @@
    ]
   },
   "fuzz-stackswitch-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1024,7 +1433,7 @@
    ]
   },
   "fuzz-stackswitch-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1032,7 +1441,7 @@
    ]
   },
   "fuzz-stackswitch-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1040,7 +1449,7 @@
    ]
   },
   "fuzz-inlineargs-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1048,7 +1457,7 @@
    ]
   },
   "fuzz-inlineargs-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1056,7 +1465,7 @@
    ]
   },
   "fuzz-inlineargs-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1064,7 +1473,7 @@
    ]
   },
   "fuzz-skip-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1072,7 +1481,7 @@
    ]
   },
   "fuzz-skip-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1080,7 +1489,7 @@
    ]
   },
   "fuzz-skip-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1088,7 +1497,7 @@
    ]
   },
   "fuzz-decimal-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1096,7 +1505,7 @@
    ]
   },
   "fuzz-decimal-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1104,7 +1513,7 @@
    ]
   },
   "fuzz-decimal-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1112,7 +1521,7 @@
    ]
   },
   "fuzz-rmw-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1120,7 +1529,7 @@
    ]
   },
   "fuzz-rmw-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1128,7 +1537,7 @@
    ]
   },
   "fuzz-rmw-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1136,7 +1545,7 @@
    ]
   },
   "fuzz-vflag-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1144,7 +1553,7 @@
    ]
   },
   "fuzz-vflag-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1152,7 +1561,7 @@
    ]
   },
   "fuzz-vflag-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1160,7 +1569,7 @@
    ]
   },
   "fuzz-indx-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1168,7 +1577,7 @@
    ]
   },
   "fuzz-indx-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1176,7 +1585,7 @@
    ]
   },
   "fuzz-indx-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1184,7 +1593,7 @@
    ]
   },
   "fuzz-jam-0": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1196,7 +1605,7 @@
    ]
   },
   "fuzz-jam-1": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"
@@ -1208,7 +1617,7 @@
    ]
   },
   "fuzz-jam-2": {
-   "C1g": [
+   "invalid-input-guard": [
     [
      "$1000",
      "trap(0) entry"

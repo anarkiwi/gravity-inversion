@@ -33,24 +33,24 @@ import fuzzplayer
 from constructs import ROOT, load, memory
 from disasm import coverage
 from sidtrace import psid_parts
+from procedures import shared_tails
+from trapclass import GUARD, trap_class
 from transliterate import c64_init, transliterate
 
-KINDS = ("D1", "D2", "D3", "D4", "A1", "A2", "A3", "C1", "C1r", "C2", "C3", "E1", "E2")
-#: The informational kind: traps guarding invalid input, listed but no residue.
-GUARD = "C1g"
+KINDS = tuple(
+    "code-as-data unwritten-held hull-gap replayed-init address-dispatch address-value "
+    "flags-value deopt implied-guard goto stray-function constant-voice extra-decisions "
+    "duplicate-code duplicate-check".split()
+)
 #: Kinds no site of which the generated C and `info` let the census attribute.
 UNDETECTABLE = {
-    "D3": "needs each access's address set and the instruction of each C access "
+    "hull-gap": "needs each access's address set and the instruction of each C access "
     "(info has neither)",
 }
-#: trap_info guard kinds that trap input the original's meaning does not define.
-GUARD_KINDS = frozenset(("entry", "objchk", "window", "jam"))
 #: The child holding a statement's condition, by statement kind.
 CONDITION = dict.fromkeys(("IfStmt", "WhileStmt", "ConditionalOperator"), 0)
 CONDITION.update(DoStmt=1, ForStmt=2)
 #: Statements after which control does not reach the next.
-#: Extents of an `index` guard's table that end the data it indexes.
-DATA_ENDS = frozenset(("loaded", "object", "code", "column"))
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
 SEEDS = range(3)
 FUZZ = tuple(f"fuzz-{s}-{n}" for s in fuzzplayer.STYLES for n in SEEDS)
@@ -119,37 +119,6 @@ def cell_role(a, s, mnemonic, mode):
     if mode == "rel" or mnemonic in ("JMP", "JSR"):
         return "transfer"
     return "address"
-
-
-def _guards_input(g):
-    """Whether a trap_info guard traps input the original does not define: an entry
-    register outside its declared values, a pointer outside its object or window, a JAM, an
-    index past the end of the data its table is (docs/residue.md)."""
-    if g["kind"] in GUARD_KINDS:
-        return True
-    return (
-        g["kind"] == "index"
-        and bool(g["tables"])
-        and all(t["by"] in DATA_ENDS for t in g["tables"])
-    )
-
-
-def trap_class(meta):
-    """(kind, detail) of a trap from its trap_info: C1g implied by the entry guard alone or
-    every guard on invalid input, C1r otherwise implied or proven, else C1."""
-    if meta is None:
-        return "C1", "no trap_info"
-    kind = meta["kind"]
-    if meta["implied_by"] == ["entry"]:
-        return GUARD, f"{kind} implied by the entry guard"
-    if meta["implied_by"] is not None:
-        by = ", ".join(f"trap({k})" for k in meta["implied_by"]) or "constants"
-        return "C1r", f"{kind} implied by {by}"
-    if meta["proven"]:
-        return "C1r", f"{kind} proven"
-    if meta["guards"] and all(_guards_input(g) for g in meta["guards"]):
-        return GUARD, kind
-    return "C1", kind
 
 
 class Lift(NamedTuple):
@@ -370,9 +339,9 @@ class Census:  # pylint: disable=too-many-instance-attributes
                 mask[s : s + int(LEN[mem[s]])] = True
         return mask
 
-    def d1_d2(self):
-        """D1 instruction bytes held in a data array; D2 bytes held outside the image that
-        init does not write and no store of the C may reach."""
+    def held_bytes(self):
+        """code-as-data: instruction bytes held in a data array; unwritten-held: bytes held
+        outside the image that init does not write and no store of the C may reach."""
         cov = self._init_cov()
         code = self._instruction_mask(cov)
         stored = np.zeros(0x10000, bool)
@@ -383,7 +352,10 @@ class Census:  # pylint: disable=too-many-instance-attributes
         unwritten[IO[0] : IO[1]] = False
         out = []
         for name, m in self._held_mask().items():
-            for kind, mask in (("D1", m & code), ("D2", m & unwritten)):
+            for kind, mask in (
+                ("code-as-data", m & code),
+                ("unwritten-held", m & unwritten),
+            ):
                 cause = {}
                 for lo, hi in cflow.runs(mask):
                     cause.setdefault(self._readers(lo, hi), []).append((lo, hi))
@@ -396,10 +368,10 @@ class Census:  # pylint: disable=too-many-instance-attributes
                     out.append(Site(kind, rs[0][0], f"{name} {spans} ({n} B): {who}"))
         return out
 
-    def d4(self):
+    def replayed_init(self):
         """Init's effect replayed from tables instead of translated."""
         return [
-            Site("D4", self.init, f"{self.defs[k]} {what}")
+            Site("replayed-init", self.init, f"{self.defs[k]} {what}")
             for k, what in INIT_TABLES.items()
             if self.defs.get(k)
         ]
@@ -423,10 +395,13 @@ class Census:  # pylint: disable=too-many-instance-attributes
         return self._cells
 
     def counted(self):
-        """[(Cell, where its role is counted)]: A1, A2, C3 or plain state."""
+        """[(Cell, where its role is counted)]: address-dispatch, address-value,
+        extra-decisions or plain state."""
         sites = self.sites()
-        a2 = {s.pc for s in sites if s.kind == "A2"}
-        c3 = {s.detail.split()[2] for s in sites if s.detail.startswith("opcode cell")}
+        valued = {s.pc for s in sites if s.kind == "address-value"}
+        tested = {
+            s.detail.split()[2] for s in sites if s.detail.startswith("opcode cell")
+        }
         out = []
         for c in self.cells():
             if (
@@ -434,11 +409,11 @@ class Census:  # pylint: disable=too-many-instance-attributes
                 and c.reached
                 or (c.role == "address" and c.insn in self._via)
             ):
-                where = "A1"
+                where = "address-dispatch"
             elif c.role == "transfer":
-                where = "A2" if c.insn in a2 else "state"
+                where = "address-value" if c.insn in valued else "state"
             else:
-                where = "C3" if c.lv in c3 else "state"
+                where = "extra-decisions" if c.lv in tested else "state"
             out.append((c, where))
         return out
 
@@ -495,7 +470,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
                     out.append(s)
         return out
 
-    def a1(self):
+    def address_dispatch(self):
         """Address dispatch: calls of cgen's dispatchers (one through address operand cells
         at each of their instructions), subscripts by a 16-bit machine address and cells
         reached by address."""
@@ -516,14 +491,17 @@ class Census:  # pylint: disable=too-many-instance-attributes
                     pcs = set().union(*(pointers.get(v, ()) for v in names))
                     self._via |= pcs
                     per_fn.setdefault(fn, []).extend(
-                        Site("A1", pc, what) for pc in sorted(pcs or {self._at(fn)})
+                        Site("address-dispatch", pc, what)
+                        for pc in sorted(pcs or {self._at(fn)})
                     )
                 elif kind == "ArraySubscriptExpr" and self._machine_index(n):
                     what = "subscript by address " + cflow.norm(self.unit.src(n))
-                    per_fn.setdefault(fn, []).append(Site("A1", self._at(fn), what))
+                    per_fn.setdefault(fn, []).append(
+                        Site("address-dispatch", self._at(fn), what)
+                    )
         transfers = {c.insn for c in self.cells() if c.role == "transfer"}
         return self._once(per_fn) + [
-            Site("A1", c.at, f"{c.lv} reached by address")
+            Site("address-dispatch", c.at, f"{c.lv} reached by address")
             for c in self.cells()
             if c.reached and c.insn not in transfers
         ]
@@ -591,7 +569,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
         cand = [p for p in cand if len(jumps[p] - cases) == best]
         return cand[0] if len(cand) == 1 else None
 
-    def a2(self):
+    def address_value(self):
         """Machine addresses as values: CODE_ORG/IMG_ORG in tune code (a switch over code
         addresses one site) and the operand cells of transfers without such a switch."""
         out = set()
@@ -615,7 +593,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
                 addr = (
                     f"${v:04X}" if v is not None else cflow.norm(self.unit.src(inner))
                 )
-                out.add(Site("A2", self._at(fn), f"{use} {addr}"))
+                out.add(Site("address-value", self._at(fn), f"{use} {addr}"))
             for sw in switches.values():
                 cases = {
                     cflow.constant(c["inner"][0])
@@ -625,16 +603,16 @@ class Census:  # pylint: disable=too-many-instance-attributes
                 pc = self._switch_pc(cases)
                 out.add(
                     Site(
-                        "A2",
+                        "address-value",
                         self._at(fn) if pc is None else pc,
                         f"switch over {len(cases)} code addresses",
                     )
                 )
         switched = {s.pc for s in out if s.detail.startswith("switch over")}
-        cells = self._cell_sites("A2", "transfer", "transfer operand")
+        cells = self._cell_sites("address-value", "transfer", "transfer operand")
         return sorted(out | {s for s in cells if s.pc not in switched})
 
-    def a3(self):
+    def flags_value(self):
         """The status register packed as a byte: an `|` of the constant bits $30 with
         shifted flags."""
         per_fn = {}
@@ -649,13 +627,16 @@ class Census:  # pylint: disable=too-many-instance-attributes
                 if any(cflow.constant(x) == 0x30 for x in leaves) and any(
                     cflow.strip(x, WRAPS).get("opcode") == "<<" for x in leaves
                 ):
-                    site = Site("A3", self._at(fn), cflow.norm(self.unit.src(n)))
+                    site = Site(
+                        "flags-value", self._at(fn), cflow.norm(self.unit.src(n))
+                    )
                     per_fn.setdefault(fn, []).append(site)
         return self._once(per_fn)
 
-    def c1(self):
+    def traps(self):
         """Each trap of the C once, by what it stands for (`trap_info`): a translatable
-        deopt (C1), a redundant guard (C1r) or a guard on invalid input (C1g)."""
+        deopt, a redundant guard (implied-guard) or a guard on invalid input
+        (invalid-input-guard)."""
         traps = {int(k): v for k, v in self.info["traps"].items()}
         meta = {int(k): v for k, v in self.info.get("trap_info", {}).items()}
         out = {}
@@ -664,43 +645,44 @@ class Census:  # pylint: disable=too-many-instance-attributes
                 if n.get("kind") == "CallExpr" and costs.callee(n) == "trap":
                     k = cflow.constant(n["inner"][1])
                     if k not in out and k not in traps:
-                        out[k] = Site("C1", self._at(fn), f"trap({k}) untabled")
+                        out[k] = Site("deopt", self._at(fn), f"trap({k}) untabled")
                     elif k not in out:
                         kind, why = trap_class(meta.get(k))
                         out[k] = Site(kind, traps[k][1], f"trap({k}) {why}")
         return list(out.values())
 
-    def c2(self):
-        """Gotos beyond the construct map's, functions for no procedure of the original,
-        voice registers written at constant addresses."""
-        prov = self.info["provenance"]
-        gotos = {tuple(e) for e in prov["gotos"]}
-        mapped = self._mapped_gotos()
-        out = [Site("C2", a, f"goto ${b:04X}") for a, b in sorted(gotos - mapped)]
-        procs = self._procedures()
-        out += [
-            Site("C2", f["entry"], f"function {n} at no procedure entry")
-            for n, f in sorted(prov["functions"].items(), key=lambda x: x[1]["entry"])
+    def gotos(self):
+        """Gotos beyond the construct map's."""
+        gotos = {tuple(e) for e in self.info["provenance"]["gotos"]}
+        return [
+            Site("goto", a, f"goto ${b:04X}")
+            for a, b in sorted(gotos - self._mapped_gotos())
+        ]
+
+    def stray_functions(self):
+        """Functions for no procedure nor shared tail of the original."""
+        fns = self.info["provenance"]["functions"]
+        bounded = shared_tails(self.post_init, self.info, self._procedures())
+        return [
+            Site("stray-function", f["entry"], f"function {n} at no procedure entry")
+            for n, f in sorted(fns.items(), key=lambda x: x[1]["entry"])
             if n in self.nodes
             and not f["index"]
-            and f["entry"] not in procs
+            and f["entry"] not in bounded
             and not self._jsr_dispatch(f)
-            and not self._tail_called(n, f)
         ]
-        if self.tune is None:
-            return out
-        regs = set(VOICE_REGS[self.tune])
-        for fn, nodes in self.nodes.items():
-            for n, _ in nodes:
-                if n.get("kind") == "CallExpr" and costs.callee(n) == "io_write":
-                    a = cflow.leading(n["inner"][1])
-                    if a in regs:
-                        out.append(
-                            Site(
-                                "C2", self._at(fn), f"voice register ${a:04X} constant"
-                            )
-                        )
-        return out
+
+    def constant_voices(self):
+        """Voice registers written at constant addresses."""
+        regs = set() if self.tune is None else set(VOICE_REGS[self.tune])
+        return [
+            Site("constant-voice", self._at(fn), f"voice register ${a:04X} constant")
+            for fn, nodes in self.nodes.items()
+            for n, _ in nodes
+            if n.get("kind") == "CallExpr"
+            and costs.callee(n) == "io_write"
+            and (a := cflow.leading(n["inner"][1])) in regs
+        ]
 
     def _procedures(self):
         """The original's procedure entries: init, play and every target of a JSR of the
@@ -728,18 +710,6 @@ class Census:  # pylint: disable=too-many-instance-attributes
             for s in edges
         )
 
-    def _tail_called(self, name, f):
-        """Whether a function returning by RTS is called, and only in tail position."""
-        calls = [
-            n
-            for nodes in self.nodes.values()
-            for n, _ in nodes
-            if n.get("kind") == "CallExpr" and costs.callee(n) == name
-        ]
-        return any(int(self.post_init[p]) == RTS for p in f["pcs"]) and all(
-            cflow.tail(self.unit.parent, n) for n in calls or [None]
-        )
-
     def _mapped_gotos(self):
         """The construct map's goto edges from the lifted code (none without a map)."""
         if self.tune is None:
@@ -753,10 +723,10 @@ class Census:  # pylint: disable=too-many-instance-attributes
             if e[0] in starts
         }
 
-    def c3(self):
+    def extra_decisions(self):
         """Decision points that are no original branch: tests of an opcode cell, and per
-        function those beyond the original's branches (trap tests are C1's, bounds tests
-        before a dispatcher A1's)."""
+        function those beyond the original's branches (a trap test counts as its trap, a
+        bounds test before a dispatcher as address-dispatch)."""
         starts = set(self.info["starts"])
         opcode_cells = {
             lv for lv, a in self.info["state"]["vars"].items() if a in starts
@@ -774,7 +744,9 @@ class Census:  # pylint: disable=too-many-instance-attributes
                     if cells and not set(cells) <= flags:
                         cell = next(c for c in cells if c not in flags)
                         a = self.info["state"]["vars"][cell]
-                        out.append(Site("C3", a, f"opcode cell {cell} tested"))
+                        out.append(
+                            Site("extra-decisions", a, f"opcode cell {cell} tested")
+                        )
                     elif cells:
                         atoms, tested = atoms + 1, tested + 1
                     elif not cflow.arm_calls(n, DISPATCH):
@@ -788,7 +760,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
             if atoms > branches:
                 out.append(
                     Site(
-                        "C3",
+                        "extra-decisions",
                         self._at(fn),
                         f"{atoms} decision points, {branches} original branches",
                     )
@@ -834,8 +806,10 @@ class Census:  # pylint: disable=too-many-instance-attributes
 
     def sites(self):
         """Every residue site of the lift, sorted."""
-        found = self.d1_d2() + self.d4() + self.a1() + self.a2() + self.a3()
-        found += self.c1() + self.c2() + self.c3() + emission.sites(self.info, Site)
+        found = self.held_bytes() + self.replayed_init() + self.address_dispatch()
+        found += self.address_value() + self.flags_value() + self.traps()
+        found += self.gotos() + self.stray_functions() + self.constant_voices()
+        found += self.extra_decisions() + emission.sites(self.info, Site)
         order = KINDS + (GUARD,)
         return sorted(found, key=lambda s: (order.index(s.kind), s.pc, s.detail))
 
