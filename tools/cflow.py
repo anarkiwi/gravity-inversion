@@ -44,6 +44,7 @@ BINARY = {
 RET = "return"
 BREAKS = ("SwitchStmt", *LOOPS)
 LOGICAL = frozenset(("&&", "||", "!"))
+LEAVES = frozenset(("ContinueStmt", "BreakStmt", "ReturnStmt", "GotoStmt"))
 WRAPS = ("ParenExpr", *CASTS, "ConstantExpr")
 BODIES = ("IfStmt", "SwitchStmt", "CaseStmt", "DefaultStmt", "LabelStmt")
 
@@ -824,6 +825,14 @@ def last_stmt(stmt):
     while stmt.get("kind") == "CompoundStmt" and stmt.get("inner"):
         stmt = stmt["inner"][-1]
     return stmt
+
+
+def after_if(n, up):
+    """The statement after an `if` without `else` whose arm leaves (none otherwise)."""
+    if len(n["inner"]) != 2 or last_stmt(n["inner"][1]).get("kind") not in LEAVES:
+        return []
+    rest = up["inner"] if up and up.get("kind") == "CompoundStmt" else []
+    return rest[next((i + 1 for i, s in enumerate(rest) if s is n), len(rest)) :][:1]
 
 
 def outer(parent, n):

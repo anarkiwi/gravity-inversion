@@ -77,11 +77,12 @@ fall-through enters it. Any other function (a shared tail the C does not call in
 position, or one that returns by no `RTS` of its own) cuts the original's procedure where it
 has no boundary.
 
-An opcode cell is a **flag** when `info` bounds the values the program writes to it: an
-`opcode` guard of `trap_info` checks it (`addr`), its `ok` the values the C takes as the
-program's own and a trap (C1) the rest. Testing a flag is the original's decision, an atom
-and an original branch of its function. An opcode cell of unknown values is a site: the C
-would interpret opcodes.
+An opcode cell is a **flag** when `info` bounds the values the program writes to it: its
+entry in `state.opcodes` has a finite value set (`values`, which the C tests and assigns by
+the names in `enum`), or, failing one, an `opcode` guard of `trap_info` checks it (`addr`),
+its `ok` the values the C takes as the program's own and a trap (C1) the rest. Testing a
+flag is the original's decision, an atom and an original branch of its function. An opcode
+cell of unknown values is a site: the C would interpret opcodes.
 
 C3's atoms are the leaves of `&&`, `\|\|` and `!` (through casts and a comma's value) of each
 `if`, `while`, `do`, `for` and `?:` condition, non-constant, and one per `switch`; a test with
@@ -163,9 +164,6 @@ causes name the rest, which are lift residue.
   bytes inside an access's hull that its address set lacks) is not detected.
 - Each folded copy's instructions (`copy_pcs`): C3 compares a folded function's atoms with
   all its copies' branches.
-- The value set of an opcode cell no `opcode` guard checks: such a cell's test is a C3 site
-  although the lift may know its values (they are no `info` key; the C's own stores to a cell
-  `cgen_var` reaches are not all its writes).
 - Which instruction consumes a pushed status byte (a push to pull pairing of the stack, and
   each A3 expression's `PHP`, `BRK` or interrupt): A3 counts every composed status byte,
   a `PLP`/`RTI` round trip and one the program reads as data alike.

@@ -49,7 +49,6 @@ GUARD_KINDS = frozenset(("entry", "objchk", "window", "jam"))
 CONDITION = dict.fromkeys(("IfStmt", "WhileStmt", "ConditionalOperator"), 0)
 CONDITION.update(DoStmt=1, ForStmt=2)
 #: Statements after which control does not reach the next.
-LEAVES = frozenset(("ContinueStmt", "BreakStmt", "ReturnStmt", "GotoStmt"))
 #: Extents of an `index` guard's table that end the data it indexes.
 DATA_ENDS = frozenset(("loaded", "object", "code", "column"))
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
@@ -777,9 +776,14 @@ class Census:  # pylint: disable=too-many-instance-attributes
         return out
 
     def _flag_cells(self):
-        """The opcode cells whose value set `info` bounds: each an `opcode` guard checks
-        (trap_info), its `ok` the values the C takes as the program's, a trap the rest.
-        """
+        """The opcode cells whose value set `info` bounds: each with a finite value set in
+        `state.opcodes`, else one an `opcode` guard checks (trap_info), its `ok` the values
+        the C takes as the program's, a trap the rest."""
+        valued = {
+            int(a)
+            for a, o in self.info["state"].get("opcodes", {}).items()
+            if o.get("values")
+        }
         guarded = [
             g["addr"]
             for t in self.info.get("trap_info", {}).values()
@@ -789,7 +793,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
         return {
             lv
             for lv, a in self.info["state"]["vars"].items()
-            if any(lo <= a <= hi for lo, hi in guarded)
+            if a in valued or any(lo <= a <= hi for lo, hi in guarded)
         }
 
     def _decisions(self, n, up=None):
@@ -799,7 +803,9 @@ class Census:  # pylint: disable=too-many-instance-attributes
         kind, inner = n.get("kind"), n.get("inner", ())
         if kind == "SwitchStmt":
             return [inner[0]]
-        if kind == "IfStmt" and any(_traps(s) for s in inner[1:] + _after(n, up)):
+        if kind == "IfStmt" and any(
+            _traps(s) for s in inner[1:] + cflow.after_if(n, up)
+        ):
             return []
         at = CONDITION.get(kind)
         if at is None or at >= len(inner) or not inner[at]:
@@ -818,14 +824,6 @@ def _traps(stmt):
     """Whether a statement starts with a trap call."""
     s = cflow.first(stmt)
     return s.get("kind") == "CallExpr" and costs.callee(s) == "trap"
-
-
-def _after(n, up):
-    """The statement after an `if` without `else` whose arm leaves (none otherwise)."""
-    if len(n["inner"]) != 2 or cflow.last_stmt(n["inner"][1]).get("kind") not in LEAVES:
-        return []
-    rest = up["inner"] if up and up.get("kind") == "CompoundStmt" else []
-    return rest[next((i + 1 for i, s in enumerate(rest) if s is n), len(rest)) :][:1]
 
 
 def _dispatch_guard(n):

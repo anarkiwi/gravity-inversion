@@ -1,6 +1,6 @@
 {
  "pins": {
-  "deity-informant": "0.40.5",
+  "deity-informant": "0.40.9",
   "vagrant-moses": "0.17.0",
   "jennings": "0.14.1",
   "pysidtracker": "0.61.0"
@@ -9,7 +9,6 @@
   "automatas": {
    "A1": "the reads through each row copy's operand pointers (the V1_f21, V1_f3C/f3D, V1_f4A/f4B and V1_f58/f59 cells of $1149, $1164, $1172, $1180 and their copies at $11D1-$1208 and $1259-$1290), advanced by its row's length, through span C2's bounds-checked reader at each copy's instruction: their values are bounded to a byte, not to a table",
    "C1g": "init's song guard: A outside the PSID header's songs (by construction); $1690-$1748 the pointer reads whose addresses the machine model bounds to the loaded object they point into (objchk, def machine), trapping an address outside it",
-   "C3": "patched opcode cells tested against their opcodes, ADC or SBC ($10B8, $10BF), ASL A or NOP ($10D4, set by init's SID model probe, the store at $14F9) and RTS ($10D8), instead of selecting the operation by the state that patches them; no opcode guard bounds their values",
    "D1": "span C1 $1554-$1713 holds play's code $168C-$1713, which the reads at $0FE3 and $1022 (the note reads at $1426/$143F) indexed by a note byte reach; span C0 $1020-$1083 holds the voice copies' gate bit and mask bytes ($1020-$1021 at the copies' $31 stride), constant after init and read at $12BE by voice index, and the copies' code $1022-$1049 and $1053-$107A between them"
   },
   "commando": {
@@ -168,24 +167,6 @@
     [
      "$1290",
      "rdC2(((uint16_t)V1_f59[v1] << 8) | V1_f58[v1], v11)"
-    ]
-   ],
-   "C3": [
-    [
-     "$10B8",
-     "opcode cell S_D5 tested"
-    ],
-    [
-     "$10BF",
-     "opcode cell S_DC tested"
-    ],
-    [
-     "$10D4",
-     "opcode cell S_F1 tested"
-    ],
-    [
-     "$10D8",
-     "opcode cell S_F5 tested"
     ]
    ]
   },
