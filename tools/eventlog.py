@@ -59,11 +59,11 @@ def song_mask(psid, starts=()):
 
 
 def origins(h_text):
-    """``{array: origin}`` of the regions, held spans and code span a cgen .h defines."""
+    """``{array: origin}`` of the blocks, regions, held spans and code span a cgen .h defines."""
     return {
         m[1]: int(m[2], 16)
         for m in ORG.finditer(h_text)
-        if re.fullmatch(r"[CR]\d+|CODE", m[1])
+        if re.fullmatch(r"[BCR]\d+|CODE", m[1])
     }
 
 

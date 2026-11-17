@@ -7,6 +7,8 @@ import operator
 import re
 from collections import defaultdict
 
+import numpy as np
+
 from costs import callee, walk
 
 IO = range(0xD000, 0xE000)
@@ -857,6 +859,75 @@ def switch_of(parent, n):
             return up
         prev, up = up, parent.get(up["id"])
     return None
+
+
+def norm(text):
+    """C text with its whitespace collapsed."""
+    return " ".join(text.split())
+
+
+def runs(mask):
+    """[(first, last)] of the runs of True in a boolean array."""
+    edges = np.flatnonzero(np.diff(np.concatenate(([0], mask.view(np.int8), [0]))))
+    return [(int(a), int(b) - 1) for a, b in zip(edges[::2], edges[1::2])]
+
+
+def clip(lo, hi):
+    """[lo, hi] clipped to 16-bit addresses."""
+    return max(lo, 0), min(hi, 0xFFFF)
+
+
+def calls(stmt, callees):
+    """Whether a statement starts with a call of one of `callees`."""
+    s = first(stmt)
+    return s.get("kind") == "CallExpr" and callee(s) in callees
+
+
+def arm_calls(n, callees):
+    """Whether an `if` or conditional has an arm that starts with a call of one of
+    `callees`."""
+    if n.get("kind") not in ("IfStmt", "ConditionalOperator"):
+        return False
+    return any(calls(a, callees) for a in n["inner"][1:])
+
+
+def guard(parent, node, pattern):
+    """The integer group of the first call matching `pattern` in the condition of an `if`
+    enclosing a node (an object check guarding the read), or None."""
+    while (up := parent.get(node["id"])) is not None:
+        if up.get("kind") == "IfStmt" and up["inner"][0] is not node:
+            for n, _ in walk(up["inner"][0]):
+                if n.get("kind") == "CallExpr" and (
+                    m := pattern.match(callee(n) or "")
+                ):
+                    return int(m[1])
+        node = up
+    return None
+
+
+def array_name(unit, node, defs):
+    """The header array a pointer expression names (a slice macro's name as spelled), or
+    None."""
+    text = " ".join(unit.src(node).split()).strip("() ")
+    if f"{text}_ORG" in defs:
+        return text
+    name = strip(node, WRAPS).get("referencedDecl", {}).get("name")
+    return name if f"{name}_ORG" in defs else None
+
+
+def objects(header, defs):
+    """{j: [(lo, hi)]} of the objects a `cgen_out<j>` check admits: `CGEN_OBJ<j>_LO` and
+    `_LIM` lists (or `_ORG` and `_LIM` values), each run from `lo` to `lo + lim`."""
+    out = {}
+    for j in sorted(
+        {int(m) for m in re.findall(r"^#define CGEN_OBJ(\d+)_LIM", header, re.M)}
+    ):
+        los = [int(x, 0) for x in header_list(header, f"CGEN_OBJ{j}_LO")] or [
+            defs[f"CGEN_OBJ{j}_ORG"]
+        ]
+        lims = [int(x, 0) for x in header_list(header, f"CGEN_OBJ{j}_LIM")]
+        out[j] = [(lo, lo + lim) for lo, lim in zip(los, lims)]
+    return out
 
 
 def header_list(header, name):
