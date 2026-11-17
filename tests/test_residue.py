@@ -368,15 +368,53 @@ def test_traps(found):
     ]
 
 
-def test_implied_table(lift, monkeypatch):
-    """A trap IMPLIED records is C1r with its derivation."""
-    monkeypatch.setattr(residue, "IMPLIED", {(None, 0x100D): "by the song guard"})
-    assert (0x100D, "trap(6) index implied by the song guard") in _found(lift)["C1r"]
+def test_implied_by_entry():
+    """A trap only the entry guard implies is C1g, named by the entry guard; one other traps
+    or constants imply is C1r."""
+    assert residue.trap_class(_trap("index", [_guard("index")], implied=["entry"])) == (
+        residue.GUARD,
+        "index implied by the entry guard",
+    )
+    assert residue.trap_class(_trap("index", [], implied=["entry", 3]))[0] == "C1r"
     assert residue.trap_class(_trap("entry", [], implied=[])) == (
         "C1r",
         "entry implied by constants",
     )
     assert residue.trap_class(_trap("index", [_guard("index")]))[0] == "C1"
+
+
+def test_machine_objchk():
+    """An objchk guard of the machine model's rule (`def` machine) is C1g."""
+    g = dict(_guard("objchk"), **{"def": "machine"})
+    assert residue.trap_class(_trap("objchk", [g])) == (residue.GUARD, "objchk")
+    assert residue.trap_class(_trap("mixed", [g, _guard("index")]))[0] == "C1"
+
+
+def _ref(name):
+    return {"kind": "DeclRefExpr", "referencedDecl": {"id": name, "name": name}}
+
+
+def _if(*arms):
+    return {"kind": "IfStmt", "inner": [_ref("v1"), *arms]}
+
+
+def test_guard_after_leaving_arm():
+    """A test whose arm leaves and whose next statement traps decides nothing; one whose arm
+    falls through, or that the statement after does not trap, decides its condition."""
+    trap = {"kind": "CallExpr", "inner": [_ref("trap")]}
+    leave = {"kind": "CompoundStmt", "inner": [{"kind": "ContinueStmt"}]}
+    fall = {"kind": "CompoundStmt", "inner": [{"kind": "NullStmt"}]}
+    decide = residue.Census._decisions  # pylint: disable=protected-access
+
+    def decided(n, *rest):
+        return len(decide(None, n, {"kind": "CompoundStmt", "inner": [n, *rest]}))
+
+    assert decided(_if(leave), trap) == 0
+    assert decided(_if(fall), trap) == 1
+    assert decided(_if(leave), fall) == 1
+    assert decided(_if(leave)) == 1
+    assert decided(_if(leave, fall), trap) == 1
+    assert len(decide(None, _if(leave), None)) == 1
 
 
 def test_control(found):

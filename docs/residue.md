@@ -50,10 +50,10 @@ program's meaning: the accesses through it count where they are printed as resid
 | A2 machine addresses as values | a literal spelled `CODE_ORG` or `IMG_ORG`: one site per switch whose condition or case labels hold one, else per (function, use, address) of the `+`/`-` expression around it; each instruction with a transfer operand cell and no such switch | a switch: the printed switch (`info["provenance"]["switches"]`) whose computed jump's targets (`info["jumps"]`) hold the cases with the fewest others, if one; else function entry; the instruction | `switch over n code addresses`, `compared`/`stored`/`argument`/`value` and the address, or `transfer operand of $pc: cells` |
 | A3 status register as a value | a maximal `\|` expression one of whose operands is the constant `0x30` and another a `<<` | function entry | the expression |
 | C1 translatable deopt | a trap of `info["traps"]` whose `trap_info` is neither C1r nor C1g, or untabled | the trap's pc; function entry if untabled | `trap(k)` and its kind |
-| C1r redundant guard | a trap whose `trap_info` has `implied_by` set or is `proven`, or one `IMPLIED` records | the trap's pc | `trap(k)`, kind, what implies it |
+| C1r redundant guard | a trap whose `trap_info` has `implied_by` set to more than the entry guard or is `proven` | the trap's pc | `trap(k)`, kind, what implies it |
 | C2 unstructured control | a goto edge of `info["provenance"]["gotos"]` that is no edge of the tune's construct map (`tunes/<tune>/constructs.json` `goto` entries from lifted code; any goto for a PSID or fuzz player); a function of no procedure of the original; an `io_write` whose address starts with a constant voice register of the tune (`VOICE_REGS`) | the edge's source; the function's entry; function entry | `goto` target; function; register |
 | C3 lift complexity | decision points that are no original branch: an atom of a condition naming an opcode cell that is no flag; and per function, the atoms beyond its original branches | the cell; function entry | the cell; `n decision points, m original branches` |
-| C1g guard on invalid input (informational) | a trap every guard of which traps input the original's meaning does not define (below) | the trap's pc | `trap(k)` and its kind |
+| C1g guard on invalid input (informational) | a trap every guard of which traps input the original's meaning does not define, or that only the entry guard implies (below) | the trap's pc | `trap(k)` and its kind |
 
 A **subscript by a machine address** is a subscript of held array `X` whose index (with the
 offset of a pointer base `X + o`) is a sum with a non-constant term and the term `- X_ORG`:
@@ -85,7 +85,9 @@ would interpret opcodes.
 
 C3's atoms are the leaves of `&&`, `\|\|` and `!` (through casts and a comma's value) of each
 `if`, `while`, `do`, `for` and `?:` condition, non-constant, and one per `switch`; a test with
-an arm that starts with `trap` has none (C1 lists it), nor one with an arm that is a
+an arm that starts with `trap` has none (C1 lists it), the statement after an `if` without
+`else` whose arm ends in `continue`, `break`, `return` or `goto` counting as its other arm,
+nor one with an arm that is a
 dispatcher call (A1 lists the call). A function's original branches are the conditional
 branches and computed jumps (`info["jumps"]`) among its `pcs`; each atom stands for at least
 one of them (a folded function's atom for each copy's or a shared one), so a function with
@@ -98,18 +100,21 @@ cgen's traps take only `k`: no C restores machine state, so every A2 and A3 cons
 Each trap `k` of the C is one site (however many `trap(k)` calls print), classified by
 `info["trap_info"][k]` in this order:
 
-1. **C1r** when its `implied_by` is set (other traps or constants already keep every guard's
-   register inside what it lets pass) or it is `proven` (the lift's values at every guard lie
-   inside): the guard should not exist. `IMPLIED` adds the traps whose implication trap_info
-   does not find, each with its derivation.
-2. **C1g** when every guard traps input the original's meaning does not define:
+1. **C1g** when its `implied_by` is `["entry"]`: only the declared song range makes the guard
+   redundant. The C does not depend on the song count, so the guard traps invalid input and
+   stays; the census prints it as implied by the entry guard.
+2. **C1r** when its `implied_by` is otherwise set (other traps or constants already keep every
+   guard's register inside what it lets pass) or it is `proven` (the lift's values at every
+   guard lie inside): the guard should not exist.
+3. **C1g** when every guard traps input the original's meaning does not define:
    - `entry`: an entry register outside its declared values (init's `A` outside the songs);
    - `index` whose every table's extent ends the data (`by` `loaded`, `object`, `code` or
      `column`): past it the original reads or writes beyond its data (the loaded program, the
      next object, code, a byte another column reads);
-   - `objchk`, `window`: a pointer outside the object it points into, or into a zone's window;
+   - `objchk`, `window`: a pointer outside the object it points into, or into a zone's window
+     (an `objchk` of the machine model's rule, `def` `machine`, among them);
    - `jam`: the translation of `JAM`, which stops the machine.
-3. **C1** otherwise: `opcode`, `codechk`, `path`, `ind`, `transfer`, `return`, `txs`,
+4. **C1** otherwise: `opcode`, `codechk`, `path`, `ind`, `transfer`, `return`, `txs`,
    `decimal`, `sp`, `bank`, `stack`, `zone`, `entry_sp`, `port`, an `index` whose table ends at
    a `target` or `wrap`s, a `mixed` trap with any guard of these, or a trap without
    `trap_info`: a deopt the lift could translate.
@@ -141,7 +146,7 @@ causes name the rest, which are lift residue.
   indexed by the voice) is accepted: the 6502 writes the SID through indexed addressing and
   the C keeps one I/O write per original store. Only a voice register written at a constant
   address in a voice function (C2, `VOICE_REGS`) counts.
-- A redundant guard trap_info does not find implied is C1g unless `IMPLIED` records it.
+- A redundant guard trap_info does not find implied is C1g.
 
 ## Attribution `info` lacks
 

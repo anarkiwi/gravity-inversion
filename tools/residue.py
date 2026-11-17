@@ -45,9 +45,10 @@ UNDETECTABLE = {
 }
 #: trap_info guard kinds that trap input the original's meaning does not define.
 GUARD_KINDS = frozenset(("entry", "objchk", "window", "jam"))
-#: Traps of a tune whose guards an earlier guard implies where trap_info does not find it:
-#: {(tune, trap pc): the derivation}.
-IMPLIED: dict[tuple[str, int], str] = {}
+#: trap_info's `implied_by` of a guard only the declared song range makes redundant.
+BY_ENTRY = ["entry"]
+#: Statements after which control does not reach the next.
+LEAVES = frozenset(("ContinueStmt", "BreakStmt", "ReturnStmt", "GotoStmt"))
 #: Extents of an `index` guard's table that end the data it indexes.
 DATA_ENDS = frozenset(("loaded", "object", "code", "column"))
 TUNES = ("commando", "incoherent", "automatas", "ghouls", "emomyst")
@@ -132,11 +133,13 @@ def _guards_input(g):
 
 
 def trap_class(meta):
-    """(kind, detail) of a trap from its trap_info: C1r implied or proven, C1g every guard
-    on invalid input, else C1."""
+    """(kind, detail) of a trap from its trap_info: C1g implied by the entry guard alone or
+    every guard on invalid input, C1r otherwise implied or proven, else C1."""
     if meta is None:
         return "C1", "no trap_info"
     kind = meta["kind"]
+    if meta["implied_by"] == BY_ENTRY:
+        return GUARD, f"{kind} implied by the entry guard"
     if meta["implied_by"] is not None:
         by = ", ".join(f"trap({k})" for k in meta["implied_by"]) or "constants"
         return "C1r", f"{kind} implied by {by}"
@@ -646,9 +649,6 @@ class Census:  # pylint: disable=too-many-instance-attributes
                         out[k] = Site("C1", self._at(fn), f"trap({k}) untabled")
                         continue
                     kind, why = trap_class(meta.get(k))
-                    if (self.tune, traps[k][1]) in IMPLIED:
-                        kind = "C1r"
-                        why = f"{why} implied {IMPLIED[self.tune, traps[k][1]]}"
                     out[k] = Site(kind, traps[k][1], f"trap({k}) {why}")
         return list(out.values())
 
@@ -749,8 +749,8 @@ class Census:  # pylint: disable=too-many-instance-attributes
         out = []
         for fn, nodes in self.nodes.items():
             atoms = tested = 0
-            for n, _ in nodes:
-                for atom in self._decisions(n):
+            for n, up in nodes:
+                for atom in self._decisions(n, up):
                     names = cflow.names(atom)
                     cells = sorted(names & opcode_cells)
                     if cells and not set(cells) <= flags:
@@ -793,13 +793,14 @@ class Census:  # pylint: disable=too-many-instance-attributes
             if any(lo <= a <= hi for lo, hi in guarded)
         }
 
-    def _decisions(self, n):
+    def _decisions(self, n, up=None):
         """The atoms of the condition a statement or expression decides; a test with an arm
-        that traps has none."""
+        that traps has none, the statement after an `if` its arm when the `if`'s own arm
+        leaves."""
         kind, inner = n.get("kind"), n.get("inner", ())
         if kind == "SwitchStmt":
             return [inner[0]]
-        if kind == "IfStmt" and not any(_traps(s) for s in inner[1:]):
+        if kind == "IfStmt" and not any(_traps(s) for s in inner[1:] + _after(n, up)):
             cond = inner[0]
         elif kind in ("WhileStmt", "ConditionalOperator"):
             cond = inner[0]
@@ -823,6 +824,25 @@ def _traps(stmt):
     """Whether a statement starts with a trap call."""
     s = cflow.first(stmt)
     return s.get("kind") == "CallExpr" and costs.callee(s) == "trap"
+
+
+def _after(n, up):
+    """The statement after an `if` without `else` whose arm leaves (none otherwise)."""
+    inner = n["inner"]
+    if len(inner) != 2 or not up or up.get("kind") != "CompoundStmt":
+        return []
+    arm = _last(inner[1])
+    if arm.get("kind") not in LEAVES:
+        return []
+    rest = up["inner"][next(i for i, s in enumerate(up["inner"]) if s is n) + 1 :]
+    return rest[:1]
+
+
+def _last(stmt):
+    """A statement's last statement under compound statements."""
+    while stmt.get("kind") == "CompoundStmt" and stmt.get("inner"):
+        stmt = stmt["inner"][-1]
+    return stmt
 
 
 def _dispatch_guard(n):
