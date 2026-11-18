@@ -45,6 +45,7 @@ versions and native modules), so a pin or wheel change regenerates it.
 | `tools/residue.py` | residue census: each site where generated C keeps the 6502's machine model, against `tests/residue_manifest.json` ([docs/residue.md](docs/residue.md)) |
 | `tools/costs.py` | constructs in generated C that cost code size ([docs/costs.md](docs/costs.md)) |
 | `tools/ablate.py` | where a generated translation's PRG bytes go: cumulative ablation of its C (AST model in `tools/cflow.py`) and a data accounting ([docs/ablate.md](docs/ablate.md)) |
+| `tools/ghidra_ref.py`, `tools/ghidra/` | Ghidra headless reference decompilation of each target, seeded at the PSID's and the lifter's entries; image `docker/ghidra.Dockerfile` ([docs/ghidra_ref.md](docs/ghidra_ref.md)) |
 | `tools/copies.py` | repeated playroutine code: unrolled copies with operand strides, JSR targets, fall-through entries |
 | `tools/mutate.py` | mutation check: run a test command against source edits |
 | `tools/transliterate.py` | PSID → `.c` + `.h` with vagrant-moses' `cgen` (needs `mlir-opt` 22, `clang-format`) |
