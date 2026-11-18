@@ -1,0 +1,9 @@
+[[metric]]
+name = "readability"
+adapter = "wayward-census"
+budget = "budgets/readability.json"
+[metric.options]
+files = ["out/readability/*.c"]
+include = ["out/readability", "c64"]
+key = "{stem}:{class}"
+total = "{stem}:cognitive-complexity"

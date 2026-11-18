@@ -29,6 +29,9 @@ endef
 
 fixture: $(FIX)/$(FIXTURE)
 
+# The PSID the generated translation is lifted from.
+psid: $(PSID)
+
 $(FIX)/$(FIXTURE):
 	$(call fetch,$@,$(URL),$(MD5))
 
@@ -69,5 +72,5 @@ endif
 clean:
 	rm -rf $(B)
 
-.PHONY: all check fixture clean FORCE
+.PHONY: all check fixture clean psid FORCE
 FORCE:
