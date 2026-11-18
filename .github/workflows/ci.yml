@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/cache@v6
         with:
           path: fixtures
@@ -23,3 +25,15 @@ jobs:
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: deps
+          load: true
+          tags: gravity-inversion-deps
+          cache-from: type=gha
+      - name: Readability ratchet
+        run: >-
+          docker run --rm -v "$PWD:/src" -w /src gravity-inversion-deps
+          sh -c 'git config --global --add safe.directory /src
+          && make readability AGAINST=origin/main'

@@ -1,0 +1,25 @@
+# Readability ratchet
+
+[wayward-eagle's census](https://github.com/anarkiwi/wayward-eagle/blob/main/docs/census.md)
+lists each readability defect of C by class: clang-tidy's checks and checks over clang's
+AST, keyed to a decompiler-fidelity taxonomy. [virtuous-cycles](https://github.com/anarkiwi/virtuous-cycles)
+holds its counts, per generated file and class, and each file's total cognitive complexity,
+to `budgets/readability.json`, which may only tighten.
+
+    make readability          # generate, then virtuous-cycles check
+    make readability AGAINST=origin/main   # also fail if a budget loosened
+    virtuous-cycles tighten   # after an improvement; commit budgets/readability.json
+
+`tools/readability.py [TARGET...]` writes the translation of each tune and fuzz player
+(`fuzz-<style>-<seed>`, the residue census' targets) to `out/readability/<name>.c` and
+`.h`; `virtuous-cycles.toml` runs the `wayward-census` adapter over them. Keys are
+`<name>:<class>`, every class of every file held (zero where it has no site), and
+`<name>:cognitive-complexity`.
+
+CI runs `make readability AGAINST=origin/main` (`virtuous-cycles check --against origin/main`): no value may exceed its budget, and
+no budget may loosen. Budget files merge by keeping the stricter value per key:
+
+    git config merge.virtuous-cycles.driver 'virtuous-cycles merge-driver %O %A %B %P'
+    git config merge.virtuous-cycles.name 'keep the stricter budget per key'
+
+(`.gitattributes` assigns `budgets/*.json` to it.)
