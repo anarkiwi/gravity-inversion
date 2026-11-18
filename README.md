@@ -18,6 +18,7 @@ or, with `mos-c64-clang` and `requirements-dev.txt` installed:
     make                      # tunes/*/build/*.prg
     make check                # compare each tune's SID writes against its original
     make test lint
+    make readability          # readability defects of the generated C against budgets/
 
 Each tune Makefile sets `GEN := 1` (with `PSID` and `CHECK_ARGS`) before including
 `common.mk`, so `make` also builds `build/gen.prg` from `build/gen/<tune>.c` and `.h`,
@@ -43,8 +44,10 @@ versions and native modules), so a pin or wheel change regenerates it.
 | `tools/eventlog.py` | every song data read of generated C, each an event, lookup, machine or table read by value flow (`tools/irflow.py`), with the state and SID writes after it: read sites in its LLVM IR (`tools/irmodule.py`, needs `clang`), logged natively ([docs/eventlog.md](docs/eventlog.md)) |
 | `tools/flowgraph.py`, `tools/flowsegment.py`, `tools/condition.py` | value-flow graph of generated C (`tools/irflow.py`), its state machines, and per player family the lift and trace check ([docs/flowgraph.md](docs/flowgraph.md)) |
 | `tools/residue.py` | residue census: each site where generated C keeps the 6502's machine model, against `tests/residue_manifest.json` ([docs/residue.md](docs/residue.md)) |
+| `tools/readability.py` | the generated C whose readability defects (wayward-eagle's census) `virtuous-cycles.toml` ratchets ([docs/readability.md](docs/readability.md)) |
 | `tools/costs.py` | constructs in generated C that cost code size ([docs/costs.md](docs/costs.md)) |
 | `tools/ablate.py` | where a generated translation's PRG bytes go: cumulative ablation of its C (AST model in `tools/cflow.py`) and a data accounting ([docs/ablate.md](docs/ablate.md)) |
+| `tools/ghidra_ref.py`, `tools/ghidra/` | Ghidra headless reference decompilation of each target, seeded at the PSID's and the lifter's entries; image `docker/ghidra.Dockerfile` ([docs/ghidra_ref.md](docs/ghidra_ref.md)) |
 | `tools/copies.py` | repeated playroutine code: unrolled copies with operand strides, JSR targets, fall-through entries |
 | `tools/mutate.py` | mutation check: run a test command against source edits |
 | `tools/transliterate.py` | PSID → `.c` + `.h` with vagrant-moses' `cgen` (needs `mlir-opt` 22, `clang-format`) |
