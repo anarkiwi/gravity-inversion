@@ -3,12 +3,12 @@
 Every construct of a generated translation either translates an original instruction or is
 **residue**: a place where the lift kept the 6502's machine model instead of the program's
 meaning. `tools/residue.py` lists each residue **site** `(kind, address, detail)` of a
-translation, and apart from them the traps that guard invalid input (kind `C1g`,
-informational). Detection reads the C's clang AST, the generated header and the original PSID
+translation, and apart from them the traps that guard invalid input (kind
+`invalid-input-guard`, informational). Detection reads the C's clang AST, the generated header and the original PSID
 (jennings coverage of init, sidtrace's C64 for the memory init leaves); cgen's `info`
 attributes a site to the original's addresses and classifies each trap (`trap_info`).
 
-    python3 tools/residue.py ghouls fuzz-rti-0 path/to/tune.sid [--kind D1 ...] [--json]
+    python3 tools/residue.py ghouls fuzz-rti-0 path/to/tune.sid [--kind code-as-data ...] [--json]
     python3 tools/residue.py ghouls --cells
     python3 tools/residue.py --write-manifest
 
@@ -35,12 +35,13 @@ arrays are `CGEN_ARRAYS`.
 A **block** `B<b>` (`info["blocks"]`, `B<b>_ORG`, `B<b>_LEN`, stored by `CGEN_STORAGE`) holds
 the image's bytes; the held arrays and regions are **slices** of it (`#define C1 (B0 + (C1_ORG -
 B0_ORG))`, `R<k>` likewise), each named by its macro as the C spells it. A block's
-**padding** (`padding`, inclusive runs) is zero bytes no slice holds; it is no D1 or D2 byte.
+**padding** (`padding`, inclusive runs) is zero bytes no slice holds; it is no code-as-data or unwritten-held byte.
 A read of the block itself is past a machine check: `B<b>[(uint16_t)(p - B<b>_ORG)]` in the arm
 of an `if` testing `cgen_out<j>(p, k)`, or the checked block read `B<b>c<j>(p, y, k)`. Either
 reaches only the runs of object `j` (`CGEN_OBJ<j>_LO` and `_LIM`, or `_ORG` and `_LIM`: each
 run from `lo` to `lo + lim`); a block read with no such check reaches its interval. A block
-read is no A1 site; its check's trap is classified as any other (C1g for `objchk`).
+read is no address-dispatch site; its check's trap is classified as any other
+(invalid-input-guard for `objchk`).
 
 A **cell** is a promoted variable (`info["state"]["vars"]`) on a byte of one of the lift's
 instructions (`info["starts"]`, lengths from the memory init leaves). Its role is the byte's
@@ -52,18 +53,22 @@ program's meaning: the accesses through it count where they are printed as resid
 
 | Kind | Site | Address | Detail |
 |---|---|---|---|
-| D1 code held as data | the held array bytes that are instruction bytes: of the lift's instructions or of those jennings sees init execute for any song; one site per array and set of accesses whose interval meets a run of them | the first byte | array, runs, bytes, the accesses |
-| D2 unwritten memory held | the held array bytes outside the loaded image and the I/O page that init writes for no song and no store's interval meets; one site per array and set of accesses | the first byte | array, runs, bytes, the accesses |
-| D3 hull gaps | not detectable (*Attribution `info` lacks*) | | |
-| D4 replayed init | a non-empty `CGEN_IO`, `CGEN_LIT` or `CGEN_CP` table: init's effect replayed, not translated | init's entry | entry count |
-| A1 address dispatch | a call of `rd`, `wr`, `rdCj`, `oob_rd`, `oob_wr`, `codechk` or `cgen_rd`; a subscript by a machine address; a cell reached by address of an instruction with no transfer operand cell | function entry, or each instruction whose address operand cells the call's address reads; the cell | the call or subscript; `cell reached by address` |
-| A2 machine addresses as values | a literal spelled `CODE_ORG` or `IMG_ORG`: one site per switch whose condition or case labels hold one, else per (function, use, address) of the `+`/`-` expression around it; each instruction with a transfer operand cell and no such switch | a switch: the printed switch (`info["provenance"]["switches"]`) whose computed jump's targets (`info["jumps"]`) hold the cases with the fewest others, if one; else function entry; the instruction | `switch over n code addresses`, `compared`/`stored`/`argument`/`value` and the address, or `transfer operand of $pc: cells` |
-| A3 status register as a value | a maximal `\|` expression one of whose operands is the constant `0x30` and another a `<<` | function entry | the expression |
-| C1 translatable deopt | a trap of `info["traps"]` whose `trap_info` is neither C1r nor C1g, or untabled | the trap's pc; function entry if untabled | `trap(k)` and its kind |
-| C1r redundant guard | a trap whose `trap_info` has `implied_by` set to more than the entry guard or is `proven` | the trap's pc | `trap(k)`, kind, what implies it |
-| C2 unstructured control | a goto edge of `info["provenance"]["gotos"]` that is no edge of the tune's construct map (`tunes/<tune>/constructs.json` `goto` entries from lifted code; any goto for a PSID or fuzz player); a function of no procedure of the original; an `io_write` whose address starts with a constant voice register of the tune (`VOICE_REGS`) | the edge's source; the function's entry; function entry | `goto` target; function; register |
-| C3 lift complexity | decision points that are no original branch: an atom of a condition naming an opcode cell that is no flag; and per function, the atoms beyond its original branches | the cell; function entry | the cell; `n decision points, m original branches` |
-| C1g guard on invalid input (informational) | a trap every guard of which traps input the original's meaning does not define, or that only the entry guard implies (below) | the trap's pc (for a check hoisted to a pointer's definition, the store completing the pointer, `Program.slack`) | `trap(k)` and its kind |
+| `code-as-data`: code held as data | the held array bytes that are instruction bytes: of the lift's instructions or of those jennings sees init execute for any song; one site per array and set of accesses whose interval meets a run of them | the first byte | array, runs, bytes, the accesses |
+| `unwritten-held`: unwritten memory held | the held array bytes outside the loaded image and the I/O page that init writes for no song and no store's interval meets; one site per array and set of accesses | the first byte | array, runs, bytes, the accesses |
+| `hull-gap`: hull gaps | not detectable (*Attribution `info` lacks*) | | |
+| `replayed-init`: replayed init | a non-empty `CGEN_IO`, `CGEN_LIT` or `CGEN_CP` table: init's effect replayed, not translated | init's entry | entry count |
+| `address-dispatch`: address dispatch | a call of `rd`, `wr`, `rdCj`, `oob_rd`, `oob_wr`, `codechk` or `cgen_rd`; a subscript by a machine address; a cell reached by address of an instruction with no transfer operand cell | function entry, or each instruction whose address operand cells the call's address reads; the cell | the call or subscript; `cell reached by address` |
+| `address-value`: machine addresses as values | a literal spelled `CODE_ORG` or `IMG_ORG`: one site per switch whose condition or case labels hold one, else per (function, use, address) of the `+`/`-` expression around it; each instruction with a transfer operand cell and no such switch | a switch: the printed switch (`info["provenance"]["switches"]`) whose computed jump's targets (`info["jumps"]`) hold the cases with the fewest others, if one; else function entry; the instruction | `switch over n code addresses`, `compared`/`stored`/`argument`/`value` and the address, or `transfer operand of $pc: cells` |
+| `flags-value`: status register as a value | a maximal `\|` expression one of whose operands is the constant `0x30` and another a `<<` | function entry | the expression |
+| `deopt`: translatable deopt | a trap of `info["traps"]` whose `trap_info` is neither implied-guard nor invalid-input-guard, or untabled | the trap's pc; function entry if untabled | `trap(k)` and its kind |
+| `implied-guard`: redundant guard | a trap whose `trap_info` has `implied_by` set to more than the entry guard or is `proven` | the trap's pc | `trap(k)`, kind, what implies it |
+| `goto`: unstructured control | a goto edge of `info["provenance"]["gotos"]` that is no edge of the tune's construct map (`tunes/<tune>/constructs.json` `goto` entries from lifted code; any goto for a PSID or fuzz player) | the edge's source | `goto` target |
+| `stray-function`: unstructured control | a function of no procedure nor shared tail of the original (below) | the function's entry | function |
+| `constant-voice`: unstructured control | an `io_write` whose address starts with a constant voice register of the tune (`VOICE_REGS`) | function entry | register |
+| `extra-decisions`: lift complexity | decision points that are no original branch: an atom of a condition naming an opcode cell that is no flag; and per function, the atoms beyond its original branches | the cell; function entry | the cell; `n decision points, m original branches` |
+| `duplicate-code`: duplicate emission | each printed copy of an original instruction past its first (`info["emission"]["copies"]`: a tail the structuring prints in place, a callee inlined at several sites, an instruction several lift nodes hold); separate instructions of the original are no copies | the instruction | `copy i of n` |
+| `duplicate-check`: redundant check | each check past one per pointer definition whose region the lift leaves unproven, and each trap path past one per check (`cost.redundant` over `info["emission"]["checks"]`) | the check's instruction | the check's kind and the definitions it checks |
+| `invalid-input-guard`: guard on invalid input (informational) | a trap every guard of which traps input the original's meaning does not define, or that only the entry guard implies (below) | the trap's pc (for a check hoisted to a pointer's definition, the store completing the pointer, `Program.slack`) | `trap(k)` and its kind |
 
 A **subscript by a machine address** is a subscript of held array `X` (a slice's macro
 resolved; a block or region slice is none) whose index (with the offset of a pointer base `X +
@@ -79,46 +84,54 @@ target `info["jumps"]` gives for a `JSR` whose operand the program writes), or w
 instance function (`index`: the copies of an unrolled body, [constructs.md](constructs.md)'s
 *Rule*). A function entered at a `JSR` whose operand the program writes is the procedure that
 dispatches over its targets when every `JSR` reaching it (`calls`) has the same target set
-(`info["jumps"]`). A function whose `pcs` hold an `RTS` and that the C calls only in tail
-position (the call is returned, or ends the body, or a `return` of no computed value or a
-`break` of a statement in tail position follows it, through compound statements, `if` and
-`switch` bodies, cases and labels) is a procedure the original enters by a tail call: the C
-returns where its `RTS` does, whether a `JMP`, a computed `JMP`'s arm, a branch or a
-fall-through enters it. Any other function (a shared tail the C does not call in tail
-position, or one that returns by no `RTS` of its own) cuts the original's procedure where it
-has no boundary.
+(`info["jumps"]`). A function whose `pcs` hold an `RTS` and that code outside it enters by a `JMP`, a
+computed `JMP`'s arm (`info["jumps"]`), a branch or falling through, with no `JSR` targeting
+it, is a shared tail of the original: its procedures end in it, and the C returns where its
+`RTS` does, whatever the C's own calls of it look like (a caller the C inlines leaves its call
+of the tail before more of the inliner's work). Any other function (one no code outside it
+enters, or that returns by no `RTS` of its own) cuts the original's procedure where it has no
+boundary.
 
 An opcode cell is a **flag** when `info` bounds the values the program writes to it: its
 entry in `state.opcodes` has a finite value set (`values`, which the C tests and assigns by
 the names in `enum`), or, failing one, an `opcode` guard of `trap_info` checks it (`addr`),
-its `ok` the values the C takes as the program's own and a trap (C1) the rest. Testing a
+its `ok` the values the C takes as the program's own and a trap (deopt) the rest. Testing a
 flag is the original's decision, an atom and an original branch of its function. An opcode
 cell of unknown values is a site: the C would interpret opcodes.
 
-C3's atoms are the leaves of `&&`, `\|\|` and `!` (through casts and a comma's value) of each
+extra-decisions' atoms are the leaves of `&&`, `\|\|` and `!` (through casts and a comma's value) of each
 `if`, `while`, `do`, `for` and `?:` condition, non-constant, and one per `switch`; a test with
-an arm that starts with `trap` has none (C1 lists it), the statement after an `if` without
+an arm that starts with `trap` has none (its trap lists it), the statement after an `if` without
 `else` whose arm ends in `continue`, `break`, `return` or `goto` counting as its other arm,
 nor one with an arm that is a
-dispatcher call (A1 lists the call). A function's original branches are the conditional
+dispatcher call (address-dispatch lists the call). A function's original branches are the conditional
 branches and computed jumps (`info["jumps"]`) among its `pcs`; each atom stands for at least
 one of them (a folded function's atom for each copy's or a shared one), so a function with
 more atoms than branches has at least the difference of its own.
 
-cgen's traps take only `k`: no C restores machine state, so every A2 and A3 construct counts.
+cgen's traps take only `k`: no C restores machine state, so every address-value and flags-value construct
+counts.
+
+duplicate-code and duplicate-check read deity-informant's `info["emission"]` (its cgen.md, *Translation cost*), whose
+ideal the program sets: each original instruction printed once, and one check per pointer
+definition (the instructions last writing a pointer's bytes, or an index register over a run
+of data, on a path to the access, from the code alone) that some access needs checked,
+covering every access through it (`p + y`, `y` a byte). Every check counts: the memory map's
+(`objchk`, `cgen_outj`), `rdCj`, `codechk`, a bounded access's test and the register guards
+of `index` traps.
 
 ### Traps
 
 Each trap `k` of the C is one site (however many `trap(k)` calls print), classified by
 `info["trap_info"][k]` in this order:
 
-1. **C1g** when its `implied_by` is `["entry"]`: only the declared song range makes the guard
+1. **invalid-input-guard** when its `implied_by` is `["entry"]`: only the declared song range makes the guard
    redundant. The C does not depend on the song count, so the guard traps invalid input and
    stays; the census prints it as implied by the entry guard.
-2. **C1r** when its `implied_by` is otherwise set (other traps or constants already keep every
+2. **implied-guard** when its `implied_by` is otherwise set (other traps or constants already keep every
    guard's register inside what it lets pass) or it is `proven` (the lift's values at every
    guard lie inside): the guard should not exist.
-3. **C1g** when every guard traps input the original's meaning does not define:
+3. **invalid-input-guard** when every guard traps input the original's meaning does not define:
    - `entry`: an entry register outside its declared values (init's `A` outside the songs);
    - `index` whose every table's extent ends the data (`by` `loaded`, `object`, `code` or
      `column`): past it the original reads or writes beyond its data (the loaded program, the
@@ -126,7 +139,7 @@ Each trap `k` of the C is one site (however many `trap(k)` calls print), classif
    - `objchk`, `window`: a pointer outside the object it points into, or into a zone's window
      (an `objchk` of the machine model's rule, `def` `machine`, among them);
    - `jam`: the translation of `JAM`, which stops the machine.
-4. **C1** otherwise: `opcode`, `codechk`, `path`, `ind`, `transfer`, `return`, `txs`,
+4. **deopt** otherwise: `opcode`, `codechk`, `path`, `ind`, `transfer`, `return`, `txs`,
    `decimal`, `sp`, `bank`, `stack`, `zone`, `entry_sp`, `port`, an `index` whose table ends at
    a `target` or `wrap`s, a `mixed` trap with any guard of these, or a trap without
    `trap_info`: a deopt the lift could translate.
@@ -134,7 +147,7 @@ Each trap `k` of the C is one site (however many `trap(k)` calls print), classif
 ## Manifest
 
 `tests/residue_manifest.json` holds every tune's and fuzz player's residue sites by kind
-(`sites`), its C1g sites (`informational`, outside the residue total), a cause per group and
+(`sites`), its invalid-input-guard sites (`informational`, outside the residue total), a cause per group and
 kind (`causes`: the tune, or `fuzz-<style>` over its seeds) and the pins it was made on.
 `tests/test_residue.py` requires each target's detected sites to equal its manifest entries:
 a new site fails as a regression, a removed one until the manifest records the improvement.
@@ -152,29 +165,29 @@ causes name the rest, which are lift residue.
 - A data address stored as a pointer's seed (`R0[0] = (uint8_t)(R4_ORG)`, `S_C9 =
   (uint8_t)(R63_ORG + 0xAB)`) is no site of its own: the pointer counts where it is used (a
   subscript by a machine address, a dispatcher call). Only
-  `CODE_ORG`/`IMG_ORG` literals are A2. A dispatcher call with `Rk_ORG + c` in its address
-  (`rdC0(R3_ORG + 0x52B, v)`) is one A1 site as a call.
+  `CODE_ORG`/`IMG_ORG` literals are address-value. A dispatcher call with `Rk_ORG + c` in its address
+  (`rdC0(R3_ORG + 0x52B, v)`) is one address-dispatch site as a call.
 - A computed device register address (`io_write(0xD402 + v, ...)`, a register of a voice
   indexed by the voice) is accepted: the 6502 writes the SID through indexed addressing and
   the C keeps one I/O write per original store. Only a voice register written at a constant
-  address in a voice function (C2, `VOICE_REGS`) counts.
-- A redundant guard trap_info does not find implied is C1g.
+  address in a voice function (constant-voice, `VOICE_REGS`) counts.
+- A redundant guard trap_info does not find implied is invalid-input-guard.
 
 ## Attribution `info` lacks
 
-- Each printed operation's original instruction (a C source range to pc map): A1 (other than
-  calls through address operand cells, and cells reached by address), A2 (other than
-  switches and transfer operand cells), A3, C3 sites name their function's entry. A function
-  whose instructions all lie in another's (`pcs`) is inlined there; the other's A1 and A3
-  sites equal to its own up to the names of locals (`v<n>`) are its copies, counted once.
+- Each printed operation's original instruction (a C source range to pc map): address-dispatch (other
+  than calls through address operand cells, and cells reached by address), address-value (other than switches and transfer operand cells),
+  flags-value and extra-decisions sites name their function's entry. A function
+  whose instructions all lie in another's (`pcs`) is inlined there; the other's address-dispatch and
+  flags-value sites equal to its own up to the names of locals (`v<n>`) are its copies, counted once.
   Equal calls within one function may be one instruction duplicated or several; each counts.
 - Each access's address set and the instruction of each C access (`Program.addr_sets`,
   `reach`, `proven`, `bounded`; `info["ptr_sets"]` gives pointer word sets by instruction,
-  with no C access to join them to): D1 and D2 name the C accesses whose type-bounded intervals
-  meet a run, D2 counts a byte unwritten only when no such interval meets it, and D3 (held
+  with no C access to join them to): code-as-data and unwritten-held name the C accesses whose type-bounded intervals
+  meet a run, unwritten-held counts a byte unwritten only when no such interval meets it, and hull-gap (held
   bytes inside an access's hull that its address set lacks) is not detected.
-- Each folded copy's instructions (`copy_pcs`): C3 compares a folded function's atoms with
+- Each folded copy's instructions (`copy_pcs`): extra-decisions compares a folded function's atoms with
   all its copies' branches.
 - Which instruction consumes a pushed status byte (a push to pull pairing of the stack, and
-  each A3 expression's `PHP`, `BRK` or interrupt): A3 counts every composed status byte,
+  each flags-value expression's `PHP`, `BRK` or interrupt): flags-value counts every composed status byte,
   a `PLP`/`RTI` round trip and one the program reads as data alike.

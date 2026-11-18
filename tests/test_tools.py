@@ -1,4 +1,5 @@
-"""Tests for tools/disasm.py, tools/survey.py, tools/sizes.py and tools/lifterstamp.py."""
+"""Tests for tools/disasm.py, tools/survey.py, tools/sizes.py, tools/owners.py and
+tools/lifterstamp.py."""
 
 import hashlib
 import json
@@ -12,6 +13,7 @@ import pytest
 import disasm
 import lifterstamp
 import mutate
+import owners
 import sidtrace
 import sizes
 import survey
@@ -189,3 +191,41 @@ def test_lifter_stamp(tmp_path):
     assert not lifterstamp.write(stamp, lifterstamp.identity())
     lifterstamp.main([str(tmp_path / "s" / "lifter.stamp")])
     assert (tmp_path / "s" / "lifter.stamp").read_text() == lifterstamp.identity()
+
+
+def test_opclass():
+    """Opcodes fall in the classes of byte ownership by mnemonic and addressing mode."""
+    cases = {
+        0xAD: "load/store",
+        0x69: "ALU",
+        0xD0: "branch",
+        0x20: "branch",
+        0xB1: "indirect",
+    }
+    cases.update(
+        {
+            0x81: "indirect",
+            0xAA: "other",
+            0x48: "other",
+            0xC6: "ALU",
+            0x8F: "load/store",
+        }
+    )
+    assert {op: owners.opclass(op) for op in cases} == cases
+
+
+def test_ownership(tmp_path, capsys):
+    """Every byte of a translation is an instruction class's or an artifact's; the check bytes
+    split between the least the code needs and the sites past it; the CLI prints a row.
+    """
+    r = owners.ownership("commando", tmp_path / "commando")
+    classes = sum(b for b, _ in r["classes"].values())
+    assert r["total"] == classes + sum(r["artifacts"].values()) > r["original"] > 0
+    assert set(r["artifacts"]) <= {*owners.ARTIFACTS, "unmarked"}
+    assert sum(r["checks"].values()) == r["artifacts"].get("check", 0) and r["hand"] > 0
+    assert (
+        all(n <= b for b, n in r["classes"].values()) and r["classes"]["load/store"][1]
+    )
+    assert owners.main(["commando", "--out", str(tmp_path)]) == 0
+    rows = capsys.readouterr().out.splitlines()
+    assert rows[0].startswith("| Tune |") and rows[2].startswith("| Commando |")

@@ -25,3 +25,31 @@ Bytes; deity-informant 0.40.12, jennings 0.14.1, llvm-mos SDK v23.4.0, `-Os`.
 | Emomyst | 2323 | 6179 | 10111 | 2961 | 2864 | 5625 | `$2BA9` | `$45AA` |
 
 Where the generated PRGs' bytes go is measured by ablation in [ablate.md](ablate.md).
+
+## Byte ownership
+
+`tools/owners.py` translates each tune with deity-informant's `#line` markers (its cgen.md,
+*Translation cost*), builds it with `-g` and gives each `.text` byte of the translation to
+what the DWARF line table names for it (over every unit, as link-time optimization moves code
+between them): an original instruction, or an artifact of the lift.
+
+    python3 tools/owners.py commando incoherent automatas ghouls emomyst [--json]
+
+| Measure | Definition |
+|---|---|
+| B/insn per class | bytes per original instruction printed, over the instructions of each class: load/store (`LDA`, `STA`, ... not through a pointer), ALU (arithmetic, logic, compares, shifts, increments), branch (conditional branches, `JMP`, `JSR`, `RTS`, `RTI`, `BRK`), indirect (`(zp,X)`, `(zp),Y` accesses), other (register transfers, stack, flags) |
+| check, trap, access, copy, frame, runtime | bytes of each artifact: checks and their failure arms, `trap(k)` calls, access helpers, block arguments' copies, function frames, the runtime |
+| check sites | the check bytes of duplicate-check's checks past one per pointer definition ([residue.md](residue.md)) |
+| total | every byte of the translation |
+| original, hand | informational: the original's instruction bytes (above) and the hand C's bytes by its line table |
+
+Bytes; deity-informant 0.40.13, llvm-mos SDK v23.4.0, `-Os -g`. B/insn: bytes per instruction
+(instructions printed).
+
+| Tune | load/store B/insn | ALU B/insn | branch B/insn | indirect B/insn | other B/insn | check | trap | access | copy | frame | runtime | check sites | total | original | hand |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Commando | 9.7 (94) | 15.5 (38) | 25.9 (16) | 41.4 (5) | - | 158 | 13 | 0 | 3 | 170 | 0 | 75 | 2465 | 926 | 1653 |
+| Incoherent | 8.9 (126) | 13.5 (39) | 15.4 (23) | 30.6 (9) | - | 108 | 0 | 0 | 0 | 92 | 0 | 84 | 2483 | 1070 | 2612 |
+| Automatas | 9.4 (133) | 14.3 (33) | 11.9 (23) | 29.1 (15) | - | 450 | 0 | 142 | 0 | 163 | 0 | 374 | 3182 | 1600 | 2379 |
+| Ghouls | 13.7 (209) | 13.2 (50) | 20.4 (25) | 53.5 (13) | - | 202 | 6 | 274 | 6 | 157 | 0 | 51 | 5381 | 3043 | 3930 |
+| Emomyst | 10.3 (231) | 16.6 (82) | 14.3 (70) | 36.8 (11) | - | 1017 | 6 | 1553 | 31 | 290 | 0 | 850 | 8044 | 2323 | 6158 |

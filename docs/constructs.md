@@ -43,8 +43,9 @@ its form in the generated C too.
 
 An edge is a goto exactly when it has no structured form: not a fall-through, an if/else arm
 rejoining at its post-dominator, a short-circuit chain, a loop's single exit or back edge, or the
-procedure exit. An edge into a real procedure (a `JSR` target) is a tail call, not a goto. A
-function is formed only for a procedure, an unrolled class or a register-parameterised shared tail;
+procedure exit. An edge into a real procedure (a `JSR` target) or a shared tail several procedures
+enter at their entry height is a tail call, not a goto. A function is formed only for a procedure,
+such a shared tail, an unrolled class or a register-parameterised shared tail;
 naming other single-entry regions is a readability choice.
 
 ## Lift procedure
@@ -57,15 +58,15 @@ acyclic structure exists, and tail calls must be cut before either. The steps, i
 | Step | Facts (inputs) | Transform | Entries |
 |---|---|---|---|
 | T1 | stores into instruction bytes (def-use); target sets of computed transfers (constant tables, written operands, branch offsets) | code cells become variables; a computed transfer with a known target set becomes a switch | 15 |
-| T2 | procedure entries: `init`, `play`, every `JSR` target; immediate loads before a jump into a shared tail | an edge into an entry from another procedure (`JMP`, branch, fall-through) becomes a call then return; register-preset entries into one tail become one function taking the register | 6 |
+| T2 | procedure entries: `init`, `play`, every `JSR` target, and code several procedures enter at their entry height by their own jumps and fall-through (a shared tail); immediate loads before a jump into a shared tail | an edge into an entry from another procedure (`JMP`, branch, fall-through) becomes a call then return; register-preset entries into one tail become one function taking the register | 8 |
 | T3 | copy classes: consecutive, chained copies equal up to operand deltas affine in the copy index | one function `f(k)`; per-copy cells and constants become state and tables indexed by `k` | 6 |
 | T4 | dominator tree per procedure (back edges, including fall-through back edges of rotated loops entered at their test) | natural loops: back edge `continue`, the exit to the loop's follow `break`, exits to the procedure's exit `return` | 24 |
 | T5 | chains of conditional branches sharing a target, each falling into the next | one `&&`/`\|\|` condition, to a fixpoint | 4 |
 | T6 | post-dominator tree of the reduced graph | a branch whose arms rejoin at its immediate post-dominator becomes if/else; a multiway branch on one selector a switch | 7 |
-| T7 | none | every remaining edge is a goto: a branch past a joined block, an entry part-way into a shared sequence, a loop's second exit | 41 |
+| T7 | none | every remaining edge is a goto: a branch past a joined block, an entry part-way into a shared sequence, a loop's second exit | 39 |
 
 Four entries are readability choices the hand C makes (naming a single-entry region, extracting
-repeated inline code) and are not lifted. Twenty-three entries record where the hand C departs from
+repeated inline code) and are not lifted. Twenty-one entries record where the hand C departs from
 the procedure (`hand_differs`): a loop back edge written as a goto, nested copy loops written as
 one, a shared suffix outlined as a helper, gotos into a subroutine, gotos at joins with a
 structured form, and flags or outlined helpers where an edge has none. There the rule wins: the
