@@ -12,11 +12,11 @@ import concurrent.futures
 import json
 import os
 import pathlib
-import re
 import shutil
 import subprocess
 import sys
 
+from packaging.requirements import Requirement
 from tqdm import tqdm
 from wayward_eagle.census import COGNITIVE, census
 
@@ -42,8 +42,12 @@ PSID, LIFTER, FOUND = "psid", "lifter", "ghidra"
 
 def pin(requirements=REQUIREMENTS):
     """The deity-informant version pinned in ``requirements``."""
-    text = pathlib.Path(requirements).read_text(encoding="utf-8")
-    return re.search(r"^deity-informant==(\S+)", text, re.M).group(1)
+    for line in pathlib.Path(requirements).read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line and (req := Requirement(line)).name == "deity-informant":
+            (spec,) = req.specifier
+            return spec.version
+    raise LookupError(f"no deity-informant pin in {requirements}")
 
 
 def image_tag(version=None):
