@@ -102,7 +102,7 @@
     "label": "end"
    },
    "why": "Leaves the row loop for the shared epilogue $1776 past the pitch joins: the table end ($16EE JMP) and a negative jump row ($16FD BMI) from inside the loop, and the pitch store ($1773), which the C places in the loop body with the pitch joins $1760/$1764, entered from inside the loop by the chord tail's fall-through $175D; $1776 is the loop's second exit target.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "covered": false,
    "uncovered": "the song never reads a table jump to a negative row; the patched variants reach it",
    "transform": "T7",
@@ -217,7 +217,7 @@
     "form": "return"
    },
    "why": "The decrement of a pending vibrato delay jumps past the joined vibrato and slide steps to $15D1, which the slide's store falls into.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "hand_differs": "the hand C ends vib_slide at $15D1 and returns; $15D1 is no procedure entry, so the edge is a goto in the generated C",
    "transform": "T7"
   },
@@ -239,7 +239,7 @@
     "label": "down"
    },
    "why": "The 16-bit subtract $15A4 is shared by slide, portamento and vibrato.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "transform": "T7"
   },
   {
@@ -264,7 +264,7 @@
     "label": "up"
    },
    "why": "The 16-bit add $15BF is shared by slide, portamento and vibrato.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "transform": "T7"
   },
   {
@@ -285,7 +285,7 @@
     "label": "store"
    },
    "why": "The store $15CE joins target-reached and subtract.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "transform": "T7"
   },
   {
@@ -347,7 +347,7 @@
     "form": "return"
    },
    "why": "Exits past the shared block $1649-$1662 to $1665, a join that is not their branch's post-dominator.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "hand_differs": "the hand C ends filter_prg at $1665 and returns; $1665 is no procedure entry",
    "covered": false,
    "uncovered": "the song's filter tables never jump to their own row ($1629); the patched variants reach it",
@@ -393,7 +393,7 @@
     "label": "write"
    },
    "why": "Entries below $16B1.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "covered": false,
    "uncovered": "the song's pulse tables never jump to their own row; the patched variants reach it",
    "transform": "T7"
@@ -430,7 +430,7 @@
     "label": "set_pos"
    },
    "why": "Entry below $16AA.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "transform": "T7"
   },
   {
@@ -767,7 +767,7 @@
     "form": "written without this goto"
    },
    "why": "$1817 falls into the store $181A, which $1802 BEQ also enters, and $1829 into $182C, which $181F BEQ enters, past the blocks the C places between.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "covered": false,
    "uncovered": "the song does not take every one of these edges",
    "transform": "T7"
