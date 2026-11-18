@@ -52,5 +52,5 @@ def build_prg(psid, labels, out_dir):
 
 
 def gen_prg(psid, out_dir):
-    """(PRG path, .c, .h) of the C generated from `psid`."""
+    """(PRG path, units, .h) of the C generated from `psid`."""
     return build(psid, out_dir, "commando")

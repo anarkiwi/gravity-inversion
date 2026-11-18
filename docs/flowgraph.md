@@ -5,17 +5,20 @@ family, and the state machines under it. Tools: `tools/irflow.py` (value flow of
 IR), `tools/flowgraph.py` (graph), `tools/flowsegment.py` (state machines),
 `tools/condition.py` (lift, hand conditioning, trace check and graphs per family).
 
-    python tools/condition.py [family ...]        # build/flow/<family>/{gen.c,graph.*,machines.*,row.json}
+    python tools/condition.py [family ...]        # build/flow/<family>/{gen_*.c,graph.*,machines.*,row.json}
     python tools/flowgraph.py PSID OUT            # whole-program graph of a lift
-    python tools/flowsegment.py GEN.c OUT         # play's state machines of a (conditioned) .c
+    python tools/flowsegment.py OUT GEN.c         # play's state machines of a (conditioned) .c
+    python tools/flowsegment.py OUT GEN_*.c --header GEN.h  # of translation units
 
-All need `CLANG` (clang 22 with the llvm-mos-compatible IR, e.g. `../bin/clang22`), `CC`
+All need `CLANG` (clang 22 with the llvm-mos-compatible IR, e.g. `../bin/clang22`), `LLVM_LINK` (its
+`llvm-link`) for translation units, `CC`
 (`mos-c64-clang`) for the trace check, `dot`, and `HVSC` (default
 `/scratch/datasets/hvsc/C64Music`).
 
 ## Graph
 
-`irmodule.lower(..., passes=True)` lowers the `.c` at `-O0` with names and line tables;
+`irmodule.lower(..., passes=True)` lowers the `.c` at `-O0` with names and line tables
+(translation units each, linked into one module by `llvm-link`, `LLVM_LINK`, e.g. `llvm-link-22`);
 `irflow.sroa` promotes locals so each C read is one `load`. `irflow.Flow` records per load,
 store, call and conditional branch (`br`, `switch`) the loads, arguments and returns its
 value, address or condition derives from (arguments and returns followed through every

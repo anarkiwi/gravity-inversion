@@ -162,9 +162,11 @@ def test_lifter_stamp(tmp_path):
     shutil.copy(constructs.ROOT / "common.mk", tmp_path)
     shutil.copy(constructs.ROOT / "tools" / "lifterstamp.py", tools)
     (tools / "transliterate.py").write_text(
-        "import sys\n"
-        "for p in (sys.argv[2], sys.argv[4], 'build/gen/cgen_trap.c'):\n"
-        "    open(p, 'w').close()\n"
+        "import os, sys\n"
+        "os.makedirs(sys.argv[2], exist_ok=True)\n"
+        "for p in (sys.argv[4], 'cgen_trap.c', 't_play.c'):\n"
+        "    open(os.path.join(sys.argv[2], p), 'w').close()\n"
+        "open(sys.argv[6], 'w').write(os.path.join(sys.argv[2], 't_play.c'))\n"
         "open('lifts', 'a').write('.')\n",
         encoding="ascii",
     )
@@ -177,7 +179,7 @@ def test_lifter_stamp(tmp_path):
     stamp = tune / "build" / "lifter.stamp"
 
     def lifts():
-        subprocess.run(["make", "-s", "build/gen/t.c"], cwd=tune, check=True)
+        subprocess.run(["make", "-s", "build/gen/units"], cwd=tune, check=True)
         return len((tune / "lifts").read_text())
 
     assert lifts() == 1

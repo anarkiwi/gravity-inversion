@@ -6,7 +6,7 @@ runtime (`rd`, `wr`, the bounds-checked span readers `rdCj`, ...) is not counted
 code size, not machine model, so the residue census ([residue.md](residue.md)) does not count
 them; what each mechanism costs, measured by ablation, is in [ablate.md](ablate.md).
 
-    python3 tools/costs.py tunes/ghouls/build/gen/ghouls.c -I tunes/ghouls/build/gen -I c64 --sites
+    python3 tools/costs.py tunes/ghouls/build/gen/ghouls_play.c -I tunes/ghouls/build/gen -I c64 --sites
 
 | Kind | Construct | 6502 idiom | Form that costs no more |
 |---|---|---|---|

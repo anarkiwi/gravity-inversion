@@ -2,6 +2,7 @@
 semantics-preserving permutations of its code and a relocation."""
 
 import json
+import pathlib
 import re
 import time
 
@@ -28,9 +29,9 @@ RELOCATE = [["ADDR    = $1000", "ADDR    = $2345"]]
 
 @pytest.fixture(scope="module", name="generated")
 def fixture_generated(ref_psid):
-    """(.c, .h, info, seconds) of the original."""
+    """(units, .h, info, seconds) of the original."""
     start = time.perf_counter()
-    c, h, info = transliterate.transliterate(ref_psid, "commando.h")
+    c, h, info = transliterate.transliterate(ref_psid, "commando.h", split=True)
     return c, h, info, time.perf_counter() - start
 
 
@@ -47,11 +48,11 @@ def _permuted(perm, extra=()):
 
 
 def _plain(perm, psid, generated):
-    """(.c, .h) generated from the unpatched `psid` of permutation `perm`."""
+    """(units, .h) generated from the unpatched `psid` of permutation `perm`."""
     return (
         generated[:2]
         if perm is None
-        else transliterate.transliterate(psid, "commando.h")[:2]
+        else transliterate.transliterate(psid, "commando.h", split=True)[:2]
     )
 
 
@@ -63,18 +64,23 @@ def test_whole_tune_identical(capsys):
 
 
 def test_generated_shape(generated):
-    """Structured C without goto, quickly made."""
+    """Structured C without goto, quickly made, as the state's, each entry's and the host's
+    units."""
     c, _, _, seconds = generated
-    assert not re.search(r"\bgoto\b", c)
+    assert not any(re.search(r"\bgoto\b", text) for text in c.values())
+    assert {f"commando_{u}.c" for u in ("state", "init", "play", "host")} <= set(c)
     assert seconds < 10
 
 
 def test_main(tmp_path, capsys, generated):
-    """The CLI writes the .c and its header."""
-    out = tmp_path / "commando.c"
-    args = [str(BUILD / "ref.sid"), str(out), "--header", str(tmp_path / "commando.h")]
-    assert transliterate.main(args) == 0
-    assert out.read_text(encoding="utf-8") == generated[0]
+    """The CLI writes the units, their header and their list."""
+    listed = tmp_path / "units"
+    args = [str(BUILD / "ref.sid"), str(tmp_path), "--header", "commando.h"]
+    assert transliterate.main(args + ["--list", str(listed)]) == 0
+    paths = listed.read_text(encoding="utf-8").split()
+    assert {pathlib.Path(p).name for p in paths} == set(generated[0])
+    for p in map(pathlib.Path, paths):
+        assert p.read_text(encoding="utf-8") == generated[0][p.name]
     assert (tmp_path / "commando.h").read_text(encoding="utf-8") == generated[1]
     assert "traps" in capsys.readouterr().out
 

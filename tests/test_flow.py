@@ -3,6 +3,7 @@ value flow and def-use webs of a small C player, the segmentation's contractions
 and the per-family runs."""
 
 import json
+import pathlib
 
 import networkx as nx
 import pytest
@@ -97,6 +98,23 @@ def test_webs(player):
     assert not s["residual_calls"]
     whole, _ = flowgraph.graph(player)
     assert "t+0" in whole and not any("@" in n for n in whole)
+
+
+def test_units_link(player):
+    """The player as two translation units, init's apart, lowered and linked, has the one
+    file's graph."""
+    play, init = player.with_name("gen_play.c"), player.with_name("gen_init.c")
+    play.write_text(
+        PLAYER.replace("void cgen_init(uint8_t song) { pos = song; }\n", "")
+    )
+    init.write_text(
+        "#include <stdint.h>\nextern uint8_t pos;\n"
+        "void cgen_init(uint8_t song) { pos = song; }\n"
+    )
+    whole, _ = flowgraph.graph(player)
+    linked, _ = flowgraph.graph([play, init], header=player.with_suffix(".h"))
+    assert set(linked.edges(data="kind")) == set(whole.edges(data="kind"))
+    assert set(linked) == set(whole)
 
 
 def test_segment(player):
@@ -217,8 +235,10 @@ def test_main(sidwizard, tmp_path, capsys):
     assert (out / "sidwizard" / "machines.png").stat().st_size
     with pytest.raises(SystemExit):
         condition.main(["nosuch"])
-    c = out / "sidwizard" / "gen.c"
-    assert flowsegment.main([str(c), str(tmp_path / "seg")]) == 0
+    units = sorted(map(str, (out / "sidwizard").glob("gen_*.c")))
+    assert {pathlib.Path(u).name for u in units} >= {"gen_play.c", "gen_host.c"}
+    header = ["--header", str(out / "sidwizard" / "gen.h")]
+    assert flowsegment.main([str(tmp_path / "seg"), *units, *header]) == 0
     assert json.loads(capsys.readouterr().out.splitlines()[-1])["nodes"]["sid"]
     psid = condition.tune_path("Emomyst.sid")
     assert flowgraph.main([str(psid), str(tmp_path / "g" / "flow")]) == 0

@@ -5,8 +5,9 @@
 per file its total, nesting penalty, gotos and number of functions scoring above 0, and its most complex functions.
 
     python tools/fcomplex.py tunes/*/build/gen/*.c --top 5
+    python tools/fcomplex.py tunes/commando/build/gen/commando_*.c --units  # one translation
 
-`fcomplex.score(path)` gives the same per function: points, nesting penalty, gotos and points
+`fcomplex.score(path)` (or `score([units])`) gives the same per function: points, nesting penalty, gotos and points
 by construct (`if`, `else`, loop, `switch`, `goto`, `&&`, `||`, `?`).
 
 C is parsed for the C64 with the file's directory, `c64/` and the llvm-mos SDK's headers,
@@ -19,6 +20,7 @@ mkdir -p out/mos-sdk && docker run --rm -u $(id -u):$(id -g) -v /scratch:/scratc
 
 `tools/flowcmp.py` checks the rewrites that lower the score keep behavior's data flow: the
 value-flow graphs and state machines (docs/flowgraph.md) of each tune's C with and without
-wayward-eagle's rewrites, each differing edge listed.
+wayward-eagle's rewrites, each differing edge listed, and each form's PRG size. `--against split`
+compares the translation units with the one file instead.
 
-    python tools/flowcmp.py OUT TUNE ... [--edges]
+    python tools/flowcmp.py OUT TUNE ... [--edges] [--against split]

@@ -44,11 +44,10 @@ def run(family, out, frames=None):
     psid = tune_path(tune).read_bytes()
     d = pathlib.Path(out) / family
     d.mkdir(parents=True, exist_ok=True)
-    c, h, _ = transliterate.transliterate(psid, "gen.h")
+    c, h, _ = transliterate.transliterate(psid, "gen.h", split=True)
     row = {"family": family, "tune": tune}
-    (d / "gen.c").write_text(c, encoding="utf-8")
-    (d / "gen.h").write_text(h, encoding="utf-8")
-    prg = transliterate.compile_prg(d)
+    units = transliterate.write(d, c, h, "gen.h")
+    prg = transliterate.compile_prg(units)
     song = sidtrace.default_song(psid)
     frames = frames or sidtrace.song_calls(psid, song, str(HVSC))
     try:
@@ -56,10 +55,10 @@ def run(family, out, frames=None):
         row["trace"] = f"exact {frames}" if not bad else f"differs {str(bad)[:60]}"
     except AssertionError as e:
         row["trace"] = str(e)[:80]
-    g, summary = flowgraph.graph(d / "gen.c")
+    g, summary = flowgraph.graph(units, header=d / "gen.h")
     row["residual"] = summary["residual_calls"]
     _write(d / "graph", g)
-    m = flowsegment.segment(d / "gen.c")
+    m = flowsegment.segment(units, header=d / "gen.h")
     _write(d / "machines", m)
     row["machines"] = flowsegment.summary(m)
     row["roles"] = {n: list(r) for n, r in flowsegment.roles(m).items()}

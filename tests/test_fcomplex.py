@@ -61,3 +61,16 @@ def test_score_totals_and_main(src, capsys):
     assert fcomplex.main([str(src), "--top", "1"]) == 0
     row = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert row["top"] == {"nested": 6} and row[str(src)]["nesting"] == 1
+
+
+def test_units_score_as_one(src, capsys):
+    """A translation's units score as their functions together: a second unit's function adds
+    its increments to the first's."""
+    other = src.with_name("gen_play.c")
+    other.write_text("int g(int a) {\n  if (a)\n    return 1;\n  return 0;\n}\n")
+    got = fcomplex.score([src, other])
+    assert set(got["functions"]) == {"nested", "g"}
+    assert got["total"]["cognitive"] == 7
+    assert fcomplex.main([str(src), str(other), "--units"]) == 0
+    row = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert row[f"{src} {other}"]["scored functions"] == 2

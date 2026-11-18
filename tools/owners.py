@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 import sizes
 from constructs import ROOT, load, memory
-from transliterate import compile_prg, transliterate
+from transliterate import compile_prg, transliterate, write
 
 CLASSES = ("load/store", "ALU", "branch", "indirect", "other")
 MOVES = frozenset(
@@ -92,12 +92,11 @@ def build(tune, out):
         subprocess.run(
             ["make", "-s", "-C", str(where), str(path.relative_to(where))], check=True
         )
-    c, h, info = transliterate(path.read_bytes(), "gen.h", lines=True)
-    (out / "gen.c").write_text(c, encoding="utf-8")
-    (out / "gen.h").write_text(h, encoding="utf-8")
-    own = owners(pathlib.Path(f"{compile_prg(out, 'gen', ('-g',))}.elf"))
+    c, h, info = transliterate(path.read_bytes(), "gen.h", lines=True, split=True)
+    units = write(out, c, h, "gen.h")
+    own = owners(pathlib.Path(f"{compile_prg(units, 'gen', ('-g',))}.elf"))
     return info, Counter(
-        {k: n for k, n in own.items() if k[0] in marks.FILES or k[0] == "gen.c"}
+        {k: n for k, n in own.items() if k[0] in marks.FILES or k[0] in c}
     )
 
 

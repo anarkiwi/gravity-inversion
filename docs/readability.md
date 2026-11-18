@@ -4,7 +4,9 @@
 lists each readability defect of C by class: clang-tidy's checks and checks over clang's
 AST, keyed to a decompiler-fidelity taxonomy. [virtuous-cycles](https://github.com/anarkiwi/virtuous-cycles)
 holds its counts, per generated file and class, and each file's total cognitive complexity,
-to `budgets/readability.json`, which may only tighten.
+to `budgets/readability.json`, which may only tighten. Each translation is read as one file
+(`transliterate(psid, header)`, its single-text form): how it is split into translation units
+changes no count.
 
     make readability          # generate, then virtuous-cycles check
     make readability AGAINST=origin/main   # also fail if a budget loosened

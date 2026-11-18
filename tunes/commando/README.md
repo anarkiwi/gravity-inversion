@@ -47,7 +47,7 @@ vibrato note and the top note (read past the table) on the bass instrument.
 
 ## Generated translation
 
-`make` also builds `build/gen.prg` from `build/gen/commando.c` and `.h`, generated from
+`make` also builds `build/gen.prg` from the translation units `build/gen/commando_*.c` and `.h`, generated from
 the PSID by `tools/transliterate.py`; `make check` compares it to the tune loop.
 `tests/test_gen.py` checks that:
 

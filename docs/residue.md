@@ -6,7 +6,9 @@ meaning. `tools/residue.py` lists each residue **site** `(kind, address, detail)
 translation, and apart from them the traps that guard invalid input (kind
 `invalid-input-guard`, informational). Detection reads the C's clang AST, the generated header and the original PSID
 (jennings coverage of init, sidtrace's C64 for the memory init leaves); cgen's `info`
-attributes a site to the original's addresses and classifies each trap (`trap_info`).
+attributes a site to the original's addresses and classifies each trap (`trap_info`). The census
+reads a translation as one file (its single-text form), so its sites do not depend on how the
+build splits it into translation units.
 
     python3 tools/residue.py ghouls fuzz-rti-0 path/to/tune.sid [--kind code-as-data ...] [--json]
     python3 tools/residue.py ghouls --cells

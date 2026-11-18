@@ -55,7 +55,7 @@ from sidtrace import (
     trace_prg,
 )
 from sizes import DATA_SECTIONS, sections
-from transliterate import trap_source
+from transliterate import trap_source, transliterate, write
 
 DRIVER = ROOT / "c64"
 GUARD = frozenset({1, *range(0xD0, 0xE0)})
@@ -701,11 +701,9 @@ def tune_flags(tune):
 
 
 def main(argv=None):
-    """CLI entry point: ablate tunes' generated translations (make build/gen.prg first)."""
+    """CLI entry point: ablate tunes' translations, each as one C file."""
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument(
-        "tunes", nargs="+", help="tunes/<name> with build/gen/<name>.c and .h"
-    )
+    ap.add_argument("tunes", nargs="+", help="tunes/<name>")
     ap.add_argument("--hvsc", default=ROOT / "fixtures", help="HVSC root: song lengths")
     ap.add_argument("--frames", type=int, help="play calls (default: HVSC length)")
     ap.add_argument(
@@ -720,9 +718,11 @@ def main(argv=None):
         song = default_song(psid)
         build = ROOT / "tunes" / tune / "build"
         hand = build / f"{tune}.prg.elf"
+        c, h, _ = transliterate(psid, f"{tune}.h")
+        (args.work / tune).mkdir(parents=True, exist_ok=True)
         out[tune] = ablate(
             psid,
-            build / "gen" / f"{tune}.c",
+            write(args.work / tune, c, h, f"{tune}.h")[0],
             frames=args.frames or song_calls(psid, song, args.hvsc),
             work=args.work / tune,
             hand=hand if hand.exists() else None,

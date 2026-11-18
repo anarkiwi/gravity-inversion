@@ -1,9 +1,12 @@
-"""Value-flow graphs and state machines of tunes' C with and without wayward-eagle's rewrites.
+"""Value-flow graphs, state machines and PRG sizes of tunes' C in two forms: reduced by
+wayward-eagle's rewrites against left whole (`raw`), or as translation units against one file
+(`split`).
 
-Rewrites that keep behavior keep what derives from what, so the graphs and machines of the two
-C texts should match; each difference is an edge one has that the other lacks (docs/flowgraph.md).
+Forms that keep behavior keep what derives from what, so the graphs and machines of the two
+should match; each difference is an edge one has that the other lacks (docs/flowgraph.md).
 
-    python tools/flowcmp.py OUT TUNE ...  # OUT/TUNE/{raw,reduced}/{gen.c,graph.dot,machines.dot}
+    python tools/flowcmp.py OUT TUNE ...  # OUT/TUNE/{raw,reduced}/{*.c,graph.dot,machines.dot}
+    python tools/flowcmp.py OUT TUNE --against split  # OUT/TUNE/{split,reduced}/...
     python tools/flowcmp.py OUT TUNE --edges  # every differing edge too
 """
 
@@ -14,7 +17,6 @@ import pathlib
 import sys
 from collections import Counter
 
-import wayward_eagle
 from deity_informant.cgen import printer
 from tqdm import tqdm
 
@@ -24,21 +26,24 @@ import flowsegment
 import transliterate
 
 
-def unreduced(body, name, fn):
-    """``reduced``'s result for a function left as it is."""
-    ret = None if fn.void else wayward_eagle.STATUS
-    return [wayward_eagle.Piece(name, fn.params, body, ret)], 1, set()
+def unreduced(fd, *_, **__):
+    """``reduce_function``'s result for a function left as it is."""
+    return [fd]
 
 
 @contextlib.contextmanager
 def rewrites(on):
     """The printer reducing functions (``on``) or leaving them as they are."""
-    keep = printer.reduced
-    printer.reduced = keep if on else unreduced
+    keep = printer.reduce_function
+    printer.reduce_function = keep if on else unreduced
     try:
         yield
     finally:
-        printer.reduced = keep
+        printer.reduce_function = keep
+
+
+#: Each form: reduced, as translation units.
+FORMS = {"raw": (False, False), "reduced": (True, False), "split": (True, True)}
 
 
 def edges(g):
@@ -46,34 +51,40 @@ def edges(g):
     return {(str(u), str(v), d.get("kind")) for u, v, d in g.edges(data=True)}
 
 
-def compare(tune, out, every=False):
-    """``{part: {"raw": n, "reduced": n, "lost": {...}, "gained": {...}}}`` of ``tune``'s graph
-    and machines, ``lost``/``gained`` counting edges by ``(source, kind)``."""
+def form(psid, mode, d):
+    """``(graph edges, machine edges, PRG bytes)`` of ``psid``'s C in form ``mode`` under
+    ``d``."""
+    on, split = FORMS[mode]
+    with rewrites(on):
+        c, h, _ = transliterate.transliterate(psid, "gen.h", split=split)
+    d.mkdir(parents=True, exist_ok=True)
+    units = transliterate.write(d, c, h, "gen.h")
+    g, _ = flowgraph.graph(units, {}, header=d / "gen.h")
+    q = flowsegment.segment(units, header=d / "gen.h")
+    (d / "graph.dot").write_text(flowgraph.dot(g), encoding="utf-8")
+    (d / "machines.dot").write_text(flowgraph.dot(q), encoding="utf-8")
+    prg = transliterate.compile_prg(units)
+    return edges(g), edges(q), prg.stat().st_size
+
+
+def compare(tune, out, every=False, against="raw"):
+    """``{part: {against: n, "reduced": n, "lost": {...}, "gained": {...}}, "prg": {form:
+    bytes}}`` of ``tune``'s graph and machines in form ``against`` and reduced, ``lost``/``gained``
+    counting edges by ``(source, kind)``."""
     psid = (constructs.ROOT / constructs.load(tune)["psid"]).read_bytes()
-    got = {}
-    for mode in ("raw", "reduced"):
-        with rewrites(mode == "reduced"):
-            c, h, _ = transliterate.transliterate(psid, "gen.h")
-        d = out / tune / mode
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "gen.c").write_text(c, encoding="utf-8")
-        (d / "gen.h").write_text(h, encoding="utf-8")
-        g, _ = flowgraph.graph(d / "gen.c", {})
-        q = flowsegment.segment(d / "gen.c")
-        (d / "graph.dot").write_text(flowgraph.dot(g), encoding="utf-8")
-        (d / "machines.dot").write_text(flowgraph.dot(q), encoding="utf-8")
-        got[mode] = {"graph": edges(g), "machines": edges(q)}
+    got = {m: form(psid, m, out / tune / m) for m in (against, "reduced")}
     rows = {}
-    for part in ("graph", "machines"):
-        a, b = got["raw"][part], got["reduced"][part]
+    for i, part in enumerate(("graph", "machines")):
+        a, b = got[against][i], got["reduced"][i]
         rows[part] = {
-            "raw": len(a),
+            against: len(a),
             "reduced": len(b),
             "lost": dict(Counter(f"{u} {k}" for u, _, k in a - b)),
             "gained": dict(Counter(f"{u} {k}" for u, _, k in b - a)),
         }
         if every:
             rows[part]["edges"] = {"lost": sorted(a - b), "gained": sorted(b - a)}
+    rows["prg"] = {m: v[2] for m, v in got.items()}
     return rows
 
 
@@ -83,11 +94,16 @@ def main(argv=None):
     ap.add_argument("out", type=pathlib.Path)
     ap.add_argument("tunes", nargs="+")
     ap.add_argument("--edges", action="store_true", help="list every differing edge")
+    ap.add_argument(
+        "--against", choices=("raw", "split"), default="raw", help="the other form"
+    )
     args = ap.parse_args(argv)
     differ = False
     for tune in tqdm(args.tunes, desc="flowcmp", unit="tune"):
-        rows = compare(tune, args.out, args.edges)
-        differ |= any(r["lost"] or r["gained"] for r in rows.values())
+        rows = compare(tune, args.out, args.edges, args.against)
+        differ |= any(
+            rows[p]["lost"] or rows[p]["gained"] for p in ("graph", "machines")
+        )
         tqdm.write(json.dumps({tune: rows}))
     return int(differ)
 

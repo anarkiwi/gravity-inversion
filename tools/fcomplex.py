@@ -83,30 +83,38 @@ def summarize(incs):
     }
 
 
-def score(path, includes=()):
-    """{"total": summary, "functions": {function: summary}} of the C at `path`, its own
-    directory and the driver's on the include path."""
-    path = pathlib.Path(path)
-    inc = increments(path, [path.parent, ROOT / "c64", *includes])
+def score(paths, includes=()):
+    """{"total": summary, "functions": {function: summary}} of the C at `paths` (a file or a
+    translation's units), each file's own directory and the driver's on the include path.
+    """
+    paths = [paths] if isinstance(paths, (str, pathlib.PurePath)) else paths
+    inc = {}
+    for path in map(pathlib.Path, paths):
+        inc.update(increments(path, [path.parent, ROOT / "c64", *includes]))
     fns = {f: summarize(v) for f, v in inc.items()}
     total = summarize([i for v in inc.values() for i in v])
     return {"total": {**total, "scored functions": len(fns)}, "functions": fns}
 
 
 def main(argv=None):
-    """CLI: one JSON line per C file, its total and its `--top` most complex functions."""
+    """CLI: one JSON line per C file, its total and its `--top` most complex functions; with
+    `--units`, one line of all the files as one translation's units."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("c", nargs="+", type=pathlib.Path)
     ap.add_argument("--top", type=int, default=5, help="functions listed per file")
+    ap.add_argument("--units", action="store_true", help="score the files as one")
     args = ap.parse_args(argv)
-    for c in tqdm(args.c, desc="fcomplex", unit="file"):
+    for c in tqdm([args.c] if args.units else args.c, desc="fcomplex", unit="file"):
         got = score(c)
         top = sorted(got["functions"].items(), key=lambda x: -x[1]["cognitive"])[
             : args.top
         ]
         tqdm.write(
             json.dumps(
-                {str(c): got["total"], "top": {f: s["cognitive"] for f, s in top}}
+                {
+                    " ".join(map(str, c)) if args.units else str(c): got["total"],
+                    "top": {f: s["cognitive"] for f, s in top},
+                }
             )
         )
     return 0

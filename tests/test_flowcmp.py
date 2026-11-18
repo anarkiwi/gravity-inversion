@@ -11,18 +11,17 @@ import flowcmp
 
 
 def test_rewrites_swap_and_restore_the_reducer():
-    """Inside ``rewrites(False)`` the printer leaves each function whole, one piece returning
-    what it did; outside it the reducer is back, also after an error."""
-    keep = printer.reduced
+    """Inside ``rewrites(False)`` the printer leaves each function whole, the one definition it
+    was; outside it the reducer is back, also after an error."""
+    keep = printer.reduce_function
     with flowcmp.rewrites(False):
-        assert printer.reduced is flowcmp.unreduced
-    assert printer.reduced is keep
+        assert printer.reduce_function is flowcmp.unreduced
+    assert printer.reduce_function is keep
     with pytest.raises(RuntimeError), flowcmp.rewrites(False):
         raise RuntimeError
-    assert printer.reduced is keep
-    fn = flowcmp.wayward_eagle.Function(["a"], set(), False)
-    pieces, sections, temps = flowcmp.unreduced(["x"], "f", fn)
-    assert (pieces[0].name, pieces[0].ret, sections, temps) == ("f", "status", 1, set())
+    assert printer.reduce_function is keep
+    fd = object()
+    assert flowcmp.unreduced(fd, frozenset(), None) == [fd]
 
 
 def test_edges_by_name_and_kind():
@@ -43,3 +42,14 @@ def test_commando_keeps_its_flow(tmp_path, capsys):
         assert row[part]["raw"] == row[part]["reduced"] > 0
         assert row[part]["edges"] == {"lost": [], "gained": []}
     assert (tmp_path / "commando" / "reduced" / "machines.dot").exists()
+
+
+@pytest.mark.slow
+def test_split_keeps_flow_and_size(tmp_path, capsys):
+    """Commando as translation units has the one file's graph and machines, and its PRG."""
+    assert flowcmp.main([str(tmp_path), "commando", "--against", "split"]) == 0
+    row = json.loads(capsys.readouterr().out.strip().splitlines()[-1])["commando"]
+    for part in ("graph", "machines"):
+        assert row[part]["split"] == row[part]["reduced"] > 0
+    assert row["prg"]["split"] == row["prg"]["reduced"]
+    assert (tmp_path / "commando" / "split" / "gen_play.c").exists()

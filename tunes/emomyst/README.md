@@ -95,7 +95,7 @@ against `make check` and the variant tests) leaves only equivalent mutants.
 
 ## Generated translation
 
-`make` also builds `build/gen.prg` from `build/gen/emomyst.c` and `.h`, generated from the PSID by
+`make` also builds `build/gen.prg` from the translation units `build/gen/emomyst_*.c` and `.h`, generated from the PSID by
 `tools/transliterate.py`; `make check` compares it over twice the HVSC length, and the tests on each
 patched variant.
 
