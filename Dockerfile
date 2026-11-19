@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && echo "deb [signed-by=/etc/apt/keyrings/llvm.asc] https://apt.llvm.org/$VERSION_CODENAME/ llvm-toolchain-$VERSION_CODENAME-22 main" \
        > /etc/apt/sources.list.d/llvm.list \
     && apt-get update && apt-get install -y --no-install-recommends clang-22 gcc git graphviz llvm-22 libc6-dev make mlir-22-tools python3 python3-venv \
-    && ln -s /usr/lib/llvm-22/bin/mlir-opt /usr/lib/llvm-22/bin/mlir-translate /usr/local/bin/ \
+    && ln -s /usr/lib/llvm-22/bin/mlir-opt /usr/lib/llvm-22/bin/mlir-translate /usr/lib/llvm-22/bin/opt /usr/local/bin/ \
     && rm -rf /var/lib/apt/lists/*
 ENV VIRTUAL_ENV=/venv PATH=/venv/bin:$PATH CLANG=clang-22 LLVM_LINK=llvm-link-22
 COPY requirements.txt requirements-dev.txt /tmp/
