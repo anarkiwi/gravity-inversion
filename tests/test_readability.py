@@ -4,6 +4,7 @@ import tomllib
 
 from wayward_eagle.census import adapter
 
+import censusdiff
 import readability
 from constructs import ROOT
 
@@ -27,3 +28,28 @@ def test_ratchet_config_counts_the_generated_c(tmp_path):
     got = adapter(options)
     assert got["fuzz-loop-0:goto"] == 0
     assert got["fuzz-jsr3-0:cognitive-complexity"] > 0
+
+
+def test_censusdiff_lists_the_functions_that_differ(tmp_path, capsys):
+    """Two directories of one player's C, one with a function given an extra local: only
+    that function's locals and lines differ."""
+    readability.main(["fuzz-loop-0", "--out", str(tmp_path / "a"), "-j", "1"])
+    (tmp_path / "b").mkdir()
+    for f in (tmp_path / "a").iterdir():
+        (tmp_path / "b" / f.name).write_bytes(f.read_bytes())
+    path = tmp_path / "b" / "fuzz-loop-0.c"
+    text = path.read_text(encoding="utf-8")
+    at = text.index("void cgen_play(uint8_t a) {") + len("void cgen_play(uint8_t a) {")
+    path.write_text(
+        text[:at] + "\n  volatile uint8_t extra = 0;\n  (void)extra;" + text[at:]
+    )
+    censusdiff.main([str(tmp_path / "a"), str(tmp_path / "b"), "fuzz-loop-0"])
+    rows = [line.split() for line in capsys.readouterr().out.splitlines()]
+    assert {(r[1], r[2]) for r in rows} >= {("cgen_play", "locals")}
+    assert {r[1] for r in rows} == {"cgen_play"}
+    old, new = censusdiff.report(tmp_path / "a" / "fuzz-loop-0.c"), censusdiff.report(
+        path
+    )
+    assert not censusdiff.changes(old, old)
+    [row] = [r for r in censusdiff.changes(old, new) if r[1] == "locals"]
+    assert row[3] == row[2] + 1

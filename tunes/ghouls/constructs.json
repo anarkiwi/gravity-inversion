@@ -309,14 +309,6 @@
      "$62ED"
     ],
     [
-     "$62CE",
-     "$62DA"
-    ],
-    [
-     "$62D6",
-     "$62DA"
-    ],
-    [
      "$64AD",
      "$64DA"
     ],
@@ -325,35 +317,19 @@
      "$64DA"
     ],
     [
-     "$64BB",
-     "$64C7"
-    ],
-    [
-     "$64C3",
-     "$64C7"
-    ],
-    [
      "$669C",
      "$66C9"
     ],
     [
      "$66A4",
      "$66C9"
-    ],
-    [
-     "$66AA",
-     "$66B6"
-    ],
-    [
-     "$66B2",
-     "$66B6"
     ]
    ],
    "hand": {
     "fn": "play_voice",
     "form": "set_note() in each section"
    },
-   "why": "The pitch store $62DA is joined by the trill and portamento sections; portamento skips it when off or at its target ($62C0/$62C8 to $62ED) and enters it from its step and clamp; the copies at +$1ED and +$3DC take the same edges.",
+   "why": "The pitch store $62DA is joined by the trill and portamento sections; portamento skips it when off or at its target ($62C0/$62C8 to $62ED); the copies at +$1ED and +$3DC take the same edges. The trill's entries ($62CE/$62D6 to $62DA) are structured.",
    "lift": "goto",
    "covered": false,
    "uncovered": "the songs the map runs take some portamento steps and clamps on only some copies; tests/test_ghouls.py's PATTERN variant, overshooting both ways on every voice, reaches them",

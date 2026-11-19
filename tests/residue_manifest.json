@@ -253,19 +253,19 @@
    "address-dispatch": [
     [
      "$2999",
-     "subscript by address C1[(uint16_t)((R2[0] | ((uint16_t)R2[1] << 8)) + v7 - C1_ORG)]"
+     "subscript by address C1[(uint16_t)((R2[0] | ((uint16_t)R2[1] << 8)) + v5 - C1_ORG)]"
     ],
     [
      "$2999",
-     "subscript by address C1[(uint16_t)((R2[0] | ((uint16_t)R2[1] << 8)) + v8 - C1_ORG)]"
+     "subscript by address C1[(uint16_t)((R2[0] | ((uint16_t)R2[1] << 8)) + v6 - C1_ORG)]"
     ],
     [
      "$2999",
-     "subscript by address C1[(uint16_t)((R2[2] | ((uint16_t)R2[3] << 8)) + v7 - C1_ORG)]"
+     "subscript by address C1[(uint16_t)((R2[2] | ((uint16_t)R2[3] << 8)) + v5 - C1_ORG)]"
     ],
     [
      "$2999",
-     "subscript by address C1[(uint16_t)((R2[2] | ((uint16_t)R2[3] << 8)) + v8 - C1_ORG)]"
+     "subscript by address C1[(uint16_t)((R2[2] | ((uint16_t)R2[3] << 8)) + v6 - C1_ORG)]"
     ],
     [
      "$6110",
@@ -287,11 +287,11 @@
    "address-value": [
     [
      "$6234",
-     "value CODE_ORG + 0xA03 + v7 + v39 - R38_ORG"
+     "value CODE_ORG + 0xA03 + v7 + v41 - R38_ORG"
     ],
     [
      "$6234",
-     "value CODE_ORG + 0xA42 + v7 + v39 - R38_ORG"
+     "value CODE_ORG + 0xA42 + v7 + v41 - R38_ORG"
     ]
    ],
    "duplicate-check": [
