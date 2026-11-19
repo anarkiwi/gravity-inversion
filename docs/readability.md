@@ -16,7 +16,8 @@ changes no count.
 (`fuzz-<style>-<seed>`, the residue census' targets) to `out/readability/<name>.c` and
 `.h`; `virtuous-cycles.toml` runs the `wayward-census` adapter over them. Keys are
 `<name>:<class>`, every class of every file held (zero where it has no site), and
-`<name>:cognitive-complexity`.
+`<name>:cognitive-complexity`, `<name>:locals`, and `<name>:lines` and `<name>:statements` (the
+file's largest function).
 
 CI runs `make readability AGAINST=origin/main` (`virtuous-cycles check --against origin/main`): no value may exceed its budget, and
 no budget may loosen. Budget files merge by keeping the stricter value per key:
