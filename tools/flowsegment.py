@@ -240,10 +240,11 @@ def edge_kinds(q, u, v):
     return {d["kind"] for d in q.get_edge_data(u, v, default={}).values()}
 
 
-def segment(c_path, entry="cgen_play"):
-    """The state machines of what ``entry`` runs in the generated C at ``c_path``, cells split
-    by def-use web, register cells contracted, classes contracted."""
-    g, _ = flowgraph.graph(pathlib.Path(c_path), entries=[entry], split=True)
+def segment(c_paths, entry="cgen_play", header=None):
+    """The state machines of what ``entry`` runs in the generated C at ``c_paths``
+    (:func:`flowgraph.units_of`), cells split by def-use web, register cells contracted,
+    classes contracted."""
+    g, _ = flowgraph.graph(c_paths, entries=[entry], split=True, header=header)
     g = machines(registers(g))
     return quotient(g, classes(g))
 
@@ -251,11 +252,12 @@ def segment(c_path, entry="cgen_play"):
 def main(argv=None):
     """CLI: write OUT.dot, OUT.png and OUT.json of a generated C's state machines."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("c", help="generated C (its .h beside)")
     ap.add_argument("out", help="output path stem")
+    ap.add_argument("c", nargs="+", help="generated C (its .h beside) or its units")
+    ap.add_argument("--header", help="the units' header")
     ap.add_argument("--entry", default="cgen_play")
     args = ap.parse_args(argv)
-    q = segment(args.c, args.entry)
+    q = segment(args.c[0] if len(args.c) == 1 else args.c, args.entry, args.header)
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.with_suffix(".dot").write_text(flowgraph.dot(q), encoding="utf-8")

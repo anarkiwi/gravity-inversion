@@ -166,7 +166,10 @@ class Census:  # pylint: disable=too-many-instance-attributes
         self.inside = np.zeros(0x10000, bool)
         self.inside[self.load : self.load + len(image)] = True
         prov = self.info["provenance"]["functions"]
-        self.entry = {n: f["entry"] for n, f in prov.items()}
+        self.entry = {
+            **{p: f["entry"] for f in prov.values() for p in f.get("pieces", ())},
+            **{n: f["entry"] for n, f in prov.items()},
+        }
         self.entry.setdefault("cgen_init", self.init)
         self.nodes = {
             n: list(costs.walk(d))

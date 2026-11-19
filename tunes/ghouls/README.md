@@ -90,7 +90,7 @@ second exit (`$630B` → `$6338`; `return` from `pulse_sweep()`).
 
 ## Generated translation
 
-`make` also builds `build/gen.prg` from `build/gen/ghouls.c` and `.h`, generated from the PSID by
+`make` also builds `build/gen.prg` from the translation units `build/gen/ghouls_*.c` and `.h`, generated from the PSID by
 `tools/transliterate.py`; `make check` compares every subtune, and the tests the patched song.
 
 ## Residue

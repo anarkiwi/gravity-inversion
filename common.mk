@@ -8,6 +8,8 @@ CC := mos-c64-clang
 endif
 CFLAGS := -Os -Wall -Wextra -Werror
 PY := PYTHONPATH=$(ROOT)/tools python3
+UNIT := -flto -Xclang -disable-llvm-passes -c
+MERGE := -flto -r -nostdlib -Wl,--lto-O0,--lto-emit-llvm
 DRIVER := $(ROOT)/c64/driver.c $(ROOT)/c64/driver.h
 SONGLENGTHS := $(FIX)/DOCUMENTS/Songlengths.md5
 SONGLENGTHS_URL := https://www.hvsc.c64.org/download/C64Music/DOCUMENTS/Songlengths.md5
@@ -48,11 +50,19 @@ all: $(B)/gen.prg
 $(B)/lifter.stamp: FORCE
 	$(PY) $(ROOT)/tools/lifterstamp.py $@
 
-$(B)/gen/$(TUNE).c $(B)/gen/$(TUNE).h $(B)/gen/cgen_trap.c &: $(PSID) $(ROOT)/tools/transliterate.py $(B)/lifter.stamp
-	mkdir -p $(B)/gen
-	$(PY) $(ROOT)/tools/transliterate.py $< $(B)/gen/$(TUNE).c --header $(B)/gen/$(TUNE).h
+# The translation units, their paths listed in $(B)/gen/units.
+$(B)/gen/units $(B)/gen/$(TUNE).h $(B)/gen/cgen_trap.c &: $(PSID) $(ROOT)/tools/transliterate.py $(B)/lifter.stamp
+	$(PY) $(ROOT)/tools/transliterate.py $< $(B)/gen --header $(TUNE).h --list $(B)/gen/units
 
-$(B)/gen.prg: $(B)/gen/$(TUNE).c $(B)/gen/$(TUNE).h $(DRIVER)
+# Each unit's bitcode, left for the whole program's optimization, linked into one module
+# (tools/transliterate.py UNIT and MERGE): the PRG is optimized as one file is.
+$(B)/gen.bc: $(B)/gen/units $(B)/gen/$(TUNE).h
+	for u in $$(cat $(B)/gen/units); do \
+	  $(CC) $(CFLAGS) $(CFLAGS_TUNE) -I$(B)/gen -I$(ROOT)/c64 $(UNIT) -o $$u.bc $$u || exit 1; \
+	done
+	$(CC) $(MERGE) -o $@ $$(sed 's/$$/.bc/' $(B)/gen/units)
+
+$(B)/gen.prg: $(B)/gen.bc $(B)/gen/cgen_trap.c $(DRIVER)
 	$(call mosbuild,$@,$(B)/gen,$< $(B)/gen/cgen_trap.c)
 
 check: check-gen

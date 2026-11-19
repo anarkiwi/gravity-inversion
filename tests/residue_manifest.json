@@ -1,7 +1,7 @@
 {
  "pins": {
-  "deity-informant": "0.40.13",
-  "vagrant-moses": "0.17.0",
+  "deity-informant": "0.40.18",
+  "vagrant-moses": "0.19.0",
   "jennings": "0.14.1",
   "pysidtracker": "0.63.0"
  },
@@ -9,7 +9,6 @@
   "automatas": {
    "code-as-data": "span C1 $14CB-$1713 holds play's code $14CB-$1553 and $168C-$1713, which the reads at $0FE3 and $1022 (the note reads at $1426/$143F) indexed by a note byte reach through C1 and the song data slice R33 inside it, and $14CB-$1553 where the loaded object's runs meet it, read past its check by the row reads at $112A (B0, B0c0); span C0 $101F-$1083 holds the voice copies' gate bit and mask bytes ($1020-$1021 at the copies' $31 stride), constant after init and read at $12BE by voice index, and the copies' code $1022-$1049 and $1053-$107A between them, which the reads at $0FE3 and $1022 reach too",
    "duplicate-check": "the memory map's per-read objchk (fused checked reads B0c0 among them) of reads through one pointer value, checked again at each offset",
-   "duplicate-code": "Instructions held by more than one C function (code init's lift and play's lift both print, or a procedure's fall-through held per procedure) and instructions the structuring prints in more than one place in one function (a shared tail or tail call printed in place per edge into it).",
    "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction); $1146 the row reads' operand pointer at $1149, checked at the store completing it, outside the loaded object it points into (objchk); $1690-$1748 the pointer reads whose addresses the machine model bounds to the loaded object they point into (objchk, def machine), trapping an address outside it"
   },
   "commando": {
@@ -20,10 +19,9 @@
   "emomyst": {
    "address-dispatch": "init's voice setup at $17C8 reads through the voice pointers $17CF/$17D3/$17D7 (R46-R48) and init's helper at $1163 through its own patched operand (S_162 with the byte at R3[0xD5], the call counted at $1163), through span C0's bounds-checked reader; init's relocator subscripts span C0 by the 16-bit operand addresses its relocation table lists less C0_ORG; play's patched immediates (S_C9-S_9ED), held in span C0 where the relocator's subscripts reach, are found through cgen_var",
    "address-value": "the effect dispatches $19CF and $1A13 lift as switches over the effect index, but the stores of each handler's address byte into the JMPs' operands (S_9CE, S_A11) stay: the cells lie where span C0's reads reach, so the C keeps the code address bytes as values",
-   "code-as-data": "span C0 $1000-$24A1 holds the whole image: init's relocator reads and patches the operands its relocation table lists by subscripts of C0 with their 16-bit addresses, and init's voice pointers and its helper's patched operand are bounds-checked reads of C0, while play's song and pattern pointer reads, checked against the loaded object (B0, B0c1), meet it where that object's runs lie in the code, so init's and play's code ($1000-$1B54, one site per set of accesses reaching it) is held; the effect offset table at $1A03 inside the code is read at $1A00 by a byte index, whose interval reaches the code after it",
+   "code-as-data": "span C0 $1000-$24A1 holds the whole image: init's relocator reads and patches the operands its relocation table lists by subscripts of C0 with their 16-bit addresses, and init's voice pointers and its helper's patched operand are bounds-checked reads of C0, while play's song and pattern pointer reads, checked against the loaded object (B0, B0c1), meet it where that object's runs lie in the code, so init's and play's code ($1000-$1B54, one site per set of accesses reaching it) is held; the effect offset table at $1A03 inside the code is read at $1A00 by a byte index, whose interval reaches the code after it; init's relocation loop, cut into its own piece with an int counter (wayward-eagle's counted loop), reads the relocation table R62 by subscripts whose type-bounded intervals meet the code too",
    "duplicate-check": "the memory map's per-read objchk (fused checked reads B0c1) of the song and pattern pointers at each Y offset, and of reads indexed by one Y definition over the song data run, each pointer value checked again at every read",
    "duplicate-code": "Instructions held by more than one C function (code init's lift and play's lift both print, or a procedure's fall-through held per procedure) and instructions the structuring prints in more than one place in one function (a shared tail or tail call printed in place per edge into it).",
-   "extra-decisions": "a shared handler tail retests the dispatch selector (v5 == 0x24, 0x2A) after the switch",
    "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction); $1947 an effect byte past its table's extent (the code after it); $1255-$175A, $1A46 and $1B22-$1B4C the pointer reads whose addresses the machine model bounds to the loaded object they point into (objchk, def machine), trapping an address outside it"
   },
   "fuzz-brk": {
@@ -75,7 +73,7 @@
   },
   "ghouls": {
    "address-dispatch": "init's copy loop at $2999 subscripts span C1 by its 16-bit copy pointers ($FA/$FB, $FC/$FD) less C1_ORG; init's song setup at $6110 reads the song list and record through the pointers it loads (the record pointer at $96/$97) through span C1's bounds-checked reader and subscripts C1 by the 16-bit address it assembles less C1_ORG",
-   "address-value": "play's command dispatch at $6234 reads each voice copy's handler address bytes from the split tables at $6C37/$6C76 by the copy's offset and a command byte $80-$94: the reads lie in the song data R36 ($6CB7 on), but the instructions' base operands lie below it, so the C spells them as CODE_ORG offsets less R36_ORG",
+   "address-value": "play's command dispatch at $6234 reads each voice copy's handler address bytes from the split tables at $6C37/$6C76 by the copy's offset and a command byte $80-$94: the reads lie in the song data R38 ($6CB7 on), but the instructions' base operands lie below it, so the C spells them as CODE_ORG offsets less R38_ORG",
    "code-as-data": "span C1 $2980-$A013 holds init's code ($2980-$29E6, $6110-$6122, $6153-$622D, $7316-$733E) and play's ($6234-$6CB6 runs): init's copy loop stores through its 16-bit copy pointers into C1, its song setup reads the song list and records through C1's bounds-checked reader and subscripts C1 by the 16-bit addresses it loads, and the song pointers' CGEN_IX subscripts of C1 by the 16-bit pointer at $6234 reach it; the per-voice cells init clears that are not promoted are held as regions inside it",
    "duplicate-check": "objchk and bounds-checked rdC reads through one pointer value or index register definition already checked",
    "invalid-input-guard": "init's song guard: A outside the PSID header's songs (by construction) ($6110); $299B a song's copy selector (from $2A1A/$2A25) past the ten copy pointer pairs at $29E7/$29FB (the next object) and $61FC the song number less $0A indexing the song list pointers past their extent (a byte another column reads), each implied by the entry guard; $6362 a voice's song pointer outside the song data $6CB7-$9E07 it points into (objchk); $6368 a song command byte outside $80-$94 indexing the command table past its extent (the next object); $6AC3 and $6ACA the pointer reads whose addresses the machine model bounds to the loaded object they point into (objchk, def machine), trapping an address outside it"
@@ -162,20 +160,6 @@
      "C1 $168C-$1713 (136 B): B0c2@$112A, C1@$12BE, R33@$12BE"
     ]
    ],
-   "duplicate-code": [
-    [
-     "$1128",
-     "copy 2 of 2"
-    ],
-    [
-     "$11B0",
-     "copy 2 of 2"
-    ],
-    [
-     "$1238",
-     "copy 2 of 2"
-    ]
-   ],
    "duplicate-check": [
     [
      "$169A",
@@ -239,7 +223,7 @@
    "code-as-data": [
     [
      "$2980",
-     "C1 $2980-$29E6 (103 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R1@$2999, rdC1@$6110"
+     "C1 $2980-$29E6 (103 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R3@$2999, rdC1@$6110"
     ],
     [
      "$6110",
@@ -247,45 +231,45 @@
     ],
     [
      "$6153",
-     "C1 $6153-$622D (219 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R1@$6110, rdC1@$6110"
+     "C1 $6153-$622D (219 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R3@$6110, rdC1@$6110"
     ],
     [
      "$6234",
-     "C1 $6234-$6A04 (2001 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R12@$6110, R14@$6110, R17@$6110, R1@$6110, R20@$6110, R22@$6110, R25@$6110, R26@$6110, R26@$6234, R27@$6110, R27@$6234, R28@$6110, R28@$6234, R29@$6110, R29@$6234, R30@$6110, R30@$6234, R4@$6110, R6@$6110, R9@$6110, rdC1@$6110"
+     "C1 $6234-$6A04 (2001 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R11@$6110, R14@$6110, R16@$6110, R19@$6110, R22@$6110, R24@$6110, R27@$6110, R28@$6110, R28@$6234, R29@$6110, R29@$6234, R30@$6110, R30@$6234, R31@$6110, R31@$6234, R32@$6110, R32@$6234, R3@$6110, R6@$6110, R8@$6110, rdC1@$6110"
     ],
     [
      "$6A0B",
-     "C1 $6A0B-$6B1E (276 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R31@$6234, rdC1@$6110"
+     "C1 $6A0B-$6B1E (276 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R33@$6234, rdC1@$6110"
     ],
     [
      "$6B31",
-     "C1 $6B31-$6BD9, $6BDC-$6BF4, $6BF7-$6C0F, $6C12-$6CB6 (384 B): B0c3@$6234, C1@$2999, C1@$6110, C1@$6234, CGEN_IX@$6234, R32@$6234, rdC1@$6110"
+     "C1 $6B31-$6BD9, $6BDC-$6BF4, $6BF7-$6C0F, $6C12-$6CB6 (384 B): B0c3@$6234, C1@$2999, C1@$6110, C1@$6234, CGEN_IX@$6234, R34@$6234, rdC1@$6110"
     ],
     [
      "$7316",
-     "C1 $7316-$733E (41 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R36@$6110, R36@$6234, rdC1@$6110"
+     "C1 $7316-$733E (41 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R38@$6110, R38@$6234, rdC1@$6110"
     ]
    ],
    "address-dispatch": [
     [
      "$2999",
-     "subscript by address C1[(uint16_t)((R0[0xFA] | ((uint16_t)R0[0xFB] << 8)) + v8 - C1_ORG)]"
+     "subscript by address C1[(uint16_t)((R2[0] | ((uint16_t)R2[1] << 8)) + v7 - C1_ORG)]"
     ],
     [
      "$2999",
-     "subscript by address C1[(uint16_t)((R0[0xFA] | ((uint16_t)R0[0xFB] << 8)) + v9 - C1_ORG)]"
+     "subscript by address C1[(uint16_t)((R2[0] | ((uint16_t)R2[1] << 8)) + v8 - C1_ORG)]"
     ],
     [
      "$2999",
-     "subscript by address C1[(uint16_t)((R0[0xFC] | ((uint16_t)R0[0xFD] << 8)) + v8 - C1_ORG)]"
+     "subscript by address C1[(uint16_t)((R2[2] | ((uint16_t)R2[3] << 8)) + v7 - C1_ORG)]"
     ],
     [
      "$2999",
-     "subscript by address C1[(uint16_t)((R0[0xFC] | ((uint16_t)R0[0xFD] << 8)) + v9 - C1_ORG)]"
+     "subscript by address C1[(uint16_t)((R2[2] | ((uint16_t)R2[3] << 8)) + v8 - C1_ORG)]"
     ],
     [
      "$6110",
-     "rdC1(R0[0x96] | ((uint16_t)R0[0x97] << 8), v2 + 2)"
+     "rdC1(R1[0x75] | ((uint16_t)R1[0x76] << 8), v2 + 2)"
     ],
     [
      "$6110",
@@ -303,11 +287,11 @@
    "address-value": [
     [
      "$6234",
-     "value CODE_ORG + 0xA03 + v7 + v50 - R36_ORG"
+     "value CODE_ORG + 0xA03 + v7 + v39 - R38_ORG"
     ],
     [
      "$6234",
-     "value CODE_ORG + 0xA42 + v7 + v50 - R36_ORG"
+     "value CODE_ORG + 0xA42 + v7 + v39 - R38_ORG"
     ]
    ],
    "duplicate-check": [
@@ -329,49 +313,49 @@
    "code-as-data": [
     [
      "$1000",
-     "C0 $1000-$1005, $1015-$101B (13 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163"
+     "C0 $1000-$1005, $1015-$101B (13 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R62@$1000, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$10A5",
-     "C0 $10A5-$1166 (194 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R2@$1000, R2@$1003, R2@$124D, R2@$1400, R2@$1537, R2@$16D6, R2@$17BA, R2@$17E5, R2@$1802, R2@$19AB, R2@$1A00, R2@$1A59, R2@$1AB4, R2@$1B2A, R2@$1B31, rdC0@$1000, rdC0@$1163"
+     "C0 $10A5-$1166 (194 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R2@$1000, R2@$1003, R2@$124D, R2@$1400, R2@$1537, R2@$16D6, R2@$17BA, R2@$17E5, R2@$1802, R2@$19AB, R2@$1A00, R2@$1A59, R2@$1AB4, R2@$1B2A, R2@$1B31, R62@$1000, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$1186",
-     "C0 $1186-$118F (10 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R2@$1400, R2@$1B2A, rdC0@$1000, rdC0@$1163"
+     "C0 $1186-$118F (10 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R2@$1400, R2@$1B2A, R62@$1000, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$11AA",
-     "C0 $11AA, $11C4-$1223, $1243-$124B (106 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, rdC0@$1000, rdC0@$1163"
+     "C0 $11AA, $11C4-$1223, $1243-$124B (106 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R62@$1000, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$124D",
-     "C0 $124D-$182F (1507 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R45@$1000, R46@$1000, R46@$17C8, R47@$1000, R47@$17C8, R48@$1000, R48@$17C8, rdC0@$1000, rdC0@$1163"
+     "C0 $124D-$182F (1507 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R45@$1000, R46@$1000, R46@$17C8, R47@$1000, R47@$17C8, R48@$1000, R48@$17C8, R62@$1000, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$1939",
-     "C0 $1939-$19F1 (185 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, C0@$1003, C0@$1537, C0@$16D6, CGEN_IX@$1000, R49@$1400, R50@$19AB, R63@$1400, R63@$16D6, R63@$1802, R64@$1A00, rdC0@$1000, rdC0@$1163"
+     "C0 $1939-$19F1 (185 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, C0@$1003, C0@$1537, C0@$16D6, CGEN_IX@$1000, R49@$1400, R50@$19AB, R62@$1000, R63@$1400, R63@$16D6, R63@$1802, R64@$1A00, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$1A00",
-     "C0 $1A00-$1A14, $1A16-$1A6F (111 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R63@$1400, R63@$1802, R64@$1A00, rdC0@$1000, rdC0@$1163"
+     "C0 $1A00-$1A14, $1A16-$1A6F (111 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R62@$1000, R63@$1400, R63@$1802, R64@$1A00, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$1AAE",
-     "C0 $1AAE-$1B54 (167 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R63@$1802, R64@$1A00, R65@$19AB, rdC0@$1000, rdC0@$1163"
+     "C0 $1AAE-$1B54 (167 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R62@$1000, R63@$1802, R64@$1A00, R65@$19AB, rdC0@$1000, rdC0@$1163"
     ]
    ],
    "address-dispatch": [
     [
      "$1000",
-     "rdC0(R46[0] | ((uint16_t)R46[1] << 8), v21)"
+     "rdC0(R46[0] | ((uint16_t)R46[1] << 8), v20)"
     ],
     [
      "$1000",
-     "rdC0(R47[0] | ((uint16_t)R47[1] << 8), v21)"
+     "rdC0(R47[0] | ((uint16_t)R47[1] << 8), v20)"
     ],
     [
      "$1000",
-     "rdC0(R48[0] | ((uint16_t)R48[1] << 8), v21)"
+     "rdC0(R48[0] | ((uint16_t)R48[1] << 8), v20)"
     ],
     [
      "$1000",
@@ -544,60 +528,34 @@
      "transfer operand of $1A13: S_A11"
     ]
    ],
-   "extra-decisions": [
-    [
-     "$19AB",
-     "8 decision points, 6 original branches"
-    ]
-   ],
    "duplicate-code": [
     [
-     "$13F5",
+     "$1424",
+     "copy 2 of 5"
+    ],
+    [
+     "$1424",
+     "copy 3 of 5"
+    ],
+    [
+     "$1424",
+     "copy 4 of 5"
+    ],
+    [
+     "$1424",
+     "copy 5 of 5"
+    ],
+    [
+     "$1459",
      "copy 2 of 2"
     ],
     [
-     "$1424",
-     "copy 2 of 7"
-    ],
-    [
-     "$1424",
-     "copy 3 of 7"
-    ],
-    [
-     "$1424",
-     "copy 4 of 7"
-    ],
-    [
-     "$1424",
-     "copy 5 of 7"
-    ],
-    [
-     "$1424",
-     "copy 6 of 7"
-    ],
-    [
-     "$1424",
-     "copy 7 of 7"
-    ],
-    [
-     "$1459",
+     "$145C",
      "copy 2 of 3"
     ],
     [
-     "$1459",
+     "$145C",
      "copy 3 of 3"
-    ],
-    [
-     "$145C",
-     "copy 2 of 4"
-    ],
-    [
-     "$145C",
-     "copy 3 of 4"
-    ],
-    [
-     "$145C",
-     "copy 4 of 4"
     ],
     [
      "$17C8",
@@ -625,23 +583,15 @@
     ],
     [
      "$1943",
-     "copy 2 of 6"
+     "copy 2 of 4"
     ],
     [
      "$1943",
-     "copy 3 of 6"
+     "copy 3 of 4"
     ],
     [
      "$1943",
-     "copy 4 of 6"
-    ],
-    [
-     "$1943",
-     "copy 5 of 6"
-    ],
-    [
-     "$1943",
-     "copy 6 of 6"
+     "copy 4 of 4"
     ],
     [
      "$1A23",

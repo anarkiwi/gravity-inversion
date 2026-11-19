@@ -3,6 +3,7 @@ value flow and def-use webs of a small C player, the segmentation's contractions
 and the per-family runs."""
 
 import json
+import pathlib
 
 import networkx as nx
 import pytest
@@ -97,6 +98,23 @@ def test_webs(player):
     assert not s["residual_calls"]
     whole, _ = flowgraph.graph(player)
     assert "t+0" in whole and not any("@" in n for n in whole)
+
+
+def test_units_link(player):
+    """The player as two translation units, init's apart, lowered and linked, has the one
+    file's graph."""
+    play, init = player.with_name("gen_play.c"), player.with_name("gen_init.c")
+    play.write_text(
+        PLAYER.replace("void cgen_init(uint8_t song) { pos = song; }\n", "")
+    )
+    init.write_text(
+        "#include <stdint.h>\nextern uint8_t pos;\n"
+        "void cgen_init(uint8_t song) { pos = song; }\n"
+    )
+    whole, _ = flowgraph.graph(player)
+    linked, _ = flowgraph.graph([play, init], header=player.with_suffix(".h"))
+    assert set(linked.edges(data="kind")) == set(whole.edges(data="kind"))
+    assert set(linked) == set(whole)
 
 
 def test_segment(player):
@@ -217,8 +235,10 @@ def test_main(sidwizard, tmp_path, capsys):
     assert (out / "sidwizard" / "machines.png").stat().st_size
     with pytest.raises(SystemExit):
         condition.main(["nosuch"])
-    c = out / "sidwizard" / "gen.c"
-    assert flowsegment.main([str(c), str(tmp_path / "seg")]) == 0
+    units = sorted(map(str, (out / "sidwizard").glob("gen_*.c")))
+    assert {pathlib.Path(u).name for u in units} >= {"gen_play.c", "gen_host.c"}
+    header = ["--header", str(out / "sidwizard" / "gen.h")]
+    assert flowsegment.main([str(tmp_path / "seg"), *units, *header]) == 0
     assert json.loads(capsys.readouterr().out.splitlines()[-1])["nodes"]["sid"]
     psid = condition.tune_path("Emomyst.sid")
     assert flowgraph.main([str(psid), str(tmp_path / "g" / "flow")]) == 0
@@ -252,3 +272,97 @@ def test_roles():
     assert r["mod"] == ("modulator", ["pulse"], [], [], [])
     assert r["tim"] == ("timer", [], [], ["control"], [])
     assert r["flg"] == ("flag", [], [], ["pulse"], ["mod"])
+
+
+HEAD = """#include <stdint.h>
+void io_write(uint16_t a, uint8_t v);
+uint8_t gate, a, b;
+"""
+
+#: Pairs of players doing the same thing in two shapes: a value chosen at a join and the
+#: same values passed to a tail call; a tail run after both arms and its copies; a guarded
+#: write and the same write in a callee.
+SAME = [
+    (
+        "void cgen_play(void) { uint8_t v; if (gate) v = a; else v = b; io_write(0xD400, v); }",
+        "static void put(uint8_t v) { io_write(0xD400, v); }\n"
+        "void cgen_play(void) { if (gate) { put(a); return; } put(b); }",
+    ),
+    (
+        "void cgen_play(void) { io_write(0xD404, gate ? 1 : 0); io_write(0xD418, a); }",
+        "static void after(void) { io_write(0xD418, a); }\n"
+        "void cgen_play(void) { if (gate) { io_write(0xD404, 1); after(); return; }\n"
+        "  io_write(0xD404, 0); after(); }",
+    ),
+    (
+        "void cgen_play(void) { if (gate) io_write(0xD403, a); io_write(0xD402, b); }",
+        "static void maybe(void) { if (gate) io_write(0xD403, a); }\n"
+        "void cgen_play(void) { maybe(); io_write(0xD402, b); }",
+    ),
+]
+
+
+def _edges(tmp_path, body, name):
+    d = tmp_path / name
+    d.mkdir()
+    g, _ = flowgraph.graph(_player(d, HEAD + body), entries=["cgen_play"])
+    return set(g.edges(data="kind"))
+
+
+@pytest.mark.parametrize("pair", SAME)
+def test_shape_keeps_flow(tmp_path, pair):
+    """Both shapes of each pair have the same value and control edges: a branch choosing a
+    value or a call site gates what it chooses, and what runs on every path is gated by
+    nothing."""
+    one, two = (_edges(tmp_path, body, n) for n, body in zip("ab", pair))
+    assert one == two
+    assert ("gate+0", "SID+$18", "control") not in one
+    assert ("gate+0", "SID+$02", "control") not in one
+
+
+def test_selected_value_and_equal_status(tmp_path):
+    """A value chosen by a branch is controlled by its condition; a status every path
+    returns alike gates nothing after the call testing it."""
+    got = _edges(tmp_path, SAME[0][0], "join")
+    assert {("gate+0", "SID+$00", "control"), ("a+0", "SID+$00", "value")} <= got
+    status = (
+        "static uint8_t f(void) { if (gate) return 0; io_write(0xD401, 1); return 0; }\n"
+        "void cgen_play(void) { if (f()) return; io_write(0xD402, a); }"
+    )
+    got = _edges(tmp_path, status, "status")
+    assert ("gate+0", "SID+$01", "control") in got
+    assert ("gate+0", "SID+$02", "control") not in got
+
+
+def test_deciders_and_gates():
+    """A branch decides a merge when its successors' gating expressions differ, even when
+    each reaches both values by tests of its own; one whose successors reach the same test
+    does not. A successor reaching no
+    exit (a trap) neither gates nor is avoided."""
+    succ = {
+        "a": ["b", "c"],
+        "b": ["x", "y"],
+        "c": ["x", "y"],
+        "x": [],
+        "y": [],
+        "d": [],
+    }
+    leaf = {("b", "x"): 1, ("b", "y"): 2, ("c", "x"): 2, ("c", "y"): 1}
+    assert irflow.deciders(succ, {"a", "b", "c"}, lambda t, s: leaf.get((t, s))) == {
+        "a",
+        "b",
+        "c",
+    }
+    join = {"a": ["m", "n"], "m": ["b"], "n": ["b"], "b": ["x", "y"], "x": [], "y": []}
+    pick = {("b", "x"): 1, ("b", "y"): 2}
+    assert irflow.deciders(join, {"a", "b"}, lambda t, s: pick.get((t, s))) == {"b"}
+    blocks = {
+        "e": ((), ["s", "trap"]),
+        "s": ((), ["k", "r"]),
+        "k": ((), ["r"]),
+        "r": ((), []),
+        "trap": ((), []),
+    }
+    gates = irflow.Gates(blocks, ["r"])
+    assert gates.of(frozenset({"k"})) == {"s"}
+    assert gates.of(frozenset({"s"})) == set()

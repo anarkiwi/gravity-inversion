@@ -87,9 +87,11 @@ def lifted(c, prov):  # pylint: disable=too-many-return-statements
             return c["cell"] not in prov["vars"] and c["reader"] in prov["switches"]
         return c["cell"] in prov["cells"]
     if k == "goto":
-        # An edge from code the C does not translate leaves no goto.
+        # An edge from code the C does not translate leaves no goto; one the structuring
+        # left a goto may be reduced to a call of a tail or a return.
         gone = all(e[0] not in prov["starts"] for e in c["edges"])
-        return gone or {tuple(e) for e in c["edges"]} <= gotos
+        placed = gotos | {tuple(e) for e in prov.get("reduced", ())}
+        return gone or {tuple(e) for e in c["edges"]} <= placed
     if k == "join":
         return not {tuple(e) for e in c["edges"]} & gotos
     if k == "short_circuit":

@@ -32,7 +32,7 @@ its form in the generated C too.
 | `multi_entry_loop` | a cycle entered by `edges` at two points, `back` -> `head` (`copies`: the same loop in other instances) | one loop with an entry selector |
 | `unrolled` | `copies` of one body, operands at strides (`inserted`: instructions only some copies have) | one function with an instance index |
 | `smc` | `writer` stores into `cell`, a byte of `reader` | a variable (`lift` `variable`); none where the transfer it targets is a switch over the index the store's value is read by (`no variable: ...`) |
-| `goto` | `edges` with no structured form | a goto per edge |
+| `goto` | `edges` with no structured form | a goto per edge (`goto`); where the cognitive-complexity reduction expresses it as a call of a tail or a return, deity-informant's provenance `reduced` (`goto, reduced`, or `goto, partly reduced` for some of its edges) |
 | `join` | edges rejoining at the post-dominator of their branch | if/else, no goto |
 | `short_circuit` | `branches` sharing `target` | one `&&`/`\|\|` condition |
 | `switch` | a computed `dispatch` (written operand, branch offset or table); `edges`: arms leaving for the join after it | a switch; those arms `break` |
@@ -62,7 +62,7 @@ acyclic structure exists, and tail calls must be cut before either. The steps, i
 | T3 | copy classes: consecutive, chained copies equal up to operand deltas affine in the copy index | one function `f(k)`; per-copy cells and constants become state and tables indexed by `k` | 6 |
 | T4 | dominator tree per procedure (back edges, including fall-through back edges of rotated loops entered at their test) | natural loops: back edge `continue`, the exit to the loop's follow `break`, exits to the procedure's exit `return` | 24 |
 | T5 | chains of conditional branches sharing a target, each falling into the next | one `&&`/`\|\|` condition, to a fixpoint | 4 |
-| T6 | post-dominator tree of the reduced graph | a branch whose arms rejoin at its immediate post-dominator becomes if/else; a multiway branch on one selector a switch | 7 |
+| T6 | post-dominator tree of the reduced graph | a branch whose arms rejoin at its immediate post-dominator becomes if/else; a multiway branch on one selector a switch | 8 |
 | T7 | none | every remaining edge is a goto: a branch past a joined block, an entry part-way into a shared sequence, a loop's second exit | 39 |
 
 Four entries are readability choices the hand C makes (naming a single-entry region, extracting

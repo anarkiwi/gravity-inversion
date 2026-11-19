@@ -173,7 +173,7 @@
     "label": "regs"
    },
    "why": "A new note skips the wave, effect, row and pulse blocks, all joins, to the register writes.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "transform": "T7"
   },
   {
@@ -268,7 +268,7 @@
     "form": "written without this goto"
    },
    "why": "The SBC step $08DE is joined by $089F (BCS after BCC, always taken), $08AA BEQ and $08DC's fall-through from three depths of the vibrato, porta and tone-porta arms; their branches meet only past it, at $0B1B. The hand C repeats the subtraction per effect.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "transform": "T7"
   },
   {
@@ -293,7 +293,7 @@
     "form": "written without this goto"
    },
    "why": "The note reload $08EE (JMP $0B09) is joined by $08A2 BEQ, $08C5 BPL and $08DC BMI from different arms, none of whose branches rejoins there. The hand C calls set_note in two places.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "covered": false,
    "uncovered": "the song does not take every one of these edges",
    "transform": "T7"
@@ -316,7 +316,7 @@
     "form": "written without this goto"
    },
    "why": "The ADC and SBC steps jump into voice_play's frequency store at $0B1B, which $0B18 falls into past the note set $0B09: an entry part-way into a shared sequence.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "transform": "T7"
   },
   {
@@ -333,7 +333,7 @@
     "form": "written without this goto"
    },
    "why": "$0B02 BPL enters the note set $0B09, which the note effect's $08F1 JMP and $0B07's fall-through also reach.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "transform": "T7"
   },
   {
@@ -358,7 +358,7 @@
     "form": "written without this goto"
    },
    "why": "Entries part-way into the store sequence $0B1B-$0B23: $0871 and $0C4C jump past its first store to $0B1E, $0AB6 BEQ past its second to $0B21.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "covered": false,
    "uncovered": "the song does not take every one of these edges",
    "transform": "T7"
@@ -381,7 +381,7 @@
     "form": "written without this goto"
    },
    "why": "$095A falls into the step $095D, which $0938 BNE also enters, past the joined block $0951 the other arms of the time test take; $096A BNE skips $097B, which $0934 BEQ and $0978 join, into $097D.",
-   "lift": "goto",
+   "lift": "goto, partly reduced",
    "transform": "T7"
   },
   {
@@ -402,7 +402,7 @@
     "form": "written without this goto"
    },
    "why": "$0A93 is joined by $0A83 BEQ, $0A8E BCS and $0A90's fall-through, $0AB3 by $0A77 BEQ, $0A88 BNE and $0AB1's fall-through, from arms whose branches meet past them.",
-   "lift": "goto",
+   "lift": "goto, partly reduced",
    "transform": "T7"
   },
   {
@@ -419,7 +419,7 @@
     "form": "written without this goto"
    },
    "why": "$0C3E jumps back into $0AC7, which $0AC4 falls into: an entry part-way into a shared sequence.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "transform": "T7"
   },
   {
@@ -461,7 +461,7 @@
     "form": "written without this goto"
    },
    "why": "Like $0A68, the pulse and row blocks jump past the joined blocks to the register writes $0BF6, which $0BF3 falls into.",
-   "lift": "goto",
+   "lift": "goto, reduced",
    "transform": "T7"
   }
  ]

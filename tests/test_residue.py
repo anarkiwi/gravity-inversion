@@ -42,11 +42,13 @@ def test_sites_match_manifest(name, tmp):
 @pytest.mark.slow
 @pytest.mark.parametrize("name", residue.TUNES)
 def test_mapped_gotos_generated(name, tmp):
-    """Each goto edge of the construct map from the lifted code is a goto of the C (the C's
-    other gotos are goto sites)."""
+    """Each goto edge of the construct map from the lifted code is a goto of the C, or one the
+    reduction expressed as a call of a tail or a return (the C's other gotos are goto
+    sites)."""
     c = _census(name, tmp)
-    gotos = {tuple(e) for e in c.info["provenance"]["gotos"]}
-    assert c._mapped_gotos() <= gotos  # pylint: disable=protected-access
+    prov = c.info["provenance"]
+    placed = {tuple(e) for e in prov["gotos"] + prov.get("reduced", [])}
+    assert c._mapped_gotos() <= placed  # pylint: disable=protected-access
 
 
 def test_manifest_causes():

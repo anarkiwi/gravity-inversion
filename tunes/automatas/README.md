@@ -60,7 +60,7 @@ far past the table, a large detune whose carry is dropped, and an 8580 SID model
 
 ## Generated translation
 
-`make` also builds `build/gen.prg` from `build/gen/automatas.c` and `.h`, generated from the PSID by
+`make` also builds `build/gen.prg` from the translation units `build/gen/automatas_*.c` and `.h`, generated from the PSID by
 `tools/transliterate.py`; `make check` compares it over the HVSC length (built with `FRAME_CIA`), and
 the tests through the arranger loop twice, on the patched songs and on both SID models. Init,
 with its SID model probe, is translated: the generated C reads `$d41b` and plays as the original

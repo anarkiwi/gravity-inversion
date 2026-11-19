@@ -43,13 +43,13 @@ between them): an original instruction, or an artifact of the lift.
 | total | every byte of the translation |
 | original, hand | informational: the original's instruction bytes (above) and the hand C's bytes by its line table |
 
-Bytes; deity-informant 0.40.13, llvm-mos SDK v23.4.0, `-Os -g`. B/insn: bytes per instruction
+Bytes; deity-informant 0.40.14, llvm-mos SDK v23.4.0, `-Os -g`. B/insn: bytes per instruction
 (instructions printed).
 
 | Tune | load/store B/insn | ALU B/insn | branch B/insn | indirect B/insn | other B/insn | check | trap | access | copy | frame | runtime | check sites | total | original | hand |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Commando | 9.7 (94) | 15.5 (38) | 25.9 (16) | 41.4 (5) | - | 158 | 13 | 0 | 3 | 170 | 0 | 75 | 2465 | 926 | 1653 |
-| Incoherent | 8.9 (126) | 13.5 (39) | 15.4 (23) | 30.6 (9) | - | 108 | 0 | 0 | 0 | 92 | 0 | 84 | 2483 | 1070 | 2612 |
-| Automatas | 9.4 (133) | 14.3 (33) | 11.9 (23) | 29.1 (15) | - | 450 | 0 | 142 | 0 | 163 | 0 | 374 | 3182 | 1600 | 2379 |
-| Ghouls | 13.7 (209) | 13.2 (50) | 20.4 (25) | 53.5 (13) | - | 202 | 6 | 274 | 6 | 157 | 0 | 51 | 5381 | 3043 | 3930 |
-| Emomyst | 10.3 (231) | 16.6 (82) | 14.3 (70) | 36.8 (11) | - | 1017 | 6 | 1553 | 31 | 290 | 0 | 850 | 8044 | 2323 | 6158 |
+| Commando | 9.5 (92) | 15.1 (39) | 28.8 (15) | 34.4 (5) | - | 261 | 13 | 0 | 0 | 186 | 0 | 101 | 2526 | 926 | 1653 |
+| Incoherent | 8.4 (145) | 16.6 (34) | 11.9 (29) | 26.1 (9) | - | 166 | 3 | 0 | 14 | 104 | 0 | 122 | 2653 | 1070 | 2612 |
+| Automatas | 9.4 (133) | 12.5 (41) | 10.7 (23) | 34.0 (8) | - | 703 | 0 | 142 | 0 | 166 | 0 | 612 | 3289 | 1600 | 2379 |
+| Ghouls | 13.2 (207) | 12.3 (52) | 20.4 (25) | 41.5 (13) | - | 338 | 6 | 274 | 6 | 149 | 0 | 52 | 5204 | 3043 | 3930 |
+| Emomyst | 10.5 (228) | 16.0 (82) | 13.4 (68) | 36.8 (11) | 5.0 (1) | 1052 | 6 | 1553 | 14 | 297 | 0 | 875 | 7950 | 2323 | 6158 |

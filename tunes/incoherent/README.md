@@ -75,7 +75,7 @@ command byte below `$40`.
 
 ## Generated translation
 
-`make` also builds `build/gen.prg` from `build/gen/incoherent.c` and `.h`, generated from the PSID by
+`make` also builds `build/gen.prg` from the translation units `build/gen/incoherent_*.c` and `.h`, generated from the PSID by
 `tools/transliterate.py`; `make check` compares it over the HVSC length, and the tests over twice that,
 without init and on the patched songs above. `tools/residue.py` (kind C2) lists its gotos beyond
 `constructs.json`'s.

@@ -6,7 +6,9 @@ AST: integer evaluation, regions from the header, the call graph, a must-equal v
 the steps apply cumulatively and the PRG's `.text` is measured after each. A step the tune
 does not have changes nothing.
 
-    make -C tunes/<tune> && make -C tunes/<tune> build/gen.prg
+    make -C tunes/<tune>
+
+Each tune is lifted as one C file (its single-text form) into the work directory.
     python3 tools/ablate.py commando incoherent automatas ghouls emomyst --verify [--json]
 
 An **exact** step keeps the run's semantics: the default song over its HVSC length.

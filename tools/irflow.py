@@ -60,16 +60,103 @@ def bases(printed):
 EXIT = ("exit",)
 
 
-def gating(blocks, exits):
-    """``{block: branch blocks}`` it is transitively control dependent on: the iterated
-    post-dominance frontier of ``{block: (acc, succ)}`` returning at ``exits``."""
-    rev = nx.DiGraph((s, b) for b, (_, succ) in blocks.items() for s in succ)
-    rev.add_edges_from((EXIT, b) for b in exits)
-    cd = nx.DiGraph(
-        (a, b) for b, fr in nx.dominance_frontiers(rev, EXIT).items() for a in fr
-    )
-    tc = nx.transitive_closure(cd, reflexive=False)
-    return {b: set(tc.predecessors(b)) for b in tc}
+class Gates:
+    """Control dependence (Ferrante, Ottenstein and Warren) of a graph ``{node: (acc,
+    succ)}`` returning at ``exits``: ``under(b)`` the branches node ``b`` is transitively
+    control dependent on (the iterated post-dominance frontier), :meth:`of` those of a set.
+    """
+
+    def __init__(self, blocks, exits):
+        self.blocks, self.exits, self.pred, self.memo = blocks, list(exits), {}, {}
+        for b, (_, succ) in blocks.items():
+            for t in succ:
+                self.pred.setdefault(t, []).append(b)
+        rev = nx.DiGraph((s, b) for b, (_, succ) in blocks.items() for s in succ)
+        rev.add_nodes_from(blocks)
+        rev.add_edges_from((EXIT, b) for b in self.exits)
+        self.cd = nx.DiGraph()
+        if self.exits:
+            self.cd.add_edges_from(
+                (a, b)
+                for b, fr in nx.dominance_frontiers(rev, EXIT).items()
+                for a in fr
+            )
+        self.live = self._back(())
+
+    def under(self, b):
+        """The branches ``b`` is transitively control dependent on, itself when on a cycle."""
+        if b not in self.memo:
+            got = set()
+            if b in self.cd:
+                got = nx.ancestors(self.cd, b)
+                if any(
+                    p == b or p in got and b in nx.ancestors(self.cd, p)
+                    for p in self.cd.predecessors(b)
+                ):
+                    got.add(b)
+            self.memo[b] = got
+        return self.memo[b]
+
+    def _back(self, stop):
+        seen, todo = set(), list(self.exits)
+        while todo:
+            b = todo.pop()
+            if b not in seen and b not in stop:
+                seen.add(b)
+                todo += self.pred.get(b, ())
+        return seen
+
+    def of(self, at):
+        """The branches a statement run at every node of ``at`` is transitively control
+        dependent on: those with a successor every path to exit from which passes ``at`` and
+        one some path from which avoids it (successors reaching no exit, a call that never
+        returns, not counted), and those they are (:meth:`under`)."""
+        avoid = self._back(at)
+        direct = {
+            b
+            for b, (_, succ) in self.blocks.items()
+            if len(succ) > 1
+            and {t in avoid for t in succ if t in self.live} == {True, False}
+        }
+        return direct.union(*(self.under(b) for b in direct))
+
+
+NEVER = ("never",)
+
+
+def deciders(succ, cands, leaf):
+    """The blocks of ``cands`` that decide which value a merge takes (gated SSA): those whose
+    successors' gating expressions differ. A successor's expression is the value ``leaf(t,
+    s)`` gives for stepping from ``t`` to ``s`` when it ends there, else ``(block, its
+    successors' expressions)`` or their one common expression; one reaching no leaf is
+    not counted, one on a cycle differs from every other."""
+    memo, active = {}, set()
+
+    def kids(t):
+        got = []
+        for s in succ[t]:
+            v = leaf(t, s)
+            got.append(expr(s) if v is None else ("v", v))
+        return [k for k in got if k != NEVER]
+
+    def expr(t):
+        if t in memo:
+            return memo[t]
+        if t in active:
+            return ("cycle", t, object())
+        active.add(t)
+        got = kids(t)
+        if not got:
+            r = NEVER
+        elif all(k == got[0] for k in got):
+            r = got[0]
+        else:
+            r = (t, tuple(got))
+        active.discard(t)
+        memo[t] = r
+        return r
+
+    return {a for a in cands if len(set(kids(a))) > 1}
 
 
 class Flow:  # pylint: disable=too-many-instance-attributes
@@ -82,15 +169,53 @@ class Flow:  # pylint: disable=too-many-instance-attributes
         self.bases = bases(str(mod))
         self.reads, self.stores, self.args, self.rets, self.cfg = {}, [], {}, {}, {}
         self.where, self.calls, self.conds, self.exits = {}, [], {}, {}
+        self.gates, self.shape, self.actuals, self.arity = {}, {}, {}, {}
         for fn in mod.functions:
             if not fn.is_declaration and not helpers.fullmatch(fn.name):
                 self._function(fn)
+        self._choices()
         self.control = self._control()
+        for t, (fn, deps) in self.gates.items():
+            if deps:
+                f = self.control.setdefault(t, {})
+                f[fn] = f.get(fn, frozenset()) | deps
 
     def _function(self, fn):  # pylint: disable=too-many-locals,too-many-statements
         defs = {str(i).strip(): i for b in fn.blocks for i in b.instructions}
         params = {str(a).strip(): k for k, a in enumerate(fn.arguments)}
-        memo, where, blocks = {}, iter(self.loc[fn.name]), {}
+        memo, gmemo, where, blocks = {}, {}, iter(self.loc[fn.name]), {}
+        ends = {b.name: list(b.instructions)[-1] for b in fn.blocks}
+        succ = {b: re.findall(r"label %([\w.]+)", str(t)) for b, t in ends.items()}
+        gates = Gates(
+            {b: ((), s) for b, s in succ.items()},
+            [b for b, t in ends.items() if t.opcode == "ret"],
+        )
+        branches = {b for b, t in ends.items() if len(succ[b]) > 1}
+
+        def cond(a):
+            return list(ends[a].operands)[0]
+
+        home = {str(i).strip(): b.name for b in fn.blocks for i in b.instructions}
+
+        def selectors(s):
+            """The branch blocks deciding which incoming value phi ``s`` takes (gated SSA):
+            those an incoming edge is control dependent on and its block is not
+            (:func:`deciders`)."""
+            incoming = re.findall(r"\[ ([^,\]]+), %([\w.]+) \]", s)
+            join = home[s]
+            cands = set().union(
+                *(gates.under(p) | ({p} & branches) for _, p in incoming)
+            )
+            cands -= gates.under(join)
+
+            def leaf(t, x):
+                return (
+                    next((v for v, p in incoming if p == t), None)
+                    if x == join
+                    else None
+                )
+
+            return deciders(succ, cands, leaf)
 
         def node(op):
             s = str(op).strip()
@@ -112,6 +237,29 @@ class Flow:  # pylint: disable=too-many-instance-attributes
                 return frozenset([("ret", ops[-1].name)])
             ops = ops[1:] if ins.opcode == "select" else ops
             return frozenset().union(*(node(o) for o in ops))
+
+        def gate(op):
+            """What decides which value ``op`` takes (phi and ``select`` selectors): their
+            conditions' sources and gates, as :meth:`loads` resolves them, the gates of
+            arguments and returns as ``("garg", fn, k)`` and ``("gret", fn)``."""
+            s = str(op).strip()
+            if s in params:
+                return frozenset([("garg", fn.name, params[s])])
+            ins = defs.get(s)
+            if ins is None or ins.opcode == "load" or self._helper(ins):
+                return frozenset()
+            if ins.opcode == "call":
+                return frozenset([("gret", list(ins.operands)[-1].name)])
+            if s not in gmemo:
+                gmemo[s] = frozenset()
+                ops = list(ins.operands)
+                conds = ops[:1] if ins.opcode == "select" else []
+                if ins.opcode == "phi":
+                    conds = [cond(a) for a in selectors(s)]
+                gmemo[s] = frozenset().union(
+                    *(gate(o) for o in ops), *(node(c) | gate(c) for c in conds)
+                )
+            return gmemo[s]
 
         def cell(op):
             """``(global, constant offset)`` of a pointer, its index terms dropped."""
@@ -155,6 +303,13 @@ class Flow:  # pylint: disable=too-many-instance-attributes
                     deps = [node(o) for o in ops[:-1]]
                     for k, d in enumerate(deps):
                         self.args.setdefault((ops[-1].name, k), set()).update(d)
+                        self.args.setdefault(("g", ops[-1].name, k), set()).update(
+                            gate(ops[k])
+                        )
+                    self.actuals[len(self.calls)] = [str(o).strip() for o in ops[:-1]]
+                    self.arity[ops[-1].name] = len(ops) - 1
+                    if ops[-1].name == "io_write" and len(ops) > 2:
+                        self.gates[("io", len(self.calls))] = (fn.name, gate(ops[1]))
                     base = constant(ops[0]) & 0xFFFF if len(ops) > 1 else 0
                     self.calls.append((fn.name, loc, ops[-1].name, deps, base))
                     acc.append(("call", ops[-1].name, len(self.calls) - 1))
@@ -162,52 +317,156 @@ class Flow:  # pylint: disable=too-many-instance-attributes
                     key = cell(ops[1])
                     self.stores.append((key, node(ops[0])))
                     self.where[len(self.stores) - 1] = (fn.name, loc, node(ops[1]))
+                    self.gates[("st", len(self.stores) - 1)] = (fn.name, gate(ops[0]))
                     acc.append(("store", key, len(self.stores) - 1))
                 elif i.opcode == "ret":
                     self.exits.setdefault(fn.name, set()).add(b.name)
                     self.rets.setdefault(fn.name, set()).update(
                         node(ops[0]) if ops else ()
                     )
+                    self.rets.setdefault(("g", fn.name), set()).update(
+                        gate(ops[0]) if ops else ()
+                    )
                 elif i.opcode == "switch" or i.opcode == "br" and len(ops) == 3:
-                    self.conds[fn.name, b.name] = node(ops[0])
+                    self.conds[fn.name, b.name] = node(ops[0]) | gate(ops[0])
             blocks[b.name] = (
                 acc,
                 re.findall(r"label %([\w.]+)", str(list(b.instructions)[-1])),
             )
         self.cfg[fn.name] = (next(iter(fn.blocks)).name, blocks)
+        self.shape[fn.name] = (succ, gates, lambda a: node(cond(a)) | gate(cond(a)))
+
+    def _choices(self):
+        """Gate each parameter by the branches deciding which call site passes it: in each
+        function, among the blocks ending in a tail call (:meth:`_tails`) reaching the
+        callee (it or a function calling it, transitively), those whose actuals differ
+        (:func:`deciders`), but not those deciding whether it is called at all."""
+        callees = {}
+        for fn, (_, bl) in self.cfg.items():
+            callees[fn] = {
+                k for acc, _ in bl.values() for kind, k, _ in acc if kind == "call"
+            }
+        reach = nx.transitive_closure(
+            nx.DiGraph((f, g) for f, gs in callees.items() for g in gs)
+        )
+        for fn, (succ, gates, cond) in self.shape.items():
+            blocks = self.cfg[fn][1]
+            last = self._tails(blocks)
+            for g in reach.successors(fn) if fn in reach else ():
+                at = {}
+                for b, (acc, _) in blocks.items():
+                    c = last.get(b)
+                    if c is not None and (c[0] == g or reach.has_edge(c[0], g)):
+                        at[b] = c[1]
+                if len(at) < 2:
+                    continue
+                cands = set().union(*(gates.under(b) for b in at))
+                cands -= gates.of(frozenset(at))
+                if not cands:
+                    continue
+                for k in range(self.arity.get(g, 0)):
+                    pick = {b: self._actual(c, g, k) for b, c in at.items()}
+                    if len(set(pick.values())) > 1:
+                        sel = deciders(succ, cands, lambda t, x, pick=pick: pick.get(x))
+                        self.args.setdefault(("g", g, k), set()).update(
+                            *(cond(a) for a in sel)
+                        )
+
+    @staticmethod
+    def _tails(blocks):
+        """``{block: (callee, call)}`` of each block whose last effect is a call in tail
+        position: no store or call follows it on any path to exit."""
+        quiet = {
+            b for b, (acc, _) in blocks.items() if not any(e[0] != "load" for e in acc)
+        }
+        while True:
+            drop = {b for b in quiet if any(t not in quiet for t in blocks[b][1])}
+            if not drop:
+                break
+            quiet -= drop
+        out = {}
+        for b, (acc, succ) in blocks.items():
+            eff = [e for e in acc if e[0] != "load"]
+            if eff and eff[-1][0] == "call" and all(t in quiet for t in succ):
+                out[b] = (eff[-1][1], eff[-1][2])
+        return out
+
+    def _actual(self, call, g, k):
+        """What call ``call`` passes ``g``'s parameter ``k``: its actual when it calls ``g``,
+        else the callee it reaches ``g`` through."""
+        fn, _, callee, _, _ = self.calls[call]
+        return self.actuals[call][k] if callee == g else ("via", callee, fn)
 
     def _control(self):
         """``{target: {function: deps}}``: the condition sources, by the function branching,
         of the branches each store (``("st", i)``) and ``io_write`` (``("io", j)``) runs
-        under, a call's callee's targets (transitively) under the call's branches."""
-        memo, out = {}, {}
-
-        def effects(fn):
-            if fn not in memo:
-                memo[fn] = set()
-                memo[fn] = set().union(
-                    *(here(acc) for acc, _ in self.cfg[fn][1].values())
-                )
-            return memo[fn]
-
-        def here(acc):
-            hit = set()
-            for kind, k, ident in acc:
-                if kind == "store":
-                    hit.add(("st", ident))
-                elif k == "io_write":
-                    hit.add(("io", ident))
-                elif kind == "call" and k in self.cfg:
-                    hit |= effects(k)
-            return hit
-
-        for fn, (_, blocks) in self.cfg.items():
-            for b, under in gating(blocks, self.exits.get(fn, ())).items():
-                deps = frozenset().union(*(self.conds.get((fn, a), ()) for a in under))
-                for t in here(blocks[b][0]) if deps else ():
-                    f = out.setdefault(t, {})
-                    f[fn] = f.get(fn, frozenset()) | deps
+        under, on each root's call graph inlined (:meth:`_inlined`), so of every copy of a
+        statement together."""
+        called = {
+            k
+            for _, bl in self.cfg.values()
+            for acc, _ in bl.values()
+            for kind, k, _ in acc
+            if kind == "call"
+        }
+        out = {}
+        for root in sorted(f for f in self.cfg if f not in called):
+            blocks, exits, branch, at = self._inlined(root)
+            gates, sets = Gates(blocks, exits), {}
+            for t, ns in at.items():
+                sets.setdefault(frozenset(ns), []).append(t)
+            for ns, ts in sets.items():
+                deps = {}
+                for a in gates.of(ns):
+                    fn, b = branch[a]
+                    deps[fn] = deps.get(fn, frozenset()) | self.conds.get(
+                        (fn, b), frozenset()
+                    )
+                for t in ts:
+                    for fn, d in deps.items():
+                        if d:
+                            f = out.setdefault(t, {})
+                            f[fn] = f.get(fn, frozenset()) | d
         return out
+
+    def _inlined(self, root):
+        """``(nodes, exits, branch, at)`` of ``root`` with every call inlined (a recursive
+        one not): ``nodes`` ``{node: ((), succ)}``, a node a block's statements between
+        calls in one call context; ``branch`` ``{node: (function, block)}`` of the nodes
+        ending in a branch; ``at`` ``{target: nodes}`` where each store and ``io_write`` runs.
+        """
+        nodes, exits, branch, at, ctx = {}, [], {}, {}, iter(range(1 << 30))
+
+        def inline(fn, c, stack, cont):
+            entry, blocks = self.cfg[fn]
+            for b, (acc, succ) in blocks.items():
+                k = 0
+                for kind, name, ident in acc:
+                    if kind == "store" or name == "io_write":
+                        at.setdefault(
+                            ("st" if kind == "store" else "io", ident), set()
+                        ).add((c, b, k))
+                    elif kind == "call" and name in self.cfg and name not in stack:
+                        sub = next(ctx)
+                        nodes[c, b, k] = (
+                            (),
+                            [inline(name, sub, stack | {name}, (c, b, k + 1))],
+                        )
+                        k += 1
+                last = (c, b, k)
+                if b in self.exits.get(fn, ()):
+                    nxt = [cont] if cont else []
+                    if cont is None:
+                        exits.append(last)
+                else:
+                    nxt = [(c, t, 0) for t in succ]
+                nodes[last] = ((), nxt)
+                if len(succ) > 1:
+                    branch[last] = (fn, b)
+            return (c, entry, 0)
+
+        inline(root, next(ctx), frozenset({root}), None)
+        return nodes, exits, branch, at
 
     def _helper(self, ins):
         ops = list(ins.operands)
@@ -230,6 +489,10 @@ class Flow:  # pylint: disable=too-many-instance-attributes
                 out.add(n)
             elif n[0] == "arg":
                 todo += self.args.get((n[1], n[2]), ())
+            elif n[0] == "garg":
+                todo += self.args.get(("g", n[1], n[2]), ())
+            elif n[0] == "gret":
+                todo += self.rets.get(("g", n[1]), ())
             else:
                 todo += self.rets.get(n[1], ())
         return out

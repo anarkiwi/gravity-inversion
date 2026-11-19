@@ -6,8 +6,10 @@ that may read a song data byte (a site) and every store to memory other than a l
 (docs/eventlog.md)."""
 
 import os
+import pathlib
 import re
 import subprocess
+import tempfile
 
 import llvmlite.binding as llvm
 
@@ -114,20 +116,32 @@ def _operand(text):
     return text
 
 
-def lower(c_path, includes=(), defines=(), passes=False):
-    """The LLVM IR text of a C file at -O0 with line tables; with ``passes`` open to
+def lower(c_paths, includes=(), defines=(), passes=False):
+    """The LLVM IR text of a C file, or of translation units (a sequence of paths) each lowered
+    and linked by ``llvm-link`` ($LLVM_LINK), at -O0 with line tables; with ``passes`` open to
     function passes, its values named."""
+    paths = (
+        [c_paths]
+        if isinstance(c_paths, (str, os.PathLike))
+        else list(map(str, c_paths))
+    )
     flags = ["-O0", "-gline-tables-only", "-fno-builtin"]
     if passes:
         flags += ["-Xclang", "-disable-O0-optnone", "-fno-discard-value-names"]
-    flags += ["-S", "-emit-llvm", "-o", "-"]
-    flags += [f"-I{i}" for i in includes] + [f"-D{d}" for d in defines]
-    return subprocess.run(
-        [os.environ.get("CLANG", "clang"), *flags, str(c_path)],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
+    flags += [f"-I{os.path.abspath(i)}" for i in includes] + [f"-D{d}" for d in defines]
+    clang = os.environ.get("CLANG", "clang")
+
+    def run(args, cwd=None):
+        return subprocess.run(
+            args, check=True, capture_output=True, text=True, cwd=cwd
+        ).stdout
+
+    if len(paths) == 1:
+        return run([clang, *flags, "-S", "-emit-llvm", "-o", "-", str(paths[0])])
+    with tempfile.TemporaryDirectory() as tmp:
+        run([clang, *flags, "-c", "-emit-llvm", *map(os.path.abspath, paths)], tmp)
+        bcs = [f"{pathlib.Path(p).stem}.bc" for p in paths]
+        return run([os.environ.get("LLVM_LINK", "llvm-link"), "-S", *bcs], tmp)
 
 
 def target():

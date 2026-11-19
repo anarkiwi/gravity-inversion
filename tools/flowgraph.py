@@ -58,19 +58,28 @@ def reach(flow, entries):
     return seen
 
 
+def units_of(c_paths, header=None):
+    """``(C paths, header path)`` of a generated C file (its .h beside) or of translation units
+    (a sequence of paths) including ``header``."""
+    if isinstance(c_paths, (str, pathlib.PurePath)):
+        c_paths = [pathlib.Path(c_paths)]
+        header = header or c_paths[0].with_suffix(".h")
+    return [pathlib.Path(c) for c in c_paths], pathlib.Path(header)
+
+
 def graph(
-    c_path, labels=None, entries=None, split=False
+    c_paths, labels=None, entries=None, split=False, header=None
 ):  # pylint: disable=too-many-locals
-    """``(networkx.MultiDiGraph, summary)`` of the generated C at ``c_path`` (its .h beside):
+    """``(networkx.MultiDiGraph, summary)`` of the generated C at ``c_paths`` (:func:`units_of`):
     every store, read and ``io_write`` traced to the loads its value, address and branch
     conditions derive from;
     with ``entries`` only those of the functions they reach; ``split`` names a cell's def-use
     webs apart, all but the one the first entry's calls keep by ``cell@line``.
     """
-    h_text = pathlib.Path(c_path).with_suffix(".h").read_text(encoding="utf-8")
-    origins = eventlog.origins(h_text)
-    inc = [pathlib.Path(c_path).parent, DRIVER]
-    text = irmodule.lower(c_path, inc, ["CGEN_HOST"], passes=True)
+    c_paths, header = units_of(c_paths, header)
+    origins = eventlog.origins(header.read_text(encoding="utf-8"))
+    inc = [header.parent, DRIVER]
+    text = irmodule.lower(c_paths, inc, ["CGEN_HOST"], passes=True)
     flow = irflow.Flow(irflow.sroa(text), re.compile(irmodule.HELPERS))
     fns = reach(flow, entries) if entries else None
     webs = irflow.Webs(flow, entries[0]) if entries and split else None
