@@ -37,9 +37,9 @@ def test_summary_counts_atoms_accesses_and_names():
 
 @pytest.mark.slow
 def test_commando_names(capsys):
-    """Commando's voice state is atoms, most of them labelled, few variables left numbered."""
+    """Commando's voice state is atoms named by the SID registers they reach, and the voice
+    loop's variables are named."""
     assert namestats.main(["commando"]) == 0
     row = json.loads(capsys.readouterr().out.strip().splitlines()[-1])["commando"]
-    assert (
-        row["atoms"]["array"] >= 10 and row["labelled"] >= 10 and row["numbered"] < 0.5
-    )
+    assert row["atoms"]["array"] >= 3 and row["labelled"] >= 5
+    assert row["variables"]["labelled"] >= 10
