@@ -1,6 +1,6 @@
 {
  "pins": {
-  "deity-informant": "0.40.18",
+  "deity-informant": "0.40.19",
   "vagrant-moses": "0.19.0",
   "jennings": "0.14.1",
   "pysidtracker": "0.63.0"
@@ -239,7 +239,7 @@
     ],
     [
      "$6A0B",
-     "C1 $6A0B-$6B1E (276 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R33@$6234, rdC1@$6110"
+     "C1 $6A0B-$6B1E (276 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, g_pw_hi_3@$6234, g_pw_lo_3@$6234, rdC1@$6110"
     ],
     [
      "$6B31",
@@ -247,37 +247,37 @@
     ],
     [
      "$7316",
-     "C1 $7316-$733E (41 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R38@$6110, R38@$6234, rdC1@$6110"
+     "C1 $7316-$733E (41 B): B0c3@$6234, C1@$2999, C1@$6110, CGEN_IX@$6234, R38@$6110, R38@$6234, g_voice_4@$6110, rdC1@$6110"
     ]
    ],
    "address-dispatch": [
     [
      "$2999",
-     "subscript by address C1[(uint16_t)((R2[0] | ((uint16_t)R2[1] << 8)) + v7 - C1_ORG)]"
+     "subscript by address C1[(uint16_t)((g_ptr_2[0] | ((uint16_t)g_ptr_2[1] << 8)) + i - C1_ORG)]"
     ],
     [
      "$2999",
-     "subscript by address C1[(uint16_t)((R2[0] | ((uint16_t)R2[1] << 8)) + v8 - C1_ORG)]"
+     "subscript by address C1[(uint16_t)((g_ptr_2[0] | ((uint16_t)g_ptr_2[1] << 8)) + i_2 - C1_ORG)]"
     ],
     [
      "$2999",
-     "subscript by address C1[(uint16_t)((R2[2] | ((uint16_t)R2[3] << 8)) + v7 - C1_ORG)]"
+     "subscript by address C1[(uint16_t)((g_ptr_3[0] | ((uint16_t)g_ptr_3[1] << 8)) + i - C1_ORG)]"
     ],
     [
      "$2999",
-     "subscript by address C1[(uint16_t)((R2[2] | ((uint16_t)R2[3] << 8)) + v8 - C1_ORG)]"
+     "subscript by address C1[(uint16_t)((g_ptr_3[0] | ((uint16_t)g_ptr_3[1] << 8)) + i_2 - C1_ORG)]"
     ],
     [
      "$6110",
-     "rdC1(R1[0x75] | ((uint16_t)R1[0x76] << 8), v2 + 2)"
+     "rdC1(g_ptr[0] | ((uint16_t)g_ptr[1] << 8), i + 2)"
     ],
     [
      "$6110",
-     "rdC1(v3, v2 + 1)"
+     "rdC1(ptr, i + 1)"
     ],
     [
      "$6110",
-     "rdC1(v3, v2)"
+     "rdC1(ptr, i)"
     ],
     [
      "$6110",
@@ -313,57 +313,57 @@
    "code-as-data": [
     [
      "$1000",
-     "C0 $1000-$1005, $1015-$101B (13 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R62@$1000, rdC0@$1000, rdC0@$1163"
+     "C0 $1000-$1005, $1015-$101B (13 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R62 + 0x3E@$1000, R62 + 1@$1000, R62@$1000, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$10A5",
-     "C0 $10A5-$1166 (194 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R2@$1000, R2@$1003, R2@$124D, R2@$1400, R2@$1537, R2@$16D6, R2@$17BA, R2@$17E5, R2@$1802, R2@$19AB, R2@$1A00, R2@$1A59, R2@$1AB4, R2@$1B2A, R2@$1B31, R62@$1000, rdC0@$1000, rdC0@$1163"
+     "C0 $10A5-$1166 (194 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R2 + 0x24@$1537, R2 + 0x33@$124D, R2 + 0x34@$124D, R2 + 0x35@$1000, R2 + 0x35@$124D, R2 + 0x36@$124D, R2 + 0x37@$1400, R2 + 0x37@$16D6, R2 + 0x37@$19AB, R2 + 0x38@$1400, R2 + 0x38@$1537, R2 + 0x38@$19AB, R2 + 0x39@$16D6, R2 + 0x39@$19AB, R2 + 0x39@$1A00, R2 + 0x48@$1000, R2 + 0x48@$124D, R2 + 0x4C@$124D, R2 + 0x4C@$1400, R2 + 0x5D@$124D, R2 + 0x5D@$1400, R2 + 0x5D@$1537, R2 + 0x5D@$17E5, R2 + 0x5D@$1A59, R2 + 0x5D@$1AB4, R2 + 0x5E@$1537, R2 + 0x5E@$1802, R2 + 0x5F@$1400, R2 + 0x5F@$1537, R2 + 0x5F@$1802, R2 + 0x60@$1400, R2 + 0x60@$1537, R2 + 0x61@$1537, R2 + 0x61@$17E5, R2 + 0x62@$1537, R2 + 0x62@$17E5, R2 + 0x72@$124D, R2 + 0x72@$1B31, R2 + 0x73@$124D, R2 + 0x73@$1B31, R2 + 0x74@$1400, R2 + 0x74@$16D6, R2 + 0x74@$19AB, R2 + 0x74@$1A00, R2 + 0x75@$1537, R2 + 0x76@$1400, R2 + 0x76@$16D6, R2 + 0x76@$19AB, R2 + 0x76@$1A00, R2 + 0x77@$1400, R2 + 0x77@$16D6, R2 + 0x77@$19AB, R2 + 0x77@$1A00, R2 + 0x78@$1400, R2 + 0x78@$16D6, R2 + 0x89@$1B2A, R2@$1000, R2@$1003, R2@$1537, R62 + 0x3E@$1000, R62 + 1@$1000, R62@$1000, g_ad@$124D, g_ad@$19AB, g_ad_3@$124D, g_ad_3@$1400, g_amp_3@$124D, g_amp_3@$1400, g_amp_3@$19AB, g_amp_4@$124D, g_amp_4@$1400, g_amp_4@$19AB, g_ctrl@$124D, g_ctrl@$1400, g_ctrl@$16D6, g_ctrl@$17BA, g_ctrl@$19AB, g_ctrl@$1A00, g_ctrl_2@$124D, g_ctrl_2@$1400, g_ctrl_2@$16D6, g_flt_ctrl_3@$1400, g_flt_ctrl_4@$1400, g_freq_hi_2@$1537, g_freq_hi_2@$16D6, g_freq_lo@$1537, g_freq_lo@$16D6, g_pw_hi@$1537, g_pw_hi@$19AB, g_pw_lo@$1537, g_vreg_2@$1400, g_vreg_2@$1537, g_vreg_2@$16D6, g_vreg_2@$1802, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$1186",
-     "C0 $1186-$118F (10 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R2@$1400, R2@$1B2A, R62@$1000, rdC0@$1000, rdC0@$1163"
+     "C0 $1186-$118F (10 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R2 + 0x89@$1B2A, R62 + 0x3E@$1000, R62 + 1@$1000, R62@$1000, g_flt_ctrl_3@$1400, g_flt_ctrl_4@$1400, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$11AA",
-     "C0 $11AA, $11C4-$1223, $1243-$124B (106 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R62@$1000, rdC0@$1000, rdC0@$1163"
+     "C0 $11AA, $11C4-$1223, $1243-$124B (106 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R62 + 0x3E@$1000, R62 + 1@$1000, R62@$1000, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$124D",
-     "C0 $124D-$182F (1507 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R45@$1000, R46@$1000, R46@$17C8, R47@$1000, R47@$17C8, R48@$1000, R48@$17C8, R62@$1000, rdC0@$1000, rdC0@$1163"
+     "C0 $124D-$182F (1507 B): B0c1@$124D, B0c1@$1400, B0c1@$1537, B0c1@$16D6, B0c1@$17C8, B0c1@$19AB, B0c1@$19D3, B0c1@$19DB, B0c1@$1AC1, B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R62 + 0x3E@$1000, R62 + 1@$1000, R62@$1000, g_ptr_3@$1000, g_ptr_4@$1000, g_ptr_5@$1000, g_ptr_5@$17C8, g_ptr_6@$1000, g_ptr_6@$17C8, g_ptr_7@$1000, g_ptr_7@$17C8, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$1939",
-     "C0 $1939-$19F1 (185 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, C0@$1003, C0@$1537, C0@$16D6, CGEN_IX@$1000, R49@$1400, R50@$19AB, R62@$1000, R63@$1400, R63@$16D6, R63@$1802, R64@$1A00, rdC0@$1000, rdC0@$1163"
+     "C0 $1939-$19F1 (185 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, C0@$1003, C0@$1537, C0@$16D6, CGEN_IX@$1000, R49@$1400, R50@$19AB, R62 + 0x3E@$1000, R62 + 1@$1000, R62@$1000, R63 + 0x50@$1400, R63@$1400, R63@$16D6, R63@$1802, R64@$1A00, g_freq_hi@$1400, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$1A00",
-     "C0 $1A00-$1A14, $1A16-$1A6F (111 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R62@$1000, R63@$1400, R63@$1802, R64@$1A00, rdC0@$1000, rdC0@$1163"
+     "C0 $1A00-$1A14, $1A16-$1A6F (111 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R62 + 0x3E@$1000, R62 + 1@$1000, R62@$1000, R63@$1400, R63@$1802, R64@$1A00, rdC0@$1000, rdC0@$1163"
     ],
     [
      "$1AAE",
-     "C0 $1AAE-$1B54 (167 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R62@$1000, R63@$1802, R64@$1A00, R65@$19AB, rdC0@$1000, rdC0@$1163"
+     "C0 $1AAE-$1B54 (167 B): B0c2@$124D, B0c3@$1400, B0c4@$1400, B0c5@$124D, B0c5@$1400, B0c6@$1400, C0@$1000, CGEN_IX@$1000, R62 + 0x3E@$1000, R62 + 1@$1000, R62@$1000, R63@$1802, R64@$1A00, R65@$19AB, rdC0@$1000, rdC0@$1163"
     ]
    ],
    "address-dispatch": [
     [
      "$1000",
-     "rdC0(R46[0] | ((uint16_t)R46[1] << 8), v20)"
+     "rdC0(g_ptr_5[0] | ((uint16_t)g_ptr_5[1] << 8), v20)"
     ],
     [
      "$1000",
-     "rdC0(R47[0] | ((uint16_t)R47[1] << 8), v20)"
+     "rdC0(g_ptr_6[0] | ((uint16_t)g_ptr_6[1] << 8), v20)"
     ],
     [
      "$1000",
-     "rdC0(R48[0] | ((uint16_t)R48[1] << 8), v20)"
+     "rdC0(g_ptr_7[0] | ((uint16_t)g_ptr_7[1] << 8), v20)"
     ],
     [
      "$1000",
-     "subscript by address C0[(uint16_t)((R45[1] | ((uint16_t)R45[2] << 8)) - C0_ORG)]"
+     "subscript by address C0[(uint16_t)((g_ptr_3[0] | ((uint16_t)g_ptr_3[1] << 8)) - C0_ORG)]"
     ],
     [
      "$1000",
-     "subscript by address C0[(uint16_t)((R45[4] | ((uint16_t)R45[5] << 8)) - C0_ORG)]"
+     "subscript by address C0[(uint16_t)((g_ptr_4[0] | ((uint16_t)g_ptr_4[1] << 8)) - C0_ORG)]"
     ],
     [
      "$1000",
@@ -371,27 +371,27 @@
     ],
     [
      "$1000",
-     "subscript by address C0[(uint16_t)((uint16_t)(1 + (R0[0] | ((uint16_t)R0[1] << 8))) - C0_ORG)]"
+     "subscript by address C0[(uint16_t)((uint16_t)(1 + (g_ptr[0] | ((uint16_t)g_ptr[1] << 8))) - C0_ORG)]"
     ],
     [
      "$1000",
-     "subscript by address C0[(uint16_t)((uint16_t)(1 + v9) - C0_ORG)]"
+     "subscript by address C0[(uint16_t)((uint16_t)(1 + ptr) - C0_ORG)]"
     ],
     [
      "$1000",
-     "subscript by address C0[(uint16_t)((uint16_t)(1 + v9) - C0_ORG)]"
+     "subscript by address C0[(uint16_t)((uint16_t)(1 + ptr) - C0_ORG)]"
     ],
     [
      "$1000",
-     "subscript by address C0[(uint16_t)((uint16_t)(2 + (R0[0] | ((uint16_t)R0[1] << 8))) - C0_ORG)]"
+     "subscript by address C0[(uint16_t)((uint16_t)(2 + (g_ptr[0] | ((uint16_t)g_ptr[1] << 8))) - C0_ORG)]"
     ],
     [
      "$1000",
-     "subscript by address C0[(uint16_t)((uint16_t)(2 + (R0[0] | ((uint16_t)R0[1] << 8))) - C0_ORG)]"
+     "subscript by address C0[(uint16_t)((uint16_t)(2 + (g_ptr[0] | ((uint16_t)g_ptr[1] << 8))) - C0_ORG)]"
     ],
     [
      "$1000",
-     "subscript by address C0[(uint16_t)((uint16_t)(2 + (R0[0] | ((uint16_t)R0[1] << 8))) - C0_ORG)]"
+     "subscript by address C0[(uint16_t)((uint16_t)(2 + (g_ptr[0] | ((uint16_t)g_ptr[1] << 8))) - C0_ORG)]"
     ],
     [
      "$10CC",
@@ -427,19 +427,19 @@
     ],
     [
      "$1202",
-     "S_1FF reached by address"
+     "g_flt_ctrl reached by address"
     ],
     [
      "$1204",
-     "S_201 reached by address"
+     "g_flt_ctrl_2 reached by address"
     ],
     [
      "$1209",
-     "S_206 reached by address"
+     "g_amp reached by address"
     ],
     [
      "$120B",
-     "S_208 reached by address"
+     "g_amp_2 reached by address"
     ],
     [
      "$1211",
@@ -447,11 +447,11 @@
     ],
     [
      "$121F",
-     "S_21C reached by address"
+     "g_flt_freq_hi reached by address"
     ],
     [
      "$1247",
-     "S_244 reached by address"
+     "g_flt_freq_lo reached by address"
     ],
     [
      "$1464",
@@ -471,7 +471,7 @@
     ],
     [
      "$15D2",
-     "S_5CF reached by address"
+     "g_vreg reached by address"
     ],
     [
      "$15D6",
@@ -507,7 +507,7 @@
     ],
     [
      "$19E3",
-     "S_9E0 reached by address"
+     "g_ad_2 reached by address"
     ],
     [
      "$19E9",
@@ -834,7 +834,7 @@
    "unwritten-held": [
     [
      "$3021",
-     "R0 $3021-$3026, $3028-$302D (12 B): R0@$103D"
+     "R0 $3021-$3026, $3028-$302D (12 B): g_sr@$103D"
     ]
    ]
   },
@@ -842,7 +842,7 @@
    "unwritten-held": [
     [
      "$3041",
-     "R2 $3041-$3046, $3048-$304D (12 B): R2@$103D"
+     "R2 $3041-$3046, $3048-$304D (12 B): g_freq_lo@$103D"
     ],
     [
      "$3061",
@@ -854,7 +854,7 @@
    "unwritten-held": [
     [
      "$3061",
-     "R3 $3061-$3066, $3068-$306D (12 B): R3@$103D"
+     "R3 $3061-$3066, $3068-$306D (12 B): g_pw_lo@$103D"
     ]
    ]
   },
