@@ -754,10 +754,6 @@
    "kind": "goto",
    "edges": [
     [
-     "$1817",
-     "$181A"
-    ],
-    [
      "$1829",
      "$182C"
     ]
@@ -766,11 +762,28 @@
     "fn": "vibrato_fx",
     "form": "written without this goto"
    },
-   "why": "$1817 falls into the store $181A, which $1802 BEQ also enters, and $1829 into $182C, which $181F BEQ enters, past the blocks the C places between.",
+   "why": "$1829 falls into $182C, which $181F BEQ enters, past the blocks the C places between.",
    "lift": "goto, reduced",
    "covered": false,
-   "uncovered": "the song does not take every one of these edges",
+   "uncovered": "the song never takes $1829 to $182C",
    "transform": "T7"
+  },
+  {
+   "id": "vibrato_fx.store",
+   "kind": "join",
+   "edges": [
+    [
+     "$1817",
+     "$181A"
+    ]
+   ],
+   "hand": {
+    "fn": "vibrato_fx",
+    "form": "written without this goto"
+   },
+   "why": "$1817 falls into the store $181A, which $1802 BEQ also enters: the arms rejoin there once $1823's path leaves by vibrato_fx.joins, the BCS at $1811 never taken (Y is clamped to $00-$7F at $180A-$180C, below #$CB).",
+   "lift": "if/else arms rejoining, no goto",
+   "transform": "T6"
   },
   {
    "id": "big_fx.tempo_pos_all",
