@@ -25,3 +25,14 @@ no budget may loosen. Budget files merge by keeping the stricter value per key:
     git config merge.virtuous-cycles.name 'keep the stricter budget per key'
 
 (`.gitattributes` assigns `budgets/*.json` to it.)
+
+## Names
+
+deity-informant names the C's memory and values (its docs/cgen.md, *Names*): each region's
+atoms (arrays, per-voice fields, scalars, pointer pairs) are `.h` views named by the SID
+register their data reaches (`g_ctrl[voice]`), SID addresses by register
+(`SID_V1_CTRL + voice_reg`), and variables by label (`freq_hi`), role (`i`, `ptr`) or left
+`vN`. `tools/namestats.py [TUNE...]` prints per tune the atoms by kind, the labelled ones,
+the accesses by how they print (`straddling`, `unbounded` and the pointer kinds stay the
+region's), the straddling address sets and the share of variables left `vN`, from
+`info["names"]`.

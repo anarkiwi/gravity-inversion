@@ -21,6 +21,8 @@ mkdir -p out/mos-sdk && docker run --rm -u $(id -u):$(id -g) -v /scratch:/scratc
 `tools/flowcmp.py` checks the rewrites that lower the score keep behavior's data flow: the
 value-flow graphs and state machines (docs/flowgraph.md) of each tune's C with and without
 wayward-eagle's rewrites, each differing edge listed, and each form's PRG size. `--against split`
-compares the translation units with the one file instead.
+compares the translation units with the one file instead. Each form's edges are written to
+`OUT/TUNE/FORM/edges.json`; `--base OLD` also compares each form against the `OUT` a run under
+another lifter wrote (nodes are the original's addresses, so a renaming lifter keeps them).
 
-    python tools/flowcmp.py OUT TUNE ... [--edges] [--against split]
+    python tools/flowcmp.py OUT TUNE ... [--edges] [--against split] [--base OLD]
