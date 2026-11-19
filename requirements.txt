@@ -4,5 +4,5 @@ pysidtracker==0.63.0
 deity-informant==0.40.19
 vagrant-moses[cpu,cgen]==0.19.0
 tqdm==4.70.1
-wayward-eagle==0.5.1
+wayward-eagle==0.5.2
 packaging==26.3
