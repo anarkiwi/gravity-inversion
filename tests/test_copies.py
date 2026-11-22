@@ -43,3 +43,11 @@ def test_instructions_skip_data():
         3,
         "n",
     )
+
+
+def test_no_fall_through_from_a_stop():
+    """A JAM before a JSR target, like an RTS or JMP, enters it by no fall-through."""
+    jsr, target = (0x1000, 3, "JSR", "L1006"), (0x1006, 1, "RTS", "")
+    for name in ("JAM", "RTS", "JMP", "NOP"):
+        falls = copies.calls([jsr, (0x1005, 1, name, ""), target])[1]
+        assert falls == ({0x1006: 0x1005} if name == "NOP" else {})

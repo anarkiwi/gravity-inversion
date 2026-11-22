@@ -14,6 +14,11 @@ pysidtracker; a capability they lack is added there, not written in this reposit
 | An instruction's P-Code | `deity_informant.lift(mem, pc)` |
 | Successors of an instruction | `jennings.coverage.cfg.successors(mem, pc)` |
 | Bytes of the instructions starting at a mask of addresses | `jennings.coverage.cfg.instruction_bytes(mem, starts)` |
+| Operand bytes of the branches, jumps and calls starting at a mask of addresses | `jennings.coverage.cfg.control_operands(mem, starts)` |
+| Opcodes that never continue at the next instruction (exits, JAMs, `JMP`) | `jennings.coverage.cfg.STOPS` |
+| The words of a hand-written split jump table | `jennings.coverage.resolve.split_table(mem, lo, hi, n, stride=, high=)`; `Listing.disassemble(..., tables=)` decodes from them |
+| Each data access of a call with its base address (an indexed access's operand, `(zp),Y`'s pointer) | `NativeMPU.run_to_rts_accesses(pc, acc, max_cycles, remap, bases=True)` |
+| The ROMs a CPU port value maps | `vagrant_moses.memmap.rom_ranges(port)` |
 | Branches a coverage run saw go one way | `jennings.coverage.one_way(cov, mem)` |
 | A subroutine under coverage, `$D012` counting for raster polls | `jennings.coverage.call(mpu, addr, a, max_steps=, raster=)` |
 | Cycles and page-cross penalty of an opcode | `jennings.opcodes.CYCLES[op]`, `jennings.opcodes.EXTRA[op]` |

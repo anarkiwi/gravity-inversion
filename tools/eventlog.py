@@ -19,7 +19,7 @@ import sys
 import tempfile
 
 import numpy as np
-from deity_informant.cgen.regions import code_bytes
+from jennings.coverage.cfg import instruction_bytes
 from pysidtracker.emu import observe_data_access
 from tqdm import tqdm
 
@@ -53,9 +53,10 @@ def song_mask(psid, starts=()):
     load, _, _, image = sidtrace.psid_parts(psid)
     mem = np.zeros(0x10000, np.uint8)
     mem[load : load + len(image)] = np.frombuffer(image, np.uint8)
-    mask = np.zeros(0x10000, bool)
+    mask, at = np.zeros(0x10000, bool), np.zeros(0x10000, bool)
     mask[load : load + len(image)] = True
-    return mask & ~code_bytes(mem, starts)
+    at[list(starts)] = True
+    return mask & ~instruction_bytes(mem, at)
 
 
 def origins(h_text):

@@ -49,13 +49,14 @@ def test_songs():
 
 
 def test_detail():
-    """Detailed writes carry the storing instruction's cycle from the call's start and pc."""
+    """Detailed writes carry the storing instruction's pc and cycle from the call's start."""
     code = [0xA9, 0x01, 0x8D, 0x00, 0xD4, 0xEA, 0x8D, 0x01, 0xD4, 0x60]
     data = _code_psid(code)
     assert sidtrace.trace_psid(data, 1, detail=True)[1] == [
-        (0, 1, 2, 0x1002),
-        (1, 1, 8, 0x1006),
+        (0, None, 0x1002, 1, 2),
+        (1, None, 0x1006, 1, 8),
     ]
+    assert sidtrace.trace_psid(data, 1)[1] == [(0, 1), (1, 1)]
 
 
 def test_boot_ram():
