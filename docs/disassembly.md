@@ -1,0 +1,20 @@
+# Disassembly and data flow
+
+Disassembly, instruction decoding and per-instruction data flow come from jennings and
+pysidtracker; a capability they lack is added there, not written in this repository.
+
+| Need | Use |
+|---|---|
+| Listing of a PSID's init and play code, computed transfers resolved through constant tables | `tools/disasm.py PSID OUT [--frames N \| --hvsc ROOT] [--song S]` (jennings `coverage.listing.Listing` over a coverage run; writes `OUT` and its `.jcov` sidecar) |
+| Rows of an address range of a SID image, init/play labelled | `pysidtracker.disasm.disassemble(image, start, end, entry_labels(image))` |
+| The image after init (init may unpack or scatter data) | `pysidtracker.disasm.image_after_init(image, subtune=)` |
+| One instruction's text and length | `jennings.disassembler.Disassembler(MPU(memory=mem), AddressParser()).instruction_at(pc)` |
+| Opcode mnemonic and addressing mode | `jennings.opcodes.OPCODES[op]` |
+| What each register, flag and byte an instruction sets depends on | `jennings.dataflow.flow(mem, pc, loads, stores, operands)`; `operands` maps self-modified operand bytes to the locations they come from |
+| An instruction's P-Code | `jennings.dataflow.lift(mem, pc)` |
+| Successors of an instruction | `jennings.coverage.cfg.successors` |
+| Static facts of a lift: instruction starts, address sets per access, stores, computed jump targets, register value sets, reaching definitions | the deity-informant `Program` `cgen.lift` returns: `starts`, `addr_sets`, `stores`, `jumps`, `regs`, `pdefs` |
+| Per-opcode roles in the lift | `tools/opclass.py` |
+| Repeated code, JSR targets, fall-through entries | `tools/copies.py` |
+| Procedure graphs and loop kinds | `tools/passes.py` ([passes.md](passes.md)) |
+| A reference decompilation | `tools/ghidra_ref.py` ([ghidra_ref.md](ghidra_ref.md)) |
