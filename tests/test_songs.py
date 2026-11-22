@@ -6,6 +6,7 @@ import functools
 import re
 
 import pytest
+from pysidtracker.header import parse_sid_header
 
 from constructs import ROOT, load
 from transliterate import transliterate
@@ -21,9 +22,10 @@ def _psid(tune):
 @functools.cache
 def _translated(tune, songs):
     """(.c, .h) of the tune with its header declaring `songs` songs."""
-    data = bytearray(_psid(tune))
-    data[0x0E:0x10] = songs.to_bytes(2, "big")
-    return transliterate(bytes(data), "gen.h")[:2]
+    data = _psid(tune)
+    head = parse_sid_header(data)
+    data = head.replace(songs=songs).to_bytes() + data[head.data_offset :]
+    return transliterate(data, "gen.h")[:2]
 
 
 @pytest.mark.slow

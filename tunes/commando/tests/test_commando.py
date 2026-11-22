@@ -1,6 +1,7 @@
 """Tests for tools/sidtrace.py: the C translation against the original."""
 
 import pytest
+from pysidtracker.reglog import first_divergence
 
 from support import BUILD, STOP_FRAMES, VARIANTS, build_prg, patched
 import footprint
@@ -37,7 +38,7 @@ def test_variant_identical(name, ref_psid, labels, tmp_path):
     psid = patched(ref_psid, labels, VARIANTS[name])
     prg = build_prg(psid, labels, tmp_path)
     ref = sidtrace.trace_psid(psid, STOP_FRAMES)
-    assert sidtrace.diff(ref, sidtrace.trace_prg(prg, STOP_FRAMES)) is None
+    assert first_divergence(ref, sidtrace.trace_prg(prg, STOP_FRAMES)) is None
     if name == "stop":
         assert not ref[-1] and (0x18, 0x0F) in sum(ref[2:], [])
 

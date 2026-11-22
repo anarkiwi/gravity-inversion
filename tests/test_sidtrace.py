@@ -2,35 +2,18 @@
 
 import hashlib
 
-
+from pysidtracker.header import write_psid
 from vagrant_moses.memmap import PAL
 
 import sidtrace
 
-
-def test_parse_labels():
-    """ACME label dumps parse to addresses."""
-    text = "\tfoo\t= $1000\t; ?\n\tbar\t= $14a2\t; unused\n"
-    assert sidtrace.parse_labels(text) == {"foo": 0x1000, "bar": 0x14A2}
+# voice 3 at full rate, every control bit then sawtooth: its osc3 read differs by SID model
+OSC3 = bytes.fromhex("a9ff8d0ed48d0fd48d12d4a9208d12d4eaeaad1bd48d00d460")
 
 
-def test_diff():
-    """First differing write is located, including short frames."""
-    ref = [[(1, 2)], [(3, 4), (5, 6)]]
-    assert sidtrace.diff(ref, ref) is None
-    assert sidtrace.diff(ref, [[(1, 2)], [(3, 4), (5, 7)]]) == (1, 1, (5, 6), (5, 7))
-    assert sidtrace.diff(ref, [[(1, 2)], [(3, 4)]]) == (1, 1, (5, 6), None)
-
-
-def _code_psid(code, speed=0):
-    """PSID with `code` at $1000: init $1000, play $1000, one subtune."""
-    head = bytearray(0x7C)
-    head[:4] = b"PSID"
-    head[5] = 2
-    head[6:16] = bytes([0, 0x7C, 0x10, 0, 0x10, 0, 0x10, 0, 0, 1])
-    head[0x11] = 1
-    head[0x12:0x16] = speed.to_bytes(4, "big")
-    return bytes(head) + bytes(code)
+def _code_psid(code, load=0x1000, **kw):
+    """PSID with `code` at `load`: init and play at its start, one subtune."""
+    return write_psid(load=load, init=load, play=load, image=bytes(code), **kw)
 
 
 def test_raster_and_poke():
@@ -60,10 +43,9 @@ def test_song_calls(tmp_path):
 
 def test_songs():
     """1-based HVSC subtune specs become 0-based subtunes."""
-    data = bytearray(_code_psid([0x60]))
-    data[0x0F] = 4
-    assert sidtrace.songs("all", bytes(data)) == [0, 1, 2, 3]
-    assert sidtrace.songs("1,3-4", bytes(data)) == [0, 2, 3]
+    data = _code_psid([0x60], songs=4)
+    assert sidtrace.songs("all", data) == [0, 1, 2, 3]
+    assert sidtrace.songs("1,3-4", data) == [0, 2, 3]
 
 
 def test_detail():
@@ -74,3 +56,33 @@ def test_detail():
         (0, 1, 2, 0x1002),
         (1, 1, 8, 0x1006),
     ]
+
+
+def test_boot_ram():
+    """Init starts on pysidtracker's PSID RAM: the driver's clear, the BASIC LOAD
+    pointers, the PAL flag, $D418 and init's bank; play runs in play's bank."""
+    data = _code_psid([0x60], load=0xC000)
+    ram = sidtrace.boot_ram(data)
+    assert ram[0x2D:0x2F] == ram[0xAE:0xB0] == bytes([0x01, 0xC0])
+    assert ram[0xAC:0xAE] == bytes([0x00, 0xC0])
+    assert (ram[1], ram[0x2A6], ram[0xD418], ram[0x200]) == (0x36, 1, 0x0F, 0)
+    mpu, _, play = sidtrace.boot(data)
+    assert (mpu.memory[1], play) == (0x36, 0xC000)
+
+
+def test_sid_model():
+    """The header names the SID model both sides of a comparison play on; a model given
+    overrides it."""
+    data = _code_psid(OSC3, flags=0x20)
+    assert sidtrace.header_model(data) == "8580"
+    assert sidtrace.header_model(_code_psid(OSC3)) == "6581"
+    ref = sidtrace.trace_psid(data, 0)
+    assert ref == sidtrace.trace_psid(data, 0, sid_model="8580")
+    assert ref != sidtrace.trace_psid(data, 0, sid_model="6581")
+
+
+def test_patched():
+    """Patches address the image by load address, whatever the header's size."""
+    for embed in (False, True):
+        data = sidtrace.patched(_code_psid([1, 2, 3], embed_load=embed), {0x1001: 9})
+        assert sidtrace.psid_parts(data)[3] == bytes([1, 9, 3])

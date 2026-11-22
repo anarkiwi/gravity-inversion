@@ -12,10 +12,9 @@ import re
 import numpy as np
 from jennings.coverage import EXEC
 from jennings.coverage.cfg import LEN, successors
+from pysidtracker.image import SidImage
 
-from copies import instructions
 from disasm import coverage, listing
-from sidtrace import psid_parts
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 JSR = 0x20
@@ -39,11 +38,8 @@ def load(tune):
 
 
 def memory(data):
-    """The PSID image as a 64 KiB array."""
-    load_addr, _, _, image = psid_parts(data)
-    mem = np.zeros(0x10000, np.uint8)
-    mem[load_addr : load_addr + len(image)] = np.frombuffer(image, np.uint8)
-    return mem
+    """The PSID image in zeroed C64 memory, a uint8 array."""
+    return np.frombuffer(SidImage.from_sid(data).mem, np.uint8)
 
 
 class Checker:
@@ -144,7 +140,7 @@ def run(tune, jobs=1):
     data = (ROOT / m["psid"]).read_bytes()
     songs = m.get("songs", [0])
     cov = coverage(data, [m["frames"]] * len(songs), songs, jobs, init=True)
-    return m, data, cov, {i[0] for i in instructions(listing(data, 0, cov=cov).source)}
+    return m, data, cov, set(listing(data, 0, cov=cov).lines[:, 1].tolist())
 
 
 def check(tune, jobs=1):

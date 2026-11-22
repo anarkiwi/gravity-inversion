@@ -8,6 +8,7 @@ import time
 
 import pytest
 from jennings.acme import assemble
+from pysidtracker.reglog import first_divergence
 
 from support import (
     ASM,
@@ -100,11 +101,11 @@ def test_generated_identical(  # pylint: disable=too-many-arguments,too-many-pos
         psid = patched(psid, perm_labels, VARIANTS[variant])
         frames = STOP_FRAMES
     ref = sidtrace.trace_psid(ref_psid, frames)
-    assert sidtrace.diff(ref, sidtrace.trace_psid(psid, frames)) is None
+    assert first_divergence(ref, sidtrace.trace_psid(psid, frames)) is None
     prg, c, h = gen_prg(psid, tmp_path)
     assert c == plain[0]
     assert (h != plain[1]) == bool(variant)
-    assert sidtrace.diff(ref, sidtrace.trace_prg(prg, frames)) is None
+    assert first_divergence(ref, sidtrace.trace_prg(prg, frames)) is None
 
 
 @pytest.mark.slow
@@ -118,4 +119,4 @@ def test_relocated(perm, generated, tmp_path):
     assert c == plain[0]
     frames = sidtrace.loop_frame(psid, labels["posoff"], 50_000)
     ref = sidtrace.trace_psid(psid, frames)
-    assert sidtrace.diff(ref, sidtrace.trace_prg(prg, frames)) is None
+    assert first_divergence(ref, sidtrace.trace_prg(prg, frames)) is None

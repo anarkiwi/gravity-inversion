@@ -213,11 +213,11 @@ def reference(psid, frames, song, loaded):
 
 
 def prg_reads(  # pylint: disable=too-many-arguments,too-many-positional-arguments
-    prg, frames, song, spans, mask, max_cycles=sidtrace.MAX_CYCLES
+    prg, frames, song, spans, mask, max_cycles=sidtrace.MAX_CYCLES, *, sid_model="6581"
 ):
-    """``(writes, reads)``: a C64 build's SID writes per call and the ``READS`` (values 0) of
-    its play calls' reads of song data; ``spans`` maps its symbols to the original addresses
-    of the bytes they hold."""
+    """``(writes, reads)``: a C64 build's SID writes per call on `sid_model` and the ``READS``
+    (values 0) of its play calls' reads of song data; ``spans`` maps its symbols to the
+    original addresses of the bytes they hold."""
     calls, addrs = array.array("I"), array.array("H")
 
     def observe(mpu, syms, log):
@@ -236,7 +236,7 @@ def prg_reads(  # pylint: disable=too-many-arguments,too-many-positional-argumen
         _observe(mpu, log, on_read, set(where))
 
     writes = sidtrace.trace_prg(
-        prg, frames, song, observe=observe, max_cycles=max_cycles
+        prg, frames, song, sid_model=sid_model, observe=observe, max_cycles=max_cycles
     )
     return writes, _reads(calls, addrs)
 

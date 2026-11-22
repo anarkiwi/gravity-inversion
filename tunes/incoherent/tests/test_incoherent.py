@@ -3,11 +3,13 @@
 import functools
 
 import pytest
+from pysidtracker.reglog import first_divergence
 
-from incoherent_support import BUILD, FIX, SID, VARIANTS, build_prg, gen_prg, patched
+from incoherent_support import BUILD, FIX, SID, VARIANTS, build_prg, gen_prg
 import footprint
 import gen_incoherent
 import sidtrace
+from sidtrace import patched
 import transliterate
 
 PRG = BUILD / "incoherent.prg"
@@ -50,15 +52,15 @@ def test_loop_identical(kind, psid):
     jumps = _jumps(psid, frames)
     assert jumps and jumps[0] > frames // 2
     ref = sidtrace.trace_psid(psid, frames)
-    assert sidtrace.diff(ref, sidtrace.trace_prg(PRGS[kind], frames)) is None
+    assert first_divergence(ref, sidtrace.trace_prg(PRGS[kind], frames)) is None
 
 
 def test_without_init_identical(psid):
     """A song number with bit 7 set skips init: play runs on the image's state."""
     ref = sidtrace.trace_psid(psid, VARIANT_FRAMES, song=0x80)
-    assert sidtrace.diff(ref, sidtrace.trace_psid(psid, VARIANT_FRAMES)) is not None
+    assert first_divergence(ref, sidtrace.trace_psid(psid, VARIANT_FRAMES)) is not None
     got = sidtrace.trace_prg(PRG, VARIANT_FRAMES, song=0x80)
-    assert sidtrace.diff(ref, got) is None
+    assert first_divergence(ref, got) is None
 
 
 def test_song_outside_range_traps():
@@ -86,10 +88,10 @@ def test_variant_identical(name, kind, psid, tmp_path):
     patches, unchanged = VARIANTS[name]
     variant = patched(psid, patches)
     ref = sidtrace.trace_psid(variant, VARIANT_FRAMES)
-    same = sidtrace.diff(ref, sidtrace.trace_psid(psid, VARIANT_FRAMES)) is None
+    same = first_divergence(ref, sidtrace.trace_psid(psid, VARIANT_FRAMES)) is None
     assert same == unchanged
     got = sidtrace.trace_prg(BUILDERS[kind](variant, tmp_path), VARIANT_FRAMES)
-    assert sidtrace.diff(ref, got) is None
+    assert first_divergence(ref, got) is None
 
 
 @pytest.mark.parametrize("name", sorted(VARIANTS))

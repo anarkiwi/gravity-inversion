@@ -46,12 +46,11 @@ def test_voice_init(psid):
 
 def test_cut_opcodes_checked(psid):
     """Cutoff opcodes that disagree are an error."""
-    data = bytearray(psid)
-    data[0x10BF - 0x0FD0 + 0x7E] = 0xE9
+    data = sidtrace.patched(psid, {0x10BF: 0xE9})
     with pytest.raises(AssertionError):
-        gen_automatas.generate(bytes(data))
-    data[0x10B8 - 0x0FD0 + 0x7E] = 0xE9
-    assert _define(gen_automatas.generate(bytes(data)), "CUT_SUB") == "1"
+        gen_automatas.generate(data)
+    data = sidtrace.patched(data, {0x10B8: 0xE9})
+    assert _define(gen_automatas.generate(data), "CUT_SUB") == "1"
 
 
 def test_main(psid, tmp_path):

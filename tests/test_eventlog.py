@@ -301,7 +301,13 @@ def test_hand(tune):
     frames = 6000 if tune == "commando" else sidtrace.song_calls(psid, song, FIX)
     log, summary, orig, mask = eventlog.run_tune(psid, frames)
     writes, hand = eventlog.prg_reads(
-        prg, frames, song, _spans(tune), mask, HAND_CYCLES
+        prg,
+        frames,
+        song,
+        _spans(tune),
+        mask,
+        HAND_CYCLES,
+        sid_model=sidtrace.header_model(psid),
     )
     trace = sidtrace.trace_psid(psid, frames, song=song)
     assert writes == trace

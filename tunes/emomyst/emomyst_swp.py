@@ -5,11 +5,12 @@ import pathlib
 import subprocess
 from typing import NamedTuple
 
+from pysidtracker.header import parse_sid_header
+
 from sidtrace import psid_parts
 
 ROOT = pathlib.Path(__file__).resolve().parent
 DRIVER = ROOT.parent.parent / "c64"
-PSID_DATA = 0x7E  # payload offset of the PSID, after the in-file load address
 PACKED = range(0x70, 0x78)
 END = 0xFF
 
@@ -27,12 +28,12 @@ class Music:
     def __init__(self, psid, gen):
         load, init, _, image = psid_parts(psid)
         self.psid = bytearray(psid)
-        self.load = load
+        self.load, self.data = load, parse_sid_header(psid).data_start
         self.base = gen.music_org(load, init, image)
 
     def _at(self, addr):
         assert self.load <= addr < self.end, hex(addr)
-        return PSID_DATA + addr - self.load
+        return self.data + addr - self.load
 
     def __getitem__(self, addr):
         return self.psid[self._at(addr)]
@@ -43,7 +44,7 @@ class Music:
     @property
     def end(self):
         """Address past the image's end."""
-        return self.load + len(self.psid) - PSID_DATA
+        return self.load + len(self.psid) - self.data
 
     def word(self, addr):
         """Little-endian word at addr."""

@@ -8,22 +8,26 @@ import argparse
 import re
 from collections import Counter, defaultdict
 
+from jennings import isa
+
 from disasm import listing
 
-INSN = re.compile(
-    r"([0-9A-F]{4})  ((?:[0-9A-F]{2} )+)\s+(?:L[0-9A-F]{4}: )?(\w{3})\s*(\S*)"
-)
 NUMBER = re.compile(r"\$([0-9a-fA-F]+)|L([0-9A-F]{4})")
 STOPS = {"JMP", "RTS", "RTI", "BRK"}
 
 
-def instructions(source):
-    """(address, length, mnemonic, operand text) of each decoded instruction of a listing."""
+def instructions(lst):
+    """(address, length, mnemonic, operand text) of each instruction of a jennings Listing."""
+    rows = lst.source.splitlines()
     out = []
-    for line in source.splitlines():
-        m = INSN.match(line)
-        if m and ".byte" not in line:
-            out.append((int(m[1], 16), len(m[2].split()), m[3], m[4]))
+    for line, addr in lst.lines.tolist():
+        toks = rows[line - 1].split()
+        op = int(toks[1], 16)
+        n = isa.length(op)
+        toks = toks[1 + n :]
+        toks = toks[1:] if toks and toks[0].endswith(":") else toks
+        text = toks[1] if len(toks) > 1 and toks[1] != ";" else ""
+        out.append((addr, n, isa.mnemonic(op), text))
     return out
 
 
@@ -109,7 +113,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     with open(args.psid, "rb") as f:
         data = f.read()
-    print(report(instructions(listing(data, args.frames).source), args.min_len))
+    print(report(instructions(listing(data, args.frames)), args.min_len))
 
 
 if __name__ == "__main__":

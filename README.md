@@ -43,7 +43,7 @@ versions and native modules), so a pin or wheel change regenerates it.
 | `tunes/<name>/` | one translation: C player, data generator, tests, notes |
 | `c64/driver.c` | shared C64 driver: `tune_init`, then `frame_wait` / `tune_play` per call; `trap(k)` for the hand C |
 | `common.mk` | shared make rules: fixtures, the C build; `GEN := 1` adds the generated translation |
-| `tools/sidtrace.py` | SID write tracer and comparator per subtune, on pysidtracker's C64 (vagrant-moses machine, jennings CPU, power-on RAM) |
+| `tools/sidtrace.py` | SID write tracer and comparator per subtune: the PSID on pysidtracker's PSID machine (`oracle.boot_flat`), the C build on its power-on RAM, both on the header's SID model |
 | `tools/disasm.py` | jennings coverage-driven disassembly listing of a PSID, computed transfers resolved through constant tables |
 | `tools/survey.py` | rank tunes by the playroutine code they execute; branch outcome gaps |
 | `tools/constructs.py` | validate `tunes/*/constructs.json`, each 6502 construct's hand-C form ([docs/constructs.md](docs/constructs.md)), against jennings coverage |

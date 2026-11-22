@@ -18,7 +18,6 @@ from typing import NamedTuple
 import numpy as np
 from elftools.elf.elffile import ELFFile
 from jennings.coverage import READ, WRITE
-from jennings.coverage.cfg import LEN
 from pysidtracker.emu import observe_data_access, run_to_rts
 from tqdm import tqdm
 
@@ -41,16 +40,14 @@ from cflow import (
     summarize,
     wrap,
 )
-from constructs import ROOT, load, memory
-from copies import instructions
+from constructs import ROOT, load
 from costs import ast, callee, refs, walk
-from disasm import coverage, listing
+from disasm import code_bytes, coverage
 from sidtrace import (
     MAX_CYCLES,
+    boot,
     compare,
     default_song,
-    machine,
-    psid_parts,
     song_calls,
     trace_prg,
 )
@@ -72,8 +69,6 @@ class Facts(NamedTuple):
 
 def cell_facts(psid, frames, song, addrs):
     """Facts of `addrs` over init and `frames` play calls of 0-based `song`."""
-    load_addr, init, play, image = psid_parts(psid)
-    mem, mpu = machine(load_addr, image)
     counts, played, phase = Counter(), set(), [0]
 
     def on_write(addr, _):
@@ -82,8 +77,11 @@ def cell_facts(psid, frames, song, addrs):
         else:
             counts[addr] += 1
 
-    observe_data_access(mpu, on_write=on_write, writes=addrs)
-    run_to_rts(mpu, mem, init, song, MAX_CYCLES)
+    mpu, mem, play = boot(
+        psid,
+        song,
+        setup=lambda mpu, _: observe_data_access(mpu, on_write=on_write, writes=addrs),
+    )
     post = {a: mem[a] for a in addrs}
     phase[0] = 1
     for _ in tqdm(range(frames), desc="cells", unit="frame", leave=False):
@@ -586,16 +584,6 @@ class Ablation:  # pylint: disable=too-many-instance-attributes
             )
             prev = size
         return rows, prg
-
-
-def code_bytes(psid, cov):
-    """Mask of the PSID image's instruction bytes from a jennings listing over `cov`."""
-    starts = {i[0] for i in instructions(listing(psid, 0, cov=cov).source)}
-    mem = memory(psid)
-    code = np.zeros(0x10000, bool)
-    for a in starts:
-        code[a : a + int(LEN[mem[a]])] = True
-    return code
 
 
 def accounting(psid, frames, song, elf, regs):
