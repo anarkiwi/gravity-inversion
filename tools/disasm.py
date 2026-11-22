@@ -7,37 +7,32 @@ import os
 import tempfile
 
 import numpy as np
-from jennings.coverage import FALLTHRU, RETURN, TAKEN, CoverageMPU, call
+from jennings import coverage as jcov
+from jennings.coverage import CoverageMPU, call
 from jennings.coverage._core import CoverageMap
-from jennings.coverage.cfg import successors
+from jennings.coverage.cfg import instruction_bytes
 from jennings.coverage.listing import Listing
+from pysidtracker.image import SidImage
 from tqdm import tqdm
 
-from pysidtracker.emu import run_to_rts
+from sidtrace import (
+    MAX_CYCLES,
+    boot,
+    boot_ram,
+    default_song,
+    psid_parts,
+    song_calls,
+    songs,
+)
 
-from sidtrace import MAX_CYCLES, default_song, machine, psid_parts, song_calls, songs
-
-RASTER = 0xD012
+RASTER_STEPS = 64
 
 
 def _image(data):
-    load, init, play, image = psid_parts(data)
-    mem = [0] * 0x10000
-    mem[load : load + len(image)] = image
-    return mem, (load, load + len(image) - 1), [init, play]
-
-
-def _init_cover(mpu, init, song, steps=MAX_CYCLES):
-    """Run init under coverage; a raster counter at $D012 advances every 64 steps for polls."""
-    sp = mpu.sp
-    mpu._push_word((RETURN - 1) & 0xFFFF)  # pylint: disable=protected-access
-    mpu.a, mpu.pc = song, init
-    for n in range(steps):
-        mpu.memory[RASTER] = n >> 6 & 0xFF
-        mpu.step()
-        if mpu.pc == RETURN and mpu.sp == sp:
-            return
-    raise RuntimeError(f"init ${init:04X} did not return")
+    """(zeroed C64 memory holding the payload, inclusive payload span, [init, play])."""
+    s = SidImage.from_sid(data)
+    entries = [s.header.init_address or s.load, s.header.play_address]
+    return np.frombuffer(s.mem, np.uint8), (s.load, s.end - 1), entries
 
 
 def _cover(
@@ -45,20 +40,17 @@ def _cover(
 ):  # pylint: disable=too-many-arguments
     """Save to `path` the coverage of `frames` play calls after init `song`.
 
-    Init runs on sidtrace's C64 machine; the play calls under coverage on its RAM. With
-    `init_cov`, init also runs under coverage, from the loaded image over power-on RAM.
-    """
-    load, init, play, image = psid_parts(data)
-    mem, native = machine(load, image)
+    Init runs on sidtrace's PSID machine; the play calls under coverage on its RAM. With
+    `init_cov`, init also runs under coverage from that machine's boot RAM, $D012 counting
+    instructions by RASTER_STEPS."""
     mpu = CoverageMPU()
     if init_cov:
-        mpu.memory = list(bytes(mem.ram))
-        _init_cover(mpu, init, song)
-        cov = mpu.cov
-    run_to_rts(native, mem, init, song, MAX_CYCLES)
+        mpu.memory = list(boot_ram(data))
+        call(mpu, psid_parts(data)[1], song, max_steps=MAX_CYCLES, raster=RASTER_STEPS)
+    cov = mpu.cov
+    _, mem, play = boot(data, song)
     mpu = CoverageMPU()
-    if init_cov:
-        mpu.cov = cov
+    mpu.cov = cov
     mpu.memory = list(bytes(mem.ram))
     for _ in range(frames):
         call(mpu, play)
@@ -101,16 +93,17 @@ def listing(data, frames, song=None, jobs=1, cov=None):
     return Listing.disassemble(mem, entries, cov=cov, ranges=[span], resolve=True)
 
 
+def code_bytes(data, cov):
+    """Address-space mask of the bytes of the instructions of `data`'s listing over `cov`."""
+    lst = listing(data, 0, cov=cov)
+    starts = np.zeros(0x10000, bool)
+    starts[lst.lines[:, 1]] = True
+    return instruction_bytes(_image(data)[0], starts)
+
+
 def one_way(data, cov):
     """{(branch PC, target never taken)} of the branches `cov` saw go one way only."""
-    mem = np.array(_image(data)[0], np.uint8)
-    bt = cov.flags & (TAKEN | FALLTHRU)
-    return {
-        (int(pc), t)
-        for pc in np.flatnonzero((bt == TAKEN) | (bt == FALLTHRU))
-        for flag, t in successors(mem, int(pc))[0]
-        if not bt[pc] & flag
-    }
+    return jcov.one_way(cov, _image(data)[0])
 
 
 def main(argv=None):

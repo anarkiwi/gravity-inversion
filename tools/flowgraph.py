@@ -15,11 +15,11 @@ import tempfile
 from collections import Counter
 
 import networkx as nx
+from jennings.acme import read_symbol_list
 
 import eventlog
 import irflow
 import irmodule
-import sidtrace
 
 DRIVER = pathlib.Path(__file__).resolve().parent.parent / "c64"
 SID = range(0xD400, 0xD420)
@@ -178,7 +178,7 @@ def main(argv=None):
     labels = {}
     if args.labels:
         text = pathlib.Path(args.labels).read_text(encoding="ascii")
-        labels = {a: n for n, a in sidtrace.parse_labels(text).items() if a >= 0x100}
+        labels = {a: n for n, a in read_symbol_list(text).items() if a >= 0x100}
     with tempfile.TemporaryDirectory() as tmp:
         psid = pathlib.Path(args.psid).read_bytes()
         c, h, _ = transliterate.transliterate(psid, "gen.h")

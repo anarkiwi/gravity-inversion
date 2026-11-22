@@ -11,8 +11,15 @@ pysidtracker; a capability they lack is added there, not written in this reposit
 | One instruction's text and length | `jennings.disassembler.Disassembler(MPU(memory=mem), AddressParser()).instruction_at(pc)` |
 | Opcode mnemonic and addressing mode | `jennings.opcodes.OPCODES[op]` |
 | What each register, flag and byte an instruction sets depends on | `jennings.dataflow.flow(mem, pc, loads, stores, operands)`; `operands` maps self-modified operand bytes to the locations they come from |
-| An instruction's P-Code | `deity_informant.lift(mem, pc)` (re-exported as `jennings.dataflow.lift`) |
-| Successors of an instruction | `jennings.coverage.cfg.successors` |
+| An instruction's P-Code | `deity_informant.lift(mem, pc)` |
+| Successors of an instruction | `jennings.coverage.cfg.successors(mem, pc)` |
+| Bytes of the instructions starting at a mask of addresses | `jennings.coverage.cfg.instruction_bytes(mem, starts)` |
+| Branches a coverage run saw go one way | `jennings.coverage.one_way(cov, mem)` |
+| A subroutine under coverage, `$D012` counting for raster polls | `jennings.coverage.call(mpu, addr, a, max_steps=, raster=)` |
+| Cycles and page-cross penalty of an opcode | `jennings.opcodes.CYCLES[op]`, `jennings.opcodes.EXTRA[op]` |
+| A PSID's header, image and 64 KiB memory | `pysidtracker.header.parse_sid_header(data)`, `pysidtracker.image.SidImage.from_sid(data)` (`.load`, `.image`, `.mem`); `tools/sidtrace.py` `psid_parts(data)` gives `(load, init, play, image)` |
+| A PSID file from its fields | `pysidtracker.header.write_psid(load=, init=, play=, image=, ...)`; `SidHeader.replace(**fields).to_bytes()` |
+| An ACME symbol list | `jennings.acme.read_symbol_list(text)` |
 | Static facts of a lift: instruction starts, address sets per access, stores, computed jump targets, register value sets, reaching definitions | the deity-informant `Program` `cgen.lift` returns: `starts`, `addr_sets`, `stores`, `jumps`, `regs`, `pdefs` |
 | Per-opcode roles in the lift | `tools/opclass.py` |
 | Repeated code, JSR targets, fall-through entries | `tools/copies.py` |

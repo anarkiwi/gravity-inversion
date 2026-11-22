@@ -12,8 +12,6 @@ BUILD = ROOT / "build"
 FIX = ROOT.parent.parent / "fixtures"
 SID = FIX / "Incoherent_Nightmare_tune_2.sid"
 DRIVER = ROOT.parent.parent / "c64"
-LOAD = 0x0800
-PSID_HEADER = 0x7E
 
 FREQ_HI, SPEED_L, SPEED_R = 0x0D2F, 0x12CA, 0x12E2
 INS_FIRST_WAVE, WAVE_L = 0x0FE0, 0x100B
@@ -56,14 +54,6 @@ VARIANTS = {
     ),
     "command_below_0x40_after_instrument": ({0x16A4: 0x0A}, True),
 }
-
-
-def patched(psid, patches):
-    """`psid` with image bytes at original addresses replaced."""
-    data = bytearray(psid)
-    for addr, value in patches.items():
-        data[addr - LOAD + PSID_HEADER] = value
-    return bytes(data)
 
 
 def build_prg(psid, out_dir):

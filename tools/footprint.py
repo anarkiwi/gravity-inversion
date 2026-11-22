@@ -12,20 +12,19 @@ import os
 import sys
 
 import numpy as np
+from jennings.acme import read_symbol_list
 from jennings.coverage import READ, WRITE
-from jennings.coverage.cfg import LEN
 
-from constructs import ROOT, load, memory
-from copies import instructions
-from disasm import coverage, listing
-from sidtrace import parse_labels, psid_parts, songs
+from constructs import ROOT, load
+from disasm import code_bytes, coverage
+from sidtrace import psid_parts, songs
 
 IO, STACK, ZP = (0xD000, 0xE000), (0x100, 0x200), (0, 0x100)
 CLEAN = {"extra": [], "missing": [], "overlap": []}
 
 
 def mask(spans):
-    """64 KiB boolean array of the half-open address spans."""
+    """Boolean address-space mask of the half-open address spans."""
     out = np.zeros(0x10000, bool)
     for lo, hi in spans:
         out[lo:hi] = True
@@ -41,11 +40,7 @@ def runs(m):
 def instruction_bytes(data, cov):
     """Mask of the image's instruction bytes: jennings' listing from `cov`."""
     load_addr, _, _, image = psid_parts(data)
-    mem = memory(data)
-    code = np.zeros(0x10000, bool)
-    for a, *_ in instructions(listing(data, 0, cov=cov).source):
-        code[a : a + int(LEN[mem[a]])] = True
-    return code & mask([(load_addr, load_addr + len(image))])
+    return code_bytes(data, cov) & mask([(load_addr, load_addr + len(image))])
 
 
 class Original:  # pylint: disable=too-few-public-methods
@@ -111,7 +106,9 @@ def maps(tune, psid):
     ACME labels where the build assembles it."""
     labels = psid.with_suffix(".labels")
     extra = (
-        [parse_labels(labels.read_text(encoding="ascii"))] if labels.exists() else []
+        [read_symbol_list(labels.read_text(encoding="ascii"))]
+        if labels.exists()
+        else []
     )
     gen = generator(tune)
     return gen.held(psid.read_bytes(), *extra), gen.named(psid.read_bytes(), *extra)

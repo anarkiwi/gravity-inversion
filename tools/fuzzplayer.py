@@ -28,6 +28,9 @@ STYLES = ("loop", "jsr3", "fallthrough", "unrolled", "smc") + MOTIFS
 STATE = 0x3000
 VOICE = 7
 SEQ = ("direct", "shadow", "shadow_next")
+#: KERNAL out, so BRK takes the RAM vector at $FFFE: in init, and in play, which the PSID
+#: driver enters with play's bank.
+BANK_RAM_VECTORS = ["LDA #$35", "STA $01"]
 SHADOW, PTR, SIDREGS = 0x3200, 0xF0, 25
 DUR, NOTE, START_LO, START_HI = 4, 5, 6, 7
 NOTES, REST, LEGATO, JUMP = 32, 0x80, 0x60, 0xFF
@@ -228,9 +231,7 @@ def motif(name, rng):  # pylint: disable=too-many-return-statements
         return code, ["mrl: !byte <mr0, <mr1", "mrh: !byte >mr0, >mr1"], []
     if name == "brk":
         handler = ["mbrk:"] + bump + ["RTI"]
-        init = [
-            "LDA #$35",
-            "STA $01",
+        init = BANK_RAM_VECTORS + [
             "LDA #<mbrk",
             "STA $fffe",
             "LDA #>mbrk",
@@ -396,7 +397,10 @@ def player(style, seed, fields=4, seq=None):  # pylint: disable=too-many-locals
             ],
             "fallthrough": ["LDX #0", "JSR voice", "LDX #7", "JSR voice", "LDX #14"],
         }
-        play = calls.get(style, calls["loop"]) + voice
+        play = (BANK_RAM_VECTORS if style == "brk" else []) + calls.get(
+            style, calls["loop"]
+        )
+        play += voice
     if shadow:
         copy = [
             "LDX #24",

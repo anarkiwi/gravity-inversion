@@ -376,7 +376,7 @@ def test_accounting(player):
     it; its bytes split into instruction, accessed and untouched."""
     psid, report = player
     cov = coverage(psid, [FRAMES], [0], init=True)
-    insns = instructions(listing(psid, 0, cov=cov).source)
+    insns = instructions(listing(psid, 0, cov=cov))
     for d in report["data"]:
         lo, hi = d["origin"], d["origin"] + d["bytes"]
         assert d["instruction"] == sum(

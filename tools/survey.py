@@ -8,7 +8,7 @@ import sys
 import numpy as np
 from tqdm import tqdm
 
-from sidtrace import MAX_CYCLES, default_song, machine, psid_parts, song_calls
+from sidtrace import MAX_CYCLES, boot, default_song, psid_parts, song_calls
 
 
 def executed(data, frames, song=None):
@@ -24,10 +24,12 @@ def coverage(data, frames, song=None):
 
 def _traces(data, frames, song):
     """(PC trace per call of init + `frames` play calls, play cycles)."""
-    load, init, play, image = psid_parts(data)
-    song = default_song(data) if song is None else song
-    _, mpu = machine(load, image[: 0x10000 - load])
-    pcs = [np.asarray(mpu.run_to_rts_traced(init, song, MAX_CYCLES).pc)]
+    pcs = []
+
+    def traced(mpu, _mem, init, a, max_cycles):
+        pcs.append(np.asarray(mpu.run_to_rts_traced(init, a, max_cycles).pc))
+
+    mpu, _, play = boot(data, song, run_init=traced)
     start = mpu.processorCycles
     for _ in range(frames):
         pcs.append(np.asarray(mpu.run_to_rts_traced(play, 0, MAX_CYCLES).pc))

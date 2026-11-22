@@ -3,6 +3,7 @@
 import functools
 
 import pytest
+from pysidtracker.reglog import first_divergence
 
 import disasm
 import footprint
@@ -314,7 +315,7 @@ def test_variant_identical(  # pylint: disable=too-many-arguments,too-many-posit
     assert not untaken & disasm.one_way(data, disasm.coverage(data, frames))
     prg = swp.build_prg(data, gen, tmp_path)
     ref = sidtrace.trace_psid(data, frames)
-    assert sidtrace.diff(ref, sidtrace.trace_prg(prg, frames)) is None
+    assert first_divergence(ref, sidtrace.trace_prg(prg, frames)) is None
 
 
 def _patterns_at_end(m):
@@ -397,7 +398,7 @@ def test_variant_generated(  # pylint: disable=too-many-positional-arguments
     data = m.bytes()
     prg = transliterate.build(data, tmp_path)[0]
     ref = sidtrace.trace_psid(data, frames)
-    assert sidtrace.diff(ref, sidtrace.trace_prg(prg, frames)) is None
+    assert first_divergence(ref, sidtrace.trace_prg(prg, frames)) is None
 
 
 def test_mismatch_reported(psid_path, gen, swp, tmp_path, capsys):

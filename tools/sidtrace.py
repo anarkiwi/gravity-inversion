@@ -1,36 +1,79 @@
 """Trace SID register writes of a PSID or C64 PRG on pysidtracker's C64 and compare them."""
 
 import argparse
-import re
 import sys
 
+from jennings.acme import read_symbol_list
 from jennings.coverage.elf import load_elf
-from pysidtracker.emu import SidWriteLog, run_to_rts, wire_mpu
+from pysidtracker.emu import SidWriteLog, wire_mpu
 from pysidtracker.header import parse_sid_header
+from pysidtracker.image import SidImage
+from pysidtracker.oracle import boot_flat
+from pysidtracker.poweron import place_tune, power_on_ram
+from pysidtracker.registers import sid_model_for_flags
+from pysidtracker.reglog import first_divergence
 from pysidtracker.survey import song_frames, song_list
 from tqdm import tqdm
-from vagrant_moses.c64 import poweron_ram
 
 MAX_CYCLES = 1_000_000
-
-
-def parse_labels(text):
-    """Parse an ACME label dump into {name: address}."""
-    return {
-        m[1]: int(m[2], 16)
-        for m in re.finditer(r"^\s*(\S+)\s*=\s*\$([0-9a-fA-F]+)", text, re.M)
-    }
+MODEL_FLAGS = {"6581": 0x10, "8580": 0x20}
 
 
 def machine(load, image, poke=None, sid_model="6581"):
-    """(mem, mpu): pysidtracker's C64 (vagrant-moses flat_mpu) over power-on RAM
-    holding `image` at `load` and `poke` {addr: byte}."""
-    ram = bytearray(poweron_ram())
-    ram[load : load + len(image)] = image
+    """(mem, mpu): pysidtracker's C64 over its PSID power-on RAM holding `image` placed
+    at `load` with the BASIC LOAD pointers, and `poke` {addr: byte}."""
+    ram = power_on_ram()
+    place_tune(ram, load, image)
     for addr, value in (poke or {}).items():
         ram[addr] = value
     mpu, mem = wire_mpu(ram, sid_model=sid_model)
     return mem, mpu
+
+
+def sid_image(data, sid_model=None):
+    """SidImage of a PSID, its header naming `sid_model` alone when given."""
+    image = SidImage.from_sid(data)
+    if sid_model:
+        flags = image.header.flags & ~0x30 | MODEL_FLAGS[sid_model]
+        image.header = image.header.replace(flags=flags)
+    return image
+
+
+def boot(data, song=None, *, poke=None, sid_model=None, setup=None, run_init=None):
+    """(mpu, mem, play) after init of 0-based `song` (default the start song) on
+    pysidtracker's PSID machine (`oracle.boot_flat`), on the header's SID model unless
+    `sid_model`; `poke` {addr: byte} is set and `setup(mpu, ram)` called before init, which
+    `run_init` (as boot_flat's `init_run`) may replace."""
+
+    def before(mpu, ram):
+        for addr, value in (poke or {}).items():
+            ram[addr] = value
+        if setup:
+            setup(mpu, ram)
+
+    song = default_song(data) if song is None else song
+    image = sid_image(data, sid_model)
+    _, mpu, mem, play = boot_flat(
+        image, song, MAX_CYCLES, setup=before, init_run=run_init
+    )
+    return mpu, mem, play
+
+
+def boot_ram(data, sid_model=None):
+    """The RAM `boot` starts `data`'s init on."""
+    ram = []
+    boot(
+        data,
+        sid_model=sid_model,
+        setup=lambda _mpu, live: ram.append(bytearray(live)),
+        run_init=lambda *_: None,
+    )
+    return ram[0]
+
+
+def header_model(data):
+    """The SID model pysidtracker plays a PSID on, from its header."""
+    return sid_model_for_flags(parse_sid_header(data).flags)
 
 
 def default_song(data):
@@ -38,16 +81,18 @@ def default_song(data):
     return parse_sid_header(data).start_song - 1
 
 
+def patched(data, patches):
+    """PSID `data` with the image bytes loaded at {address: byte} `patches` replaced."""
+    head, out = parse_sid_header(data), bytearray(data)
+    for addr, value in patches.items():
+        out[head.data_start + addr - head.real_load_address] = value
+    return bytes(out)
+
+
 def psid_parts(data):
     """Return (load, init, play, image) of a PSID file."""
-    head = parse_sid_header(data)
-    assert head.is_psid, "not a PSID file"
-    return (
-        head.real_load_address,
-        head.init_address or head.real_load_address,
-        head.play_address,
-        data[head.data_start :],
-    )
+    s = SidImage.from_sid(data)
+    return s.load, s.header.init_address or s.load, s.header.play_address, s.image
 
 
 class _CycleLog(SidWriteLog):
@@ -74,12 +119,6 @@ class _CycleLog(SidWriteLog):
         return super().start()
 
 
-def _log(mpu, detail=False):
-    """pysidtracker's per-call SID write log and a function giving its writes per call."""
-    log = _CycleLog(mpu, detail)
-    return log, lambda: log.calls
-
-
 def trace_psid(  # pylint: disable=too-many-arguments
     data,
     frames,
@@ -88,30 +127,34 @@ def trace_psid(  # pylint: disable=too-many-arguments
     song=None,
     *,
     poke=None,
-    sid_model="6581",
+    sid_model=None,
     detail=False,
     observe=None,
 ):
-    """SID writes of init then `frames` play calls: a list per frame, init first.
+    """SID writes of init then `frames` play calls on `boot`'s machine: a list per frame,
+    init first.
 
     Writes to `watch` addresses are passed to on_watch(frame, addr, value); with `detail`
     each write also carries its cycle from its call's start and its pc. `observe(mpu, mem,
     log)` is called once the machine is wired; len(log.calls) - 1 is the current call.
     """
-    load, init, play, image = psid_parts(data)
-    mem, mpu = machine(load, image, poke, sid_model)
-    log, writes = _log(mpu, detail)
-    if watch:
-        mem.subscribe_to_write(
-            watch, lambda addr, value: on_watch(len(log.calls) - 1, addr, value)
-        )
-    if observe:
-        observe(mpu, mem, log)
-    log.start()
-    run_to_rts(mpu, mem, init, default_song(data) if song is None else song, MAX_CYCLES)
+    box = []
+
+    def setup(mpu, _ram):
+        log = _CycleLog(mpu, detail)
+        box.append(log)
+        if watch:
+            mpu.memory.subscribe_to_write(
+                watch, lambda addr, value: on_watch(len(log.calls) - 1, addr, value)
+            )
+        if observe:
+            observe(mpu, mpu.memory, log)
+        log.start()
+
+    _, mem, play = boot(data, song, poke=poke, sid_model=sid_model, setup=setup)
     for _ in tqdm(range(frames), desc="psid", unit="frame"):
-        log.call(mem, play, MAX_CYCLES)
-    return writes()
+        box[0].call(mem, play, MAX_CYCLES)
+    return box[0].calls
 
 
 def trace_prg(  # pylint: disable=too-many-arguments
@@ -138,7 +181,7 @@ def trace_prg(  # pylint: disable=too-many-arguments
     with open(prg, "rb") as f:
         data = f.read()
     mem, mpu = machine(data[0] | data[1] << 8, data[2:], poke, sid_model)
-    log, writes = _log(mpu)
+    log = _CycleLog(mpu)
     if watch:
         mem.subscribe_to_write(
             watch(syms), lambda addr, value: on_watch(len(log.calls) - 1, addr, value)
@@ -163,7 +206,7 @@ def trace_prg(  # pylint: disable=too-many-arguments
         mpu.sp = (mpu.sp + 2) & 0xFF
         mpu.pc = (lo | hi << 8) + 1
         to_wait()
-    return writes()
+    return log.calls
 
 
 def song_calls(data, song, hvsc):
@@ -190,26 +233,12 @@ def loop_frame(psid, posoff, limit):
     return max(wrapped.values())
 
 
-def _at(writes, i):
-    return writes[i] if i < len(writes) else None
-
-
-def diff(ref, got):
-    """Return (frame, index, ref write, got write) of the first mismatch, or None."""
-    for frame, (r, g) in enumerate(zip(ref, got)):
-        if r != g:
-            i = next(
-                (i for i, (a, b) in enumerate(zip(r, g)) if a != b), min(len(r), len(g))
-            )
-            return frame, i, _at(r, i), _at(g, i)
-    return None
-
-
 def compare(psid, prg, frames, song):
-    """(frames, writes, first mismatch or None) of one subtune."""
+    """(frames, writes, first mismatch or None) of one subtune, the C build on the PSID's
+    SID model."""
     ref = trace_psid(psid, frames, song=song)
-    got = trace_prg(prg, frames, song)
-    return frames, sum(map(len, ref)), diff(ref, got)
+    got = trace_prg(prg, frames, song, sid_model=header_model(psid))
+    return frames, sum(map(len, ref)), first_divergence(ref, got)
 
 
 def main(argv=None):
@@ -246,7 +275,7 @@ def main(argv=None):
             frames = song_calls(psid, song, args.hvsc)
         elif args.wrap:
             with open(args.wrap[0], encoding="ascii") as f:
-                addr = parse_labels(f.read())[args.wrap[1]]
+                addr = read_symbol_list(f.read())[args.wrap[1]]
             frames = loop_frame(psid, addr, args.limit)
         frames, writes, bad = compare(psid, args.prg, args.times * frames, song)
         if bad:

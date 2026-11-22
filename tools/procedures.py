@@ -1,26 +1,17 @@
 """Procedure boundaries of the original by its control edges: which functions of a lift are
 shared tails its procedures end in (docs/residue.md, `stray-function`)."""
 
-from jennings.coverage.cfg import LEN
-from jennings.opcodes import OPCODES
+from jennings.coverage.cfg import successors
 
-JMP, JMP_IND, RTS = 0x4C, 0x6C, 0x60
-BRANCHES = frozenset(op for op, (_, mode) in OPCODES.items() if mode == "rel")
-#: Opcodes control never leaves by falling through: JMP, JMP (ind), RTS, RTI, BRK.
-NO_FALL = frozenset((JMP, JMP_IND, RTS, 0x40, 0x00))
+JMP_IND, RTS = 0x6C, 0x60
 
 
 def enters(mem, jumps, s, e):
     """Whether the instruction at `s` enters `e` by a JMP, a computed JMP's arm (`jumps`), a
-    branch or falling through."""
-    op = int(mem[s])
-    if op == JMP:
-        return int(mem[s + 1]) | int(mem[s + 2]) << 8 == e
-    if op == JMP_IND:
+    branch or falling through (never from an exit: RTS, RTI, BRK or a JAM)."""
+    if int(mem[s]) == JMP_IND:
         return e in jumps.get(s, ())
-    if op in BRANCHES:
-        return e in (s + 2, (s + 2 + (int(mem[s + 1]) ^ 0x80) - 0x80) & 0xFFFF)
-    return op not in NO_FALL and s + int(LEN[op]) == e
+    return any(t == e for _, t in successors(mem, s)[0])
 
 
 def shared_tails(mem, info, procs):

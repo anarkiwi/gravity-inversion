@@ -20,11 +20,10 @@ from typing import NamedTuple
 import numpy as np
 from jennings.acme import assemble
 from jennings.coverage import EXEC, WRITE
-from jennings.coverage.cfg import LEN
+from jennings.coverage.cfg import LEN, instruction_bytes
 from jennings.opcodes import OPCODES
 from pysidtracker.header import parse_sid_header
 from tqdm import tqdm
-from vagrant_moses.c64 import poweron_ram
 
 import cflow
 import costs
@@ -32,10 +31,10 @@ import emission
 import fuzzplayer
 from constructs import ROOT, load, memory
 from disasm import coverage
-from sidtrace import psid_parts
+from sidtrace import boot, psid_parts
 from procedures import shared_tails
 from trapclass import GUARD, trap_class
-from transliterate import c64_init, transliterate
+from transliterate import transliterate
 
 KINDS = tuple(
     "code-as-data unwritten-held hull-gap replayed-init address-dispatch address-value "
@@ -319,12 +318,8 @@ class Census:  # pylint: disable=too-many-instance-attributes
 
     @functools.cached_property
     def post_init(self):
-        """Memory after init of the first song on sidtrace's C64."""
-        mem = bytearray(poweron_ram())
-        _, _, _, image = psid_parts(self.lf.psid)
-        mem[self.load : self.load + len(image)] = image
-        c64_init(mem, self.init, 0)
-        return np.frombuffer(bytes(mem), np.uint8)
+        """Memory after init of the first song on sidtrace's PSID machine."""
+        return np.frombuffer(bytes(boot(self.lf.psid, 0)[1].ram), np.uint8)
 
     def _init_cov(self):
         """jennings coverage of init over every song."""
@@ -333,14 +328,11 @@ class Census:  # pylint: disable=too-many-instance-attributes
 
     def _instruction_mask(self, cov):
         """Bytes of the lift's instructions and of those init executes."""
-        mask = np.zeros(0x10000, bool)
-        for mem, starts in (
-            (self.post_init, self.info["starts"]),
-            (self.image, np.flatnonzero(cov.flags & EXEC)),
-        ):
-            for s in starts:
-                mask[s : s + int(LEN[mem[s]])] = True
-        return mask
+        lifted = np.zeros(0x10000, bool)
+        lifted[list(self.info["starts"])] = True
+        return instruction_bytes(self.post_init, lifted) | instruction_bytes(
+            self.image, (cov.flags & EXEC) != 0
+        )
 
     def held_bytes(self):
         """code-as-data: instruction bytes held in a data array; unwritten-held: bytes held

@@ -1,5 +1,9 @@
 """Tests for tools/copies.py on a synthetic two-voice player."""
 
+import numpy as np
+from jennings.coverage.listing import Listing
+from pysidtracker.header import write_psid
+
 import copies
 
 PLAYER = [
@@ -13,8 +17,7 @@ PLAYER = [
 
 
 def _psid(code):
-    fields = b"PSID\0\2\0\x7c\x10\0\x10\0\x10\0\0\1\0\1"
-    return fields + bytes(0x7C - len(fields)) + bytes(code)
+    return write_psid(load=0x1000, init=0x1000, play=0x1000, image=bytes(code))
 
 
 def test_copies_and_fall_through(tmp_path, capsys):
@@ -29,9 +32,12 @@ def test_copies_and_fall_through(tmp_path, capsys):
 
 def test_instructions_skip_data():
     """Data lines are not instructions; operands parse as numbers or labels."""
-    src = "1000  4C 05 10  L1000: JMP L1005\n1003                   .byte $00,$01\n"
-    insns = copies.instructions(src)
-    assert insns == [(0x1000, 3, "JMP", "L1005")]
+    mem = np.zeros(0x10000, np.uint8)
+    mem[0x1000:0x1006] = [0x4C, 0x05, 0x10, 0, 1, 0x60]
+    lst = Listing.disassemble(mem, [0x1000], ranges=[(0x1000, 0x1005)])
+    assert ".byte $00,$01" in lst.source
+    insns = copies.instructions(lst)
+    assert insns == [(0x1000, 3, "JMP", "L1005"), (0x1005, 1, "RTS", "")]
     assert copies.operand(insns[0]) == 0x1005 and copies.shape(insns[0]) == (
         "JMP",
         3,

@@ -7,6 +7,7 @@ each song the PSID header counts; play is lifted from the state it leaves, which
 holds."""
 
 import argparse
+import functools
 import os
 import pathlib
 import subprocess
@@ -15,20 +16,19 @@ import sys
 from deity_informant import cgen
 from pysidtracker.emu import observe_data_access, run_to_rts, sync_ram, wire_mpu
 from pysidtracker.header import parse_sid_header
-from vagrant_moses.c64 import poweron_ram
 from vagrant_moses.cgen import ENTRIES, HOST, SENSITIVE, TRAP, VOLATILE
 
-from sidtrace import MAX_CYCLES, psid_parts
+from sidtrace import MAX_CYCLES, boot_ram, header_model, psid_parts
 
 DRIVER = pathlib.Path(__file__).resolve().parent.parent / "c64"
 
 
-def c64_init(mem, pc, a):
-    """``postinit`` machine: init at ``pc`` with ``A = a`` on sidtrace's C64 (its SID answers
-    hardware probes), ``mem`` left as init leaves it; (volatile writes, addresses stored).
-    """
+def c64_init(mem, pc, a, sid_model="6581"):
+    """``postinit`` machine: init at ``pc`` with ``A = a`` on sidtrace's C64 (its `sid_model`
+    SID answers hardware probes), ``mem`` left as init leaves it; (volatile writes, addresses
+    stored)."""
     io, stored = [], set()
-    mpu, bus = wire_mpu(mem)
+    mpu, bus = wire_mpu(mem, sid_model=sid_model)
 
     def on_write(addr, value):
         stored.add(addr)
@@ -42,15 +42,13 @@ def c64_init(mem, pc, a):
 
 
 def transliterate(psid, header, lines=False, split=False):
-    """(c, h, info) of `psid` loaded over power-on RAM; the C includes `header`; `lines`:
+    """(c, h, info) of `psid` on sidtrace's PSID boot RAM; the C includes `header`; `lines`:
     with deity-informant's `#line` markers (docs/sizes.md, *Byte ownership*); `split`: `c` the
     translation units `{file: text}` with the host's (:func:`host_unit`), else one text.
     """
     load, init, play, image = psid_parts(psid)
-    ram = bytearray(poweron_ram())
-    ram[load : load + len(image)] = image
     c, h, info = cgen.translate(
-        ram,
+        boot_ram(psid),
         list(zip((init, play), ENTRIES)),
         VOLATILE,
         SENSITIVE,
@@ -58,7 +56,7 @@ def transliterate(psid, header, lines=False, split=False):
         header=header,
         init=0,
         songs=range(parse_sid_header(psid).songs),
-        machine=c64_init,
+        machine=functools.partial(c64_init, sid_model=header_model(psid)),
         lines=lines,
         split=split,
     )

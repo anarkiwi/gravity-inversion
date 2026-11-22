@@ -3,6 +3,7 @@
 import functools
 
 import pytest
+from pysidtracker.reglog import first_divergence
 
 from automatas_support import BUILD, FIX, SID, build_prg, gen_prg
 from vagrant_moses.memmap import PAL
@@ -43,7 +44,8 @@ def test_loop_identical(kind, psid):
     """Every SID write matches through the arranger loop, played twice."""
     calls = _wraps(psid, 300_000)[1] + 1000
     ref = sidtrace.trace_psid(psid, calls)
-    assert sidtrace.diff(ref, sidtrace.trace_prg(PRGS[kind], calls)) is None
+    got = sidtrace.trace_prg(PRGS[kind], calls, sid_model=MODEL)
+    assert first_divergence(ref, got) is None
 
 
 @functools.cache
@@ -51,18 +53,12 @@ def _base_c(psid):
     return transliterate.transliterate(psid, "gen.h")[0]
 
 
-def _patched(psid, patches):
-    data = bytearray(psid)
-    for addr, value in patches.items():
-        data[addr - 0x0FD0 + 0x7E] = value
-    return bytes(data)
-
-
+MODEL = sidtrace.header_model(SID.read_bytes())
 VARIANTS = {
     "semitone_route": ({0x2CC9: 0x05, 0x2CCC: 0x70}, {}),
     "semitone_high": ({0x2CC9: 0x7F, 0x2D84: 0x6A}, {}),
     "detune_carry": ({0x1081: 0xF0}, {}),
-    "sid8580": ({}, {"sid_model": "8580"}),
+    "sid6581": ({}, {"sid_model": "6581"}),
 }
 
 
@@ -80,15 +76,16 @@ def _variant_cases():
 def test_variant_identical(name, kind, psid, tmp_path):
     """Patched songs and an 8580 exercise paths the tune does not use."""
     patches, machine = VARIANTS[name]
-    variant = _patched(psid, patches)
+    machine = {"sid_model": MODEL} | machine
+    variant = sidtrace.patched(psid, patches)
     prg = BUILDERS[kind](variant, tmp_path)
     ref = sidtrace.trace_psid(variant, VARIANT_CALLS, **machine)
-    assert sidtrace.diff(ref, sidtrace.trace_psid(psid, VARIANT_CALLS)) is not None
+    assert first_divergence(ref, sidtrace.trace_psid(psid, VARIANT_CALLS)) is not None
     got = sidtrace.trace_prg(prg, VARIANT_CALLS, **machine)
-    assert sidtrace.diff(ref, got) is None
+    assert first_divergence(ref, got) is None
 
 
-MACHINES = {m.get("sid_model", "6581"): m for _, m in VARIANTS.values()}
+MACHINES = {m: {"sid_model": m} for m in ("6581", "8580")}
 
 
 @pytest.mark.parametrize("model", sorted(MACHINES))
@@ -98,15 +95,15 @@ def test_generated_model_probe(model, psid):
     ref = sidtrace.trace_psid(psid, VARIANT_CALLS, **MACHINES[model])
     for other in set(MACHINES) - {model}:
         alt = sidtrace.trace_psid(psid, VARIANT_CALLS, **MACHINES[other])
-        assert sidtrace.diff(ref, alt) is not None
+        assert first_divergence(ref, alt) is not None
     got = sidtrace.trace_prg(PRGS["generated"], VARIANT_CALLS, **MACHINES[model])
-    assert sidtrace.diff(ref, got) is None
+    assert first_divergence(ref, got) is None
 
 
 @pytest.mark.parametrize("name", sorted(VARIANTS))
 def test_variant_c_identical(name, psid):
     """A patched song generates the original's .c: song data is only in the .h."""
-    variant = _patched(psid, VARIANTS[name][0])
+    variant = sidtrace.patched(psid, VARIANTS[name][0])
     assert transliterate.transliterate(variant, "gen.h")[0] == _base_c(psid)
 
 
@@ -119,7 +116,9 @@ def test_outside_data_traps(where, psid, tmp_path):
         where
     ]
     patches = {PAT_LO + i: addr & 0xFF for i in range(0x80)}
-    variant = _patched(psid, patches | {PAT_HI + i: addr >> 8 for i in range(0x80)})
+    variant = sidtrace.patched(
+        psid, patches | {PAT_HI + i: addr >> 8 for i in range(0x80)}
+    )
     with pytest.raises(AssertionError, match=r"jam at \$[0-9a-f]+ \(trap 1\)"):
         sidtrace.trace_prg(build_prg(variant, tmp_path), VARIANT_CALLS)
 
@@ -130,7 +129,9 @@ def test_data_footprint(psid):
     variants."""
     runs = [(psid, [sidtrace.song_calls(psid, 0, FIX)], [0])]
     runs += [
-        (_patched(psid, p), [VARIANT_CALLS], [0]) for p, _ in VARIANTS.values() if p
+        (sidtrace.patched(psid, p), [VARIANT_CALLS], [0])
+        for p, _ in VARIANTS.values()
+        if p
     ]
     orig = footprint.Original(runs, 1)
     got = footprint.check(orig, gen_automatas.held(psid), gen_automatas.named(psid))
@@ -139,7 +140,7 @@ def test_data_footprint(psid):
 
 def test_mismatch_reported(psid, capsys):
     """A differing song is reported as a mismatch."""
-    variant = _patched(psid, VARIANTS["semitone_route"][0])
+    variant = sidtrace.patched(psid, VARIANTS["semitone_route"][0])
     path = BUILD / "variant.sid"
     path.write_bytes(variant)
     args = [str(path), str(BUILD / "automatas.prg"), "--frames", "20000"]

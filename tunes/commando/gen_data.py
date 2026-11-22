@@ -1,16 +1,10 @@
 """Generate commando_data.h from the assembled original PSID and its ACME labels."""
 
 import argparse
-from sidtrace import parse_labels
 
-PSID_HEADER = 0x7C
+from jennings.acme import read_symbol_list
 
-
-def load_psid(data):
-    """Return (load address, payload) of a PSID file with in-file load address."""
-    assert data[:4] == b"PSID", "not a PSID file"
-    off = data[6] << 8 | data[7]
-    return data[off] | data[off + 1] << 8, data[off + 2 :]
+from sidtrace import psid_parts
 
 
 def c_bytes(data):
@@ -21,7 +15,7 @@ def c_bytes(data):
 def held(psid, labels):
     """{array: original addresses}: the song data to the image's end, the frequency table
     and the voice offsets."""
-    load, image = load_psid(psid)
+    load, _, _, image = psid_parts(psid)
     return {
         "song": range(labels["_songdata"], load + len(image)),
         "v": range(labels["freqsl"], labels["posoff"]),
@@ -40,7 +34,7 @@ def named(_psid, labels):
 
 def generate(psid, labels):
     """Return header text for the song data image."""
-    load, image = load_psid(psid)
+    load, _, _, image = psid_parts(psid)
     end = load + len(image)
 
     def span(lo, hi):
@@ -72,7 +66,7 @@ def main(argv=None):
     with open(args.psid, "rb") as f:
         psid = f.read()
     with open(args.labels, encoding="ascii") as f:
-        labels = parse_labels(f.read())
+        labels = read_symbol_list(f.read())
     with open(args.out, "w", encoding="ascii") as f:
         f.write(generate(psid, labels))
 
