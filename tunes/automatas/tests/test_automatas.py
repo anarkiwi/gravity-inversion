@@ -1,17 +1,14 @@
 """The hand and generated C translations against the original, per SID write and play call."""
 
-import functools
-
 import pytest
 from pysidtracker.reglog import first_divergence
 
 from automatas_support import BUILD, FIX, SID, build_prg, gen_prg
 from vagrant_moses.memmap import PAL
 
-import footprint
 import gen_automatas
 import sidtrace
-import transliterate
+import tunetest
 
 ARRANGER_POS = range(0x10EB, 0x10EC)
 VARIANT_CALLS = 30000
@@ -46,11 +43,6 @@ def test_loop_identical(kind, psid):
     ref = sidtrace.trace_psid(psid, calls)
     got = sidtrace.trace_prg(PRGS[kind], calls, sid_model=MODEL)
     assert first_divergence(ref, got) is None
-
-
-@functools.cache
-def _base_c(psid):
-    return transliterate.transliterate(psid, "gen.h")[0]
 
 
 MODEL = sidtrace.header_model(SID.read_bytes())
@@ -103,8 +95,7 @@ def test_generated_model_probe(model, psid):
 @pytest.mark.parametrize("name", sorted(VARIANTS))
 def test_variant_c_identical(name, psid):
     """A patched song generates the original's .c: song data is only in the .h."""
-    variant = sidtrace.patched(psid, VARIANTS[name][0])
-    assert transliterate.transliterate(variant, "gen.h")[0] == _base_c(psid)
+    tunetest.assert_same_c(psid, sidtrace.patched(psid, VARIANTS[name][0]))
 
 
 @pytest.mark.parametrize("where", ["code", "end"])
@@ -119,23 +110,18 @@ def test_outside_data_traps(where, psid, tmp_path):
     variant = sidtrace.patched(
         psid, patches | {PAT_HI + i: addr >> 8 for i in range(0x80)}
     )
-    with pytest.raises(AssertionError, match=r"jam at \$[0-9a-f]+ \(trap 1\)"):
-        sidtrace.trace_prg(build_prg(variant, tmp_path), VARIANT_CALLS)
+    tunetest.assert_traps(1, build_prg(variant, tmp_path), VARIANT_CALLS)
 
 
 def test_data_footprint(psid):
     """The hand C holds only the original's data, and every byte the original reads as data
     but its operand state and the voice state it names, over the song and the patched
     variants."""
-    runs = [(psid, [sidtrace.song_calls(psid, 0, FIX)], [0])]
-    runs += [
-        (sidtrace.patched(psid, p), [VARIANT_CALLS], [0])
-        for p, _ in VARIANTS.values()
-        if p
-    ]
-    orig = footprint.Original(runs, 1)
-    got = footprint.check(orig, gen_automatas.held(psid), gen_automatas.named(psid))
-    assert got == footprint.CLEAN
+    calls = sidtrace.song_calls(psid, 0, FIX)
+    variants = [sidtrace.patched(psid, p) for p, _ in VARIANTS.values() if p]
+    tunetest.assert_clean(
+        gen_automatas, tunetest.song_runs(psid, calls, variants, VARIANT_CALLS)
+    )
 
 
 def test_mismatch_reported(psid, capsys):

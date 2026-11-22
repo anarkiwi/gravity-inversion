@@ -32,14 +32,22 @@ def test_edges_by_name_and_kind():
     assert flowcmp.edges(g) == {("a", "b", "value"), ("a", "b", "control")}
 
 
+def _commando(capsys, out, form, *args):
+    """Commando's CLI row for ``out`` and ``args``, after checking it exits 0 and the graph and
+    machines of ``form`` have the reduced form's edge counts."""
+    assert flowcmp.main([str(out), "commando", *args]) == 0
+    row = json.loads(capsys.readouterr().out.strip().splitlines()[-1])["commando"]
+    for part in ("graph", "machines"):
+        assert row[part][form] == row[part]["reduced"] > 0
+    return row
+
+
 @pytest.mark.slow
 def test_commando_keeps_its_flow(tmp_path, capsys):
     """Commando's graph and machines have no edge one form has that the other lacks; the CLI
     says so and exits 0."""
-    assert flowcmp.main([str(tmp_path), "commando", "--edges"]) == 0
-    row = json.loads(capsys.readouterr().out.strip().splitlines()[-1])["commando"]
+    row = _commando(capsys, tmp_path, "raw", "--edges")
     for part in ("graph", "machines"):
-        assert row[part]["raw"] == row[part]["reduced"] > 0
         assert row[part]["edges"] == {"lost": [], "gained": []}
     assert (tmp_path / "commando" / "reduced" / "machines.dot").exists()
 
@@ -47,9 +55,6 @@ def test_commando_keeps_its_flow(tmp_path, capsys):
 @pytest.mark.slow
 def test_split_keeps_flow_and_size(tmp_path, capsys):
     """Commando as translation units has the one file's graph and machines, and its PRG."""
-    assert flowcmp.main([str(tmp_path), "commando", "--against", "split"]) == 0
-    row = json.loads(capsys.readouterr().out.strip().splitlines()[-1])["commando"]
-    for part in ("graph", "machines"):
-        assert row[part]["split"] == row[part]["reduced"] > 0
+    row = _commando(capsys, tmp_path, "split", "--against", "split")
     assert row["prg"]["split"] == row["prg"]["reduced"]
     assert (tmp_path / "commando" / "split" / "gen_play.c").exists()

@@ -4,9 +4,9 @@ import pytest
 from pysidtracker.reglog import first_divergence
 
 from support import BUILD, STOP_FRAMES, VARIANTS, build_prg, patched
-import footprint
 import gen_data
 import sidtrace
+import tunetest
 
 LOOP_LIMIT = 20000
 
@@ -24,9 +24,11 @@ def test_loop_frame(ref_psid, labels):
         sidtrace.loop_frame(ref_psid, labels["posoff"], 100)
 
 
-def test_whole_tune_identical(capsys):
-    """Every SID write matches the original up to the tune loop."""
-    args = [str(BUILD / n) for n in ("ref.sid", "commando.prg")]
+@pytest.mark.parametrize("prg", ["commando.prg", "gen.prg"])
+def test_whole_tune_identical(prg, capsys):
+    """The `make` build of the hand and of the generated C matches the original up to the
+    tune loop."""
+    args = [str(BUILD / n) for n in ("ref.sid", prg)]
     args += ["--wrap", str(BUILD / "ref.labels"), "posoff"]
     assert sidtrace.main(args) == 0
     assert "OK" in capsys.readouterr().out
@@ -63,8 +65,7 @@ def test_outside_data_traps(code, ref_psid, labels, tmp_path):
     """A read outside the data the hand C holds traps, with the code of its site."""
     psid = patched(ref_psid, labels, _trap_patches(ref_psid, labels)[code])
     prg = build_prg(psid, labels, tmp_path)
-    with pytest.raises(AssertionError, match=rf"jam at \$[0-9a-f]+ \(trap {code}\)"):
-        sidtrace.trace_prg(prg, STOP_FRAMES)
+    tunetest.assert_traps(code, prg, STOP_FRAMES)
 
 
 def test_data_footprint(ref_psid, labels):
@@ -72,15 +73,9 @@ def test_data_footprint(ref_psid, labels):
     but its operand state and the state it names, up to the tune loop and over the patched
     variants."""
     frames = sidtrace.loop_frame(ref_psid, labels["posoff"], LOOP_LIMIT)
-    runs = [(ref_psid, [frames], [0])]
-    runs += [
-        (patched(ref_psid, labels, p), [STOP_FRAMES], [0]) for p in VARIANTS.values()
-    ]
-    orig = footprint.Original(runs, 1)
-    held = gen_data.held(ref_psid, labels)
-    assert (
-        footprint.check(orig, held, gen_data.named(ref_psid, labels)) == footprint.CLEAN
-    )
+    variants = [patched(ref_psid, labels, p) for p in VARIANTS.values()]
+    runs = tunetest.song_runs(ref_psid, frames, variants, STOP_FRAMES)
+    tunetest.assert_clean(gen_data, runs, labels)
 
 
 def test_mismatch_reported(ref_psid, labels, tmp_path, capsys):

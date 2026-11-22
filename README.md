@@ -62,7 +62,8 @@ versions and native modules), so a pin or wheel change regenerates it.
 | `tools/copies.py` | repeated playroutine code: unrolled copies with operand strides, JSR targets, fall-through entries |
 | `tools/mutate.py` | mutation check: run a test command against source edits |
 | `tools/transliterate.py` | PSID → translation units (or one `.c`) + `.h` with vagrant-moses' `cgen` (needs `mlir-opt` 22, `clang-format`) |
-| `tools/header.py` | shared CLI of the tune data generators |
+| `tools/header.py` | shared header formatting and CLI of the tune data generators |
+| `tools/tunetest.py` | checks the tunes' tests share: header values, traps, data footprint, generated C of patched songs |
 
 ## Tunes
 

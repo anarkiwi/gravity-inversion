@@ -101,15 +101,16 @@ def generator(tune):
     return importlib.import_module(path.stem)
 
 
+def labels(psid):
+    """[ACME labels of the PSID file `psid`] where the build assembles it, else []."""
+    path = psid.with_suffix(".labels")
+    return [read_symbol_list(path.read_text(encoding="ascii"))] if path.exists() else []
+
+
 def maps(tune, psid):
     """A tune's (held, named) {name: original addresses} for the PSID file `psid`, with its
-    ACME labels where the build assembles it."""
-    labels = psid.with_suffix(".labels")
-    extra = (
-        [read_symbol_list(labels.read_text(encoding="ascii"))]
-        if labels.exists()
-        else []
-    )
+    :func:`labels`."""
+    extra = labels(psid)
     gen = generator(tune)
     return gen.held(psid.read_bytes(), *extra), gen.named(psid.read_bytes(), *extra)
 

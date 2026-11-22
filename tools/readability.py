@@ -16,15 +16,21 @@ from transliterate import transliterate
 OUT = ROOT / "out" / "readability"
 
 
-def generate(name, out=OUT):
-    """Write target ``name``'s translation to ``out``/<name>.c and .h; the .c path."""
+def lift(name, out=OUT):
+    """Write target ``name``'s translation to ``out``/<name>.c and .h; the .c path and the
+    translation's info."""
     out = pathlib.Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    c, h, _ = transliterate(target(name)[0], f"{name}.h")
+    c, h, info = transliterate(target(name)[0], f"{name}.h")
     (out / f"{name}.h").write_text(h, encoding="utf-8")
     path = out / f"{name}.c"
     path.write_text(c, encoding="utf-8")
-    return path
+    return path, info
+
+
+def generate(name, out=OUT):
+    """:func:`lift`'s .c path."""
+    return lift(name, out)[0]
 
 
 def main(argv=None):
