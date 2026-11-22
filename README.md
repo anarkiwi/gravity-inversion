@@ -29,6 +29,13 @@ optimized as one file is. `make check` compares it with sidtrace too. The
 generated C depends on `build/lifter.stamp` (`tools/lifterstamp.py`: the installed lifter's
 versions and native modules), so a pin or wheel change regenerates it.
 
+## Tools
+
+- [Disassembly and data flow](docs/disassembly.md): listings, decoding, per-instruction
+  dependence and lift facts, from jennings, pysidtracker and deity-informant.
+- [Diagnostic tools](docs/diagnostics.md): SID write comparison, coverage, data reads, value
+  flow, residue, readability and size.
+
 ## Layout
 
 | Path | Content |
