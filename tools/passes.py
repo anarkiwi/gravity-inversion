@@ -8,13 +8,13 @@ depth-first search are loops; one whose target does not dominate its source is a
 import argparse
 
 import networkx as nx
-from jennings.coverage.cfg import successors
+from jennings.coverage.cfg import JSR, successors
 
 from constructs import memory, run
 from sidtrace import psid_parts
 
 EXIT = -1
-JSR, RTS, RTI = 0x20, 0x60, 0x40
+RTS, RTI = 0x60, 0x40
 
 
 def procedures(mem, cov, starts, entries):

@@ -18,10 +18,12 @@ from collections import Counter
 from typing import NamedTuple
 
 import numpy as np
+from deity_informant.masks import runs
 from jennings.acme import assemble
 from jennings.coverage import EXEC, WRITE
-from jennings.coverage.cfg import LEN, instruction_bytes
+from jennings.coverage.cfg import JSR, LEN, instruction_bytes
 from jennings.opcodes import OPCODES
+from wayward_eagle.census import COMPARE
 from pysidtracker.header import parse_sid_header
 from tqdm import tqdm
 
@@ -74,9 +76,7 @@ INIT_TABLES = {
     "CGEN_CP_N": "block copies",
 }
 BRANCHES = frozenset(op for op, (_, mode) in OPCODES.items() if mode == "rel")
-JSR = 0x20
 RTS = 0x60
-COMPARE = frozenset(("==", "!=", "<", "<=", ">", ">="))
 ADDRESS_OPS = frozenset(("+", "-", "|", "&", ">>", "<<"))
 WRAPS = cflow.WRAPS
 LOCAL = re.compile(r"\bv\d+\b")
@@ -352,7 +352,8 @@ class Census:  # pylint: disable=too-many-instance-attributes
                 ("unwritten-held", m & unwritten),
             ):
                 cause = {}
-                for lo, hi in cflow.runs(mask):
+                for lo, n in runs(mask):
+                    hi = lo + n - 1
                     cause.setdefault(self._readers(lo, hi), []).append((lo, hi))
                 for who, rs in cause.items():
                     n = sum(hi - lo + 1 for lo, hi in rs)

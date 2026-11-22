@@ -4,6 +4,7 @@ import argparse
 import sys
 
 from jennings.acme import read_symbol_list
+from jennings.coverage.components import MAX_CYCLES
 from jennings.coverage.elf import load_elf
 from pysidtracker.emu import SidWriteLog, wire_mpu
 from pysidtracker.header import parse_sid_header
@@ -15,7 +16,6 @@ from pysidtracker.reglog import first_divergence
 from pysidtracker.survey import song_frames, song_list
 from tqdm import tqdm
 
-MAX_CYCLES = 1_000_000
 MODEL_FLAGS = {"6581": 0x10, "8580": 0x20}
 
 

@@ -3,6 +3,7 @@
 import argparse
 import pathlib
 
+from jennings.coverage.cfg import JMP
 from sidtrace import psid_parts
 
 TABLES_ORG = 0x1830
@@ -12,7 +13,7 @@ CODE_READ = (
     *range(TABLES_END, 0x195F),
     *(0x1960, 0x1962, 0x1963, 0x1965, 0x1968, 0x1969, 0x196B, 0x196C, 0x196D, 0x196F),
 )
-JMP, LDX_IMM, LDY_IMM = 0x4C, 0xA2, 0xA0
+LDX_IMM, LDY_IMM = 0xA2, 0xA0
 
 
 def c_bytes(data):
