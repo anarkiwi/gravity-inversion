@@ -11,13 +11,12 @@ import re
 
 import numpy as np
 from jennings.coverage import EXEC
-from jennings.coverage.cfg import LEN, successors
+from jennings.coverage.cfg import JSR, LEN, successors
 from pysidtracker.image import SidImage
 
 from disasm import coverage, listing
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-JSR = 0x20
 ADDRESS = re.compile(r"\$[0-9A-Fa-f]{4}")
 
 

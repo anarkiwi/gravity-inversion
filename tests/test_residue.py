@@ -5,7 +5,6 @@ detector finds exactly the sites of a small synthetic lift."""
 import functools
 import json
 
-import numpy as np
 import pytest
 from jennings.acme import assemble
 
@@ -453,7 +452,6 @@ def test_intervals(lift):
     subs = [n for n, _ in costs.walk(play) if n.get("kind") == "ArraySubscriptExpr"]
     got = [cflow.interval(s["inner"][1]) for s in subs]
     assert (0, 1) in got and (0, 3) in got and (0, 0) in got
-    assert cflow.runs(np.array([0, 1, 1, 0, 1], bool)) == [(1, 2), (4, 4)]
 
 
 def test_report_and_manifest(tmp_path, monkeypatch, capsys):

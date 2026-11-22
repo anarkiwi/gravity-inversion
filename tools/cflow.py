@@ -7,7 +7,6 @@ import operator
 import re
 from collections import defaultdict
 
-import numpy as np
 
 from costs import callee, walk
 
@@ -864,12 +863,6 @@ def switch_of(parent, n):
 def norm(text):
     """C text with its whitespace collapsed."""
     return " ".join(text.split())
-
-
-def runs(mask):
-    """[(first, last)] of the runs of True in a boolean array."""
-    edges = np.flatnonzero(np.diff(np.concatenate(([0], mask.view(np.int8), [0]))))
-    return [(int(a), int(b) - 1) for a, b in zip(edges[::2], edges[1::2])]
 
 
 def clip(lo, hi):
