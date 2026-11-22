@@ -95,30 +95,6 @@ def psid_parts(data):
     return s.load, s.header.init_address or s.load, s.header.play_address, s.image
 
 
-class _CycleLog(SidWriteLog):
-    """SidWriteLog keeping each write as one shared ``(register, value)``, or with
-    ``detail`` as (register, value, cycle of the storing instruction from the call's start, pc).
-    """
-
-    def __init__(self, mpu, detail=False):
-        self.starts, self.detail, self.pairs = [], detail, {}
-        super().__init__(mpu)
-
-    def _write(self, addr, value):
-        if not self.calls:
-            return
-        if self.detail:
-            cycle = self.mpu.processorCycles - self.starts[-1]
-            self.calls[-1].append((self.registers[addr], value, cycle, self.mpu.pc))
-        else:
-            w = (self.registers[addr], value)
-            self.calls[-1].append(self.pairs.setdefault(w, w))
-
-    def start(self):
-        self.starts.append(self.mpu.processorCycles)
-        return super().start()
-
-
 def trace_psid(  # pylint: disable=too-many-arguments
     data,
     frames,
@@ -134,14 +110,15 @@ def trace_psid(  # pylint: disable=too-many-arguments
     """SID writes of init then `frames` play calls on `boot`'s machine: a list per frame,
     init first.
 
-    Writes to `watch` addresses are passed to on_watch(frame, addr, value); with `detail`
-    each write also carries its cycle from its call's start and its pc. `observe(mpu, mem,
+    Writes to `watch` addresses are passed to on_watch(frame, addr, value); each write is a
+    (register, value) pair, with `detail` a pysidtracker SidWriteLog record (register, address
+    read last, pc, value, cycle from its call's start). `observe(mpu, mem,
     log)` is called once the machine is wired; len(log.calls) - 1 is the current call.
     """
     box = []
 
     def setup(mpu, _ram):
-        log = _CycleLog(mpu, detail)
+        log = SidWriteLog(mpu, detail=detail, cycles=detail)
         box.append(log)
         if watch:
             mpu.memory.subscribe_to_write(
@@ -181,7 +158,7 @@ def trace_prg(  # pylint: disable=too-many-arguments
     with open(prg, "rb") as f:
         data = f.read()
     mem, mpu = machine(data[0] | data[1] << 8, data[2:], poke, sid_model)
-    log = _CycleLog(mpu)
+    log = SidWriteLog(mpu, detail=False)
     if watch:
         mem.subscribe_to_write(
             watch(syms), lambda addr, value: on_watch(len(log.calls) - 1, addr, value)

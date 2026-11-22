@@ -9,11 +9,12 @@ import re
 from collections import Counter, defaultdict
 
 from jennings import isa
+from jennings.coverage import cfg
 
 from disasm import listing
 
 NUMBER = re.compile(r"\$([0-9a-fA-F]+)|L([0-9A-F]{4})")
-STOPS = {"JMP", "RTS", "RTI", "BRK"}
+STOPS = {isa.mnemonic(op) for op in cfg.STOPS}
 
 
 def instructions(lst):
