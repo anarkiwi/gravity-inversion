@@ -11,6 +11,7 @@ What to run to compare, trace and measure a translation, before writing a new to
 | Which song data a hand translation reads | `tools/footprint.py` ([footprint.md](footprint.md)) |
 | Every song data read of generated C, with its state and SID writes | `tools/eventlog.py` ([eventlog.md](eventlog.md)) |
 | Value flow and state machines of generated C | `tools/flowgraph.py`, `tools/flowsegment.py`, `tools/condition.py` ([flowgraph.md](flowgraph.md)) |
+| State machines of a PSID's play, with no lift: roles, cycle periods, feed set, tracker roles | `tools/orbitflow.py PSID OUT [--song S]`: jennings components over the calls `cover_calls` proves cover play, explicit data and site taints, through `tools/flowsegment.py`'s pipeline ([flowgraph.md](flowgraph.md#orbit-source)) |
 | Where generated C keeps the 6502's machine model | `tools/residue.py` ([residue.md](residue.md)) |
 | Readability defects against budgets | `make readability`, `tools/readability.py` ([readability.md](readability.md)), `tools/fcomplex.py` ([fcomplex.md](fcomplex.md)) |
 | What costs code size | `tools/costs.py` ([costs.md](costs.md)), `tools/ablate.py` ([ablate.md](ablate.md)), `tools/sizes.py` ([sizes.md](sizes.md)) |

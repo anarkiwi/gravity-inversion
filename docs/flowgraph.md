@@ -85,6 +85,70 @@ Only branches in the functions the entries reach count.
    `resonance`, `volume`), and by its control edges the register groups and machines it
    gates: `(role, groups, tables, gated groups, gated machines)`.
 
+## Orbit source
+
+    python tools/orbitflow.py PSID OUT [--song S] [--limit N]   # OUT.{dot,png,svg,json}
+
+builds the same graph from the 6502, with no lift, and runs it through steps 3 to 6 above
+(registers contracted, `machines`, `classes`, `quotient`, `roles`). Play runs on the reference
+machine (`sidtrace.boot`, pysidtracker's `oracle.boot_flat`) and jennings
+(`jennings.coverage.components`, 0.21) learns it:
+
+- **calls**: `cover_calls`, the feed set's preperiod plus period, after which every data
+  access and control edge has been seen; the taints are learned over those calls.
+- **cell**: a persistent location (`learn`: read before written in some call, written in some
+  call), so transient scratch such as SID-Wizard's `$02/$03` is not a node. Persistent
+  registers (flags, X, Y) are contracted as the lift's register cells are.
+- **song**: a constant location read by a load, one node per load instruction, named by its
+  one base (`$185E[]`) or its pointer (`($02)@$16E6`, a `(zp),Y` at `$16E6`).
+- **sid**: a SID register written.
+
+Edges come from `components.explicit`, taints of data alone with constant loads as
+`CONST + pc`: **value** from a cell's end-of-call `deps` and a SID register's `stored` (every
+store's byte), **address** from `addressed` (per stored location) and the load sites, and
+**control** from `gated`: the conditions of the branches each store to the location ran under,
+transitively. Each edge keeps the taints behind it (`witness`). Stores are per location, so
+one `STA $D400,X` serving three voices ties each voice's state to its own registers only;
+the implicit part of `gated` (stores that did not happen) is per branch and can cross voices.
+
+Each machine also gets its cycle `(preperiod, period)`: the closure cycles `cycles` measures
+on a trajectory, refined to the machine's own cells; whether it is in the feed set (it decides
+an address or a branch) or only arithmetic (dashed); the voice its registers share, reached
+through cells; and tracker roles where the trajectory shows them: **order position** and
+**pattern row** (table machines, the row taking one value at every change of the order
+position, which changes only with it), **tick** (a timer or flag whose dependences are its own
+and which gates machines), **row timer** (one reloaded from song data that gates a sequencer)
+and **program** by the groups its tables drive. Song tables are contracted in the drawing and
+counted on each machine.
+
+SID-Wizard (`fixtures/Emomyst.sid`; `cover_calls` 8084, the feed set repeats at (1964, 6120)),
+against the table above and against the IR route rerun with deity-informant 0.40.22:
+
+| | sequencer | program | modulator | timer | flag |
+|---|---|---|---|---|---|
+| IR route, table above | 4 | 4 | 7 | 4 | 6 |
+| IR route, rerun | 1 | 1 | 7 | 4 | 7 |
+| orbit source | 3 | 4 | 11 | 0 | 8 |
+
+- **Score**: the IR route's 17-cell component holds `$02/$03`, the scratch pointer every
+  table is read through, which ties order, pattern and instrument positions together. With
+  no scratch cell the orbit splits it: order position `$103B` (with `$1042/$1049`, the voices'
+  copies), pattern row `$103C/$1043/$104A`, and the instrument component (`$1051-$1060`,
+  `$1247`, the filter table position `$15D6` and the five table reads that close its cycle).
+- **Programs**: WF-ARP `$103D` (control, freq) as the IR route has it, the PW table `$103E`
+  (and its voice copies `$1045/$104C`, split off by different reached paths) and `$107D`
+  (freq).
+- **Timers**: `$1064/$1065` are reloaded from the song at every step, never from their own
+  value, so they are not machines (the IR route's def-use webs keep a path from their old
+  value); `$1066` feeds no machine by value or address over the reached paths, so it is a flag
+  gating five machines; `$103C` is the pattern row.
+- **Modulators** and **flags**: per-voice copies whose reached paths differ stay apart
+  (`$102F` from `$1028/$1036`, `$1046` from `$103F/$104D`), which accounts for the extra
+  modulators and flag; the rest are the IR route's by address (`$1202` resonance, `$121F`
+  cutoff, where it names lifted state `S_1FF+0`, `S_21C+0`). `$1027`, `$1032`, `$1033` and
+  `$121F` are arithmetic only (outside the feed set). `$10A4` is the tick (period 8) and
+  `$103A` the row timer (period 6), each gating every group.
+
 ## Input conditioning
 
 The graphs need a lift with no residual `rd`/`wr`/`codechk` on play's path and play's song

@@ -53,6 +53,7 @@ versions and native modules), so a pin or wheel change regenerates it.
 | `tools/sizes.py` | PRG sizes beside the original 6502 player's ([docs/sizes.md](docs/sizes.md)) |
 | `tools/eventlog.py` | every song data read of generated C, each an event, lookup, machine or table read by value flow (`tools/irflow.py`), with the state and SID writes after it: read sites in its LLVM IR (`tools/irmodule.py`, needs `clang`), logged natively ([docs/eventlog.md](docs/eventlog.md)) |
 | `tools/flowgraph.py`, `tools/flowsegment.py`, `tools/condition.py` | value-flow graph of generated C (`tools/irflow.py`), its state machines, and per player family the lift and trace check ([docs/flowgraph.md](docs/flowgraph.md)) |
+| `tools/orbitflow.py` | state machines of a PSID's play straight from the 6502 (jennings components), with cycle periods and tracker roles ([docs/flowgraph.md](docs/flowgraph.md#orbit-source)) |
 | `tools/residue.py` | residue census: each site where generated C keeps the 6502's machine model, against `tests/residue_manifest.json` ([docs/residue.md](docs/residue.md)) |
 | `tools/readability.py` | the generated C whose readability defects (wayward-eagle's census) `virtuous-cycles.toml` ratchets ([docs/readability.md](docs/readability.md)) |
 | `tools/costs.py` | constructs in generated C that cost code size ([docs/costs.md](docs/costs.md)) |
