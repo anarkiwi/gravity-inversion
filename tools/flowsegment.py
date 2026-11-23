@@ -10,7 +10,6 @@ import hashlib
 import json
 import pathlib
 import re
-import subprocess
 import sys
 from collections import Counter
 
@@ -178,12 +177,10 @@ def quotient(g, cls):
 
 def summary(g):
     """Node counts by kind, edge count and value cycle sizes of ``g``."""
-    values = nx.DiGraph((u, v) for u, v, k in g.edges(data="kind") if k == "value")
-    cyc = [len(c) for c in nx.strongly_connected_components(values) if len(c) > 1]
     return {
         "nodes": dict(Counter(k for _, k in g.nodes(data="kind"))),
         "edges": g.number_of_edges(),
-        "value_cycles": sorted(cyc, reverse=True),
+        "value_cycles": sorted(map(len, flowgraph.value_cycles(g)), reverse=True),
     }
 
 
@@ -259,10 +256,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     q = segment(args.c[0] if len(args.c) == 1 else args.c, args.entry, args.header)
     out = pathlib.Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.with_suffix(".dot").write_text(flowgraph.dot(q), encoding="utf-8")
-    png = out.with_suffix(".png")
-    subprocess.run(["dot", "-Tpng", "-o", png, out.with_suffix(".dot")], check=True)
+    flowgraph.render(out.with_suffix(".dot"), flowgraph.dot(q), "png")
     report = {**summary(q), "roles": roles(q)}
     out.with_suffix(".json").write_text(json.dumps(report, indent=1), encoding="utf-8")
     print(json.dumps(report))

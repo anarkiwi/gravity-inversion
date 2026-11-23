@@ -1,20 +1,14 @@
 """Tests for tools/gen_data.py."""
 
-import re
-
 from pysidtracker.header import write_psid
 
 import gen_data
 import sidtrace
+from tunetest import array
 
 
 def _psid(load, payload):
     return write_psid(load=load, init=load, play=load, image=payload, embed_load=True)
-
-
-def _array(header, name):
-    text = re.search(rf"#define {name} (.*)", header)[1]
-    return bytes(int(b, 16) for b in text.split(","))
 
 
 def test_generate_is_byte_identical(ref_psid, labels):
@@ -22,9 +16,9 @@ def test_generate_is_byte_identical(ref_psid, labels):
     header = gen_data.generate(ref_psid, labels)
     load, _, _, image = sidtrace.psid_parts(ref_psid)
     org, freq = labels["_songdata"], labels["freqsl"]
-    assert _array(header, "SONG_DATA") == image[org - load :]
-    assert _array(header, "FREQ_TABLE") == image[freq - load : labels["posoff"] - load]
-    assert _array(header, "SID_OFFSETS") == b"\x00\x07\x0e"
+    assert array(header, "SONG_DATA") == image[org - load :]
+    assert array(header, "FREQ_TABLE") == image[freq - load : labels["posoff"] - load]
+    assert array(header, "SID_OFFSETS") == b"\x00\x07\x0e"
     assert f"#define SONG_ORG 0x{org:04x}" in header
     assert f"#define INS {labels['ins_pwl'] - org}" in header
 

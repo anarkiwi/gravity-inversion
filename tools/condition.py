@@ -6,7 +6,6 @@ import argparse
 import json
 import os
 import pathlib
-import subprocess
 import sys
 
 from tqdm import tqdm
@@ -57,19 +56,13 @@ def run(family, out, frames=None):
         row["trace"] = str(e)[:80]
     g, summary = flowgraph.graph(units, header=d / "gen.h")
     row["residual"] = summary["residual_calls"]
-    _write(d / "graph", g)
+    flowgraph.render(d / "graph.dot", flowgraph.dot(g), "png")
     m = flowsegment.segment(units, header=d / "gen.h")
-    _write(d / "machines", m)
+    flowgraph.render(d / "machines.dot", flowgraph.dot(m), "png")
     row["machines"] = flowsegment.summary(m)
     row["roles"] = {n: list(r) for n, r in flowsegment.roles(m).items()}
     (d / "row.json").write_text(json.dumps(row, indent=1), encoding="utf-8")
     return row
-
-
-def _write(stem, g):
-    stem.with_suffix(".dot").write_text(flowgraph.dot(g), encoding="utf-8")
-    png = stem.with_suffix(".png")
-    subprocess.run(["dot", "-Tpng", "-o", png, stem.with_suffix(".dot")], check=True)
 
 
 def main(argv=None):

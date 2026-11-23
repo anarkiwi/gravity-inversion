@@ -483,7 +483,11 @@ class Census:  # pylint: disable=too-many-instance-attributes
                     or costs.CHECKED.match(costs.callee(n) or "")
                 ):
                     what = cflow.norm(self.unit.src(n))
-                    names = cflow.names(n["inner"][1]) if len(n["inner"]) > 1 else set()
+                    names = (
+                        costs.refs(n["inner"][1], "name")
+                        if len(n["inner"]) > 1
+                        else set()
+                    )
                     pcs = set().union(*(pointers.get(v, ()) for v in names))
                     self._via |= pcs
                     per_fn.setdefault(fn, []).extend(
@@ -735,7 +739,7 @@ class Census:  # pylint: disable=too-many-instance-attributes
             atoms = tested = 0
             for n, up in nodes:
                 for atom in self._decisions(n, up):
-                    names = cflow.names(atom)
+                    names = costs.refs(atom, "name")
                     cells = sorted(names & opcode_cells)
                     if cells and not set(cells) <= flags:
                         cell = next(c for c in cells if c not in flags)

@@ -47,10 +47,10 @@ def walk(node, parent=None):
         yield from walk(child, node)
 
 
-def refs(node):
-    """Ids of the declarations a subtree refers to."""
+def refs(node, key="id"):
+    """The `key` (id or name) of each declaration a subtree refers to."""
     return {
-        n["referencedDecl"]["id"]
+        n["referencedDecl"][key]
         for n, _ in walk(node)
         if n.get("kind") == "DeclRefExpr"
     }

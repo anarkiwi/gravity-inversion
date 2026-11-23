@@ -9,7 +9,6 @@ import argparse
 import json
 import math
 import pathlib
-import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass
@@ -20,6 +19,7 @@ from jennings import isa
 from jennings.coverage import components as C
 from tqdm import tqdm
 
+import flowgraph
 import flowsegment
 import sidtrace
 
@@ -414,15 +414,8 @@ def main(argv=None):
     song = None if args.song is None else args.song - 1
     q, orbit = segment(pathlib.Path(args.psid).read_bytes(), song, args.limit)
     rep = report(q, orbit)
-    out = pathlib.Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    stem = str(out)
-    pathlib.Path(f"{stem}.dot").write_text(dot(q, rep), encoding="utf-8")
-    for f in ("png", "svg"):
-        subprocess.run(
-            ["dot", f"-T{f}", "-o", f"{stem}.{f}", f"{stem}.dot"],
-            check=True,
-        )
+    stem = args.out
+    flowgraph.render(f"{stem}.dot", dot(q, rep), "png", "svg")
     pathlib.Path(f"{stem}.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
     print(json.dumps({k: rep[k] for k in ("nodes", "roles", "coverage")}))
     return 0

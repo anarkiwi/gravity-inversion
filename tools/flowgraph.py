@@ -143,14 +143,19 @@ def graph(
         g.add_edge(src, dst, kind=kind, weight=w)
     for n in g:
         g.nodes[n].setdefault("kind", kinds.get(n, "cell"))
-    values = nx.DiGraph((u, v) for u, v, k in g.edges(data="kind") if k == "value")
-    cycles = [sorted(c) for c in nx.strongly_connected_components(values) if len(c) > 1]
     return g, {
         "nodes": Counter(k for _, k in g.nodes(data="kind")),
         "edges": Counter(k for _, _, k in g.edges(data="kind")),
         "residual_calls": dict(residual),
-        "value_cycles": sorted(cycles, key=len, reverse=True),
+        "value_cycles": sorted(map(sorted, value_cycles(g)), key=len, reverse=True),
     }
+
+
+def value_cycles(g):
+    """The node sets of ``g``'s cycles of value edges (strongly connected components of two
+    or more nodes)."""
+    values = nx.DiGraph((u, v) for u, v, k in g.edges(data="kind") if k == "value")
+    return [c for c in nx.strongly_connected_components(values) if len(c) > 1]
 
 
 def dot(g):
@@ -164,6 +169,18 @@ def dot(g):
         width = min(1 + d["weight"] / 4, 4)
         out.append(f'"{u}" -> "{v}" [style={LINE[d["kind"]]}, penwidth={width:.1f}];')
     return "\n".join(out + ["}"]) + "\n"
+
+
+def render(src, text, *formats):
+    """Write DOT ``text`` to the .dot path ``src`` and Graphviz's rendering of it beside, its
+    suffix each of ``formats``."""
+    src = pathlib.Path(src)
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.write_text(text, encoding="utf-8")
+    for f in formats:
+        subprocess.run(
+            ["dot", f"-T{f}", "-o", src.with_suffix(f".{f}"), src], check=True
+        )
 
 
 def main(argv=None):
@@ -187,10 +204,7 @@ def main(argv=None):
         c_path.with_suffix(".h").write_text(h, encoding="utf-8")
         g, summary = graph(c_path, labels)
     out = pathlib.Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.with_suffix(".dot").write_text(dot(g), encoding="utf-8")
-    svg = out.with_suffix(".svg")
-    subprocess.run(["dot", "-Tsvg", "-o", svg, out.with_suffix(".dot")], check=True)
+    render(out.with_suffix(".dot"), dot(g), "svg")
     out.with_suffix(".json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print({k: v for k, v in summary.items() if k != "value_cycles"})
     print("value cycles:", [len(c) for c in summary["value_cycles"]])

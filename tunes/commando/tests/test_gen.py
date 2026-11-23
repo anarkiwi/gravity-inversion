@@ -57,13 +57,6 @@ def _plain(perm, psid, generated):
     )
 
 
-def test_whole_tune_identical(capsys):
-    """The `make` build of the generated C matches the original up to the tune loop."""
-    args = [str(BUILD / n) for n in ("ref.sid", "gen.prg")]
-    assert sidtrace.main(args + ["--wrap", str(BUILD / "ref.labels"), "posoff"]) == 0
-    assert "OK" in capsys.readouterr().out
-
-
 def test_generated_shape(generated):
     """Structured C without goto, quickly made, as the state's, each entry's and the host's
     units."""

@@ -22,6 +22,7 @@ from wayward_eagle.census import COGNITIVE, census
 
 import ghidra_types
 from constructs import ROOT
+from readability import lift
 from residue import FUZZ, TUNES, target
 from sidtrace import psid_parts
 from transliterate import transliterate
@@ -233,13 +234,11 @@ def counts(js):
     return len(js["functions"]), ok, len(js["functions"]) - ok
 
 
-def generate_all(names, out=OUT, jobs=8, tag=None):
-    """:func:`generate` over ``names`` in ``jobs`` processes; ``{name: index}``."""
-    tag = ensure_image(tag or image_tag())
-    write_header(out)
+def pooled(fn, names, jobs, *args):
+    """``{name: fn(name, *args)}`` over ``names`` in ``jobs`` processes, in ``names``' order."""
     done = {}
     with concurrent.futures.ProcessPoolExecutor(jobs) as ex:
-        futs = {ex.submit(generate, n, out, tag): n for n in names}
+        futs = {ex.submit(fn, n, *args): n for n in names}
         progress = tqdm(
             concurrent.futures.as_completed(futs), total=len(futs), unit="target"
         )
@@ -247,6 +246,13 @@ def generate_all(names, out=OUT, jobs=8, tag=None):
             done[futs[fut]] = fut.result()
             progress.set_postfix_str(futs[fut])
     return {n: done[n] for n in names}
+
+
+def generate_all(names, out=OUT, jobs=8, tag=None):
+    """:func:`generate` over ``names`` in ``jobs`` processes; ``{name: index}``."""
+    tag = ensure_image(tag or image_tag())
+    write_header(out)
+    return pooled(generate, names, jobs, out, tag)
 
 
 def report(name, js):
@@ -350,17 +356,14 @@ def compare(js, ghidra, ours):
 
 
 def ours_c(name, out):
-    """Write the lifter's C of target ``name`` to ``out``/<name>.c and .h, and its
-    :func:`provenance` to <name>.provenance.json; the directory."""
-    out = pathlib.Path(out)
-    out.mkdir(parents=True, exist_ok=True)
-    c, h, info = transliterate(target(name)[0], f"{name}.h")
-    (out / f"{name}.h").write_text(h, encoding="utf-8")
-    (out / f"{name}.c").write_text(c, encoding="utf-8")
-    (out / f"{name}.provenance.json").write_text(
+    """Write the lifter's C of target ``name`` to ``out``/<name>.c and .h
+    (:func:`readability.lift`), and its :func:`provenance` to <name>.provenance.json; the
+    directory."""
+    path, info = lift(name, out)
+    path.with_suffix(".provenance.json").write_text(
         json.dumps(provenance(info)) + "\n", encoding="utf-8"
     )
-    return out
+    return path.parent
 
 
 def compare_target(name, ours, out=OUT):
@@ -384,16 +387,7 @@ def compare_target(name, ours, out=OUT):
 
 def compare_all(names, ours, out=OUT, jobs=8):
     """:func:`compare_target` over ``names`` in ``jobs`` processes; ``{name: comparison}``."""
-    done = {}
-    with concurrent.futures.ProcessPoolExecutor(jobs) as ex:
-        futs = {ex.submit(compare_target, n, ours, out): n for n in names}
-        progress = tqdm(
-            concurrent.futures.as_completed(futs), total=len(futs), unit="target"
-        )
-        for fut in progress:
-            done[futs[fut]] = fut.result()
-            progress.set_postfix_str(futs[fut])
-    return {n: done[n] for n in names}
+    return pooled(compare_target, names, jobs, ours, out)
 
 
 def compare_lines(name, got):

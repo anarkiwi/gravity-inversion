@@ -5,7 +5,7 @@ import pathlib
 import subprocess
 
 from gen_ghouls import BLOCK_DST, BLOCK_LEN, BLOCK_SRC, generate
-from sidtrace import psid_parts
+from sidtrace import patched, psid_parts
 from transliterate import build
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -64,11 +64,8 @@ def pattern_block(psid, song):
 
 def with_block_src(psid, song, src):
     """`psid` with music `song`'s (0-6) second copy block read from `src`."""
-    at, _ = _image(psid)
-    data = bytearray(psid)
-    data[at(BLOCK_SRC + _block(psid, song))] = src & 0xFF
-    data[at(BLOCK_SRC + _block(psid, song)) + 1] = src >> 8
-    return bytes(data)
+    addr = BLOCK_SRC + _block(psid, song)
+    return patched(psid, {addr: src & 0xFF, addr + 1: src >> 8})
 
 
 def with_pattern(psid, song, pattern):
@@ -77,10 +74,8 @@ def with_pattern(psid, song, pattern):
     at, _ = _image(psid)
     src, dst, length = pattern_block(psid, song)
     assert len(pattern) <= length
-    data = bytearray(psid)
-    data[at(src) : at(src) + len(pattern)] = pattern
-    col = data[at(SONG_INDEX + song)]
-    for voice in range(3):
-        data[at(SONG_PTRS_SRC + 14 * voice + col)] = dst & 0xFF
-        data[at(SONG_PTRS_SRC + 14 * voice + 7 + col)] = dst >> 8
-    return bytes(data)
+    ptrs = SONG_PTRS_SRC + psid[at(SONG_INDEX + song)]
+    lo_hi = {
+        ptrs + 14 * v + 7 * k: dst >> 8 * k & 0xFF for v in range(3) for k in (0, 1)
+    }
+    return patched(psid, dict(zip(range(src, src + len(pattern)), pattern)) | lo_hi)

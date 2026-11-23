@@ -5,5 +5,5 @@ pylint==4.1.4
 pytest==9.2.0
 pytest-cov==7.1.0
 pytest-xdist==3.8.0
-pysayme==0.1.0
+pysayme==0.2.0
 virtuous-cycles @ git+https://github.com/anarkiwi/virtuous-cycles@v0.6.0

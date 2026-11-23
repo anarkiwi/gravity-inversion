@@ -1,7 +1,5 @@
 """The C translation against the original: the tune, and patched variants."""
 
-import functools
-
 import pytest
 from pysidtracker.reglog import first_divergence
 
@@ -10,6 +8,7 @@ import footprint
 import sidtrace
 import survey
 import transliterate
+import tunetest
 
 TRAP_CALLS = 1000
 
@@ -82,21 +81,22 @@ def _orderlist_end(m):
     m[_seq_loop(m, 0)] = 0xFE
 
 
-def _vibrato_types(m):
-    """Vibrato types 0/$10/$20/$30 with fast increase, some with bit 0 set."""
-    values = [0x08, 0x38, 0x11, 0x28, 0x39, 0x01]
-    for i, ins in enumerate(_instruments(m)):
-        m[ins] = m[ins] & 0xC6 | values[i % len(values)]
-        m[ins + 5] |= 0x03
-        m[ins + 6] = 0x60
+def _ctrl(mask, values, more=None):
+    """Each instrument's control bits under `mask` set to `values` in turn, then `more(m, ins)`
+    applied to it."""
 
-
-def _ctrl(mask, values):
     def patch(m):
         for i, ins in enumerate(_instruments(m)):
             m[ins] = m[ins] & ~mask | values[i % len(values)]
+            if more:
+                more(m, ins)
 
     return patch
+
+
+def _fast_vibrato(m, ins):
+    m[ins + 5] |= 0x03
+    m[ins + 6] = 0x60
 
 
 def _tables(m):
@@ -208,8 +208,9 @@ VARIANTS = {
     "orderlists": (_orderlists, {0x1153}, {0x13CB, 0x13D1}),
     "orderlist_end": (_orderlist_end, {0x13C3}, {0x13C1}),
     "hr_gate_off": (_ctrl(0x04, [0x04]), {0x136F}, {0x136D}),
+    # types 0/$10/$20/$30 with fast increase, some with bit 0 set
     "vibrato_types": (  # also without the first-frame waveform
-        _vibrato_types,
+        _ctrl(0x39, [0x08, 0x38, 0x11, 0x28, 0x39, 0x01], _fast_vibrato),
         {0x1581},
         {0x153A, 0x1471, 0x17F2, 0x17F7},
     ),
@@ -337,8 +338,7 @@ def test_outside_data_traps(code, psid, gen, swp, tmp_path):
     m = swp.Music(psid, gen)
     TRAPS[code](m)
     prg = swp.build_prg(m.bytes(), gen, tmp_path)
-    with pytest.raises(AssertionError, match=rf"jam at \$[0-9a-f]+ \(trap {code}\)"):
-        sidtrace.trace_prg(prg, TRAP_CALLS)
+    tunetest.assert_traps(code, prg, TRAP_CALLS)
 
 
 def test_data_footprint(psid, gen, swp, frames):
@@ -352,8 +352,7 @@ def test_data_footprint(psid, gen, swp, frames):
         patch(m)
         data = m.bytes()
         (runs if len(data) == len(psid) else moved).append((data, [frames], [0]))
-    orig = footprint.Original(runs, 1)
-    assert footprint.check(orig, gen.held(psid), gen.named(psid)) == footprint.CLEAN
+    tunetest.assert_clean(gen, runs)
     for run in moved:
         got = footprint.check(
             footprint.Original([run], 1), gen.held(run[0]), gen.named(run[0])
@@ -361,17 +360,12 @@ def test_data_footprint(psid, gen, swp, frames):
         assert not got["missing"] and not got["overlap"], got
 
 
-@functools.cache
-def _base_c(psid):
-    return transliterate.transliterate(psid, "gen.h")[0]
-
-
 @pytest.mark.parametrize("name", sorted(VARIANTS))
 def test_variant_c_identical(name, psid, gen, swp):
     """A patched song generates the original's .c: song data is only in the .h."""
     m = swp.Music(psid, gen)
     VARIANTS[name][0](m)
-    assert transliterate.transliterate(m.bytes(), "gen.h")[0] == _base_c(psid)
+    tunetest.assert_same_c(psid, m.bytes())
 
 
 GEN_MISSED = {}

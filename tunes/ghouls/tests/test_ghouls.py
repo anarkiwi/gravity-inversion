@@ -4,10 +4,9 @@ songs."""
 import pytest
 
 import disasm
-import footprint
 import gen_ghouls
 import sidtrace
-import transliterate
+import tunetest
 from ghouls_support import (
     HVSC,
     BUILD,
@@ -88,8 +87,7 @@ def test_variant_identical(variant):
 
 def test_variant_c_identical(variant, psid):
     """The patched song generates the original's .c: song data is only in the .h."""
-    c = transliterate.transliterate(variant[0], "gen.h")[0]
-    assert c == transliterate.transliterate(psid, "gen.h")[0]
+    tunetest.assert_same_c(psid, variant[0])
 
 
 def test_variant_generated(variant, tmp_path):
@@ -127,8 +125,7 @@ def _trap_variants(psid):
 def test_outside_data_traps(code, psid, tmp_path):
     """An access outside the data the hand C holds traps, with the code of its site."""
     prg = build_prg(_trap_variants(psid)[code], tmp_path)
-    with pytest.raises(AssertionError, match=rf"jam at \$[0-9a-f]+ \(trap {code}\)"):
-        sidtrace.trace_prg(str(prg), VARIANT_FRAMES, VARIANT_SONG)
+    tunetest.assert_traps(code, str(prg), VARIANT_FRAMES, VARIANT_SONG)
 
 
 def test_data_footprint(psid, variant):
@@ -138,9 +135,7 @@ def test_data_footprint(psid, variant):
         (psid, [sidtrace.song_calls(psid, s, HVSC) for s in SONGS], list(SONGS)),
         (variant[0], [VARIANT_FRAMES], [VARIANT_SONG]),
     ]
-    orig = footprint.Original(runs, 8)
-    got = footprint.check(orig, gen_ghouls.held(psid), gen_ghouls.named(psid))
-    assert got == footprint.CLEAN
+    tunetest.assert_clean(gen_ghouls, runs, jobs=8)
 
 
 def test_mismatch_reported(psid, variant, tmp_path, capsys):

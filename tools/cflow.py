@@ -269,15 +269,6 @@ def interval(node):  # pylint: disable=too-many-return-statements
     return full(node)
 
 
-def names(node):
-    """Names a subtree refers to."""
-    return {
-        r["referencedDecl"]["name"]
-        for r, _ in walk(node)
-        if r.get("kind") == "DeclRefExpr"
-    }
-
-
 def terms(node, sign=1):
     """[(sign, term)] of a sum (`+`, `-`) through parentheses and casts."""
     node = strip(node, ("ParenExpr", "ConstantExpr", *CASTS))
@@ -462,7 +453,7 @@ class Flow:  # pylint: disable=too-many-instance-attributes
     def zp(self, node):
         """State key of a constant-index zero-page cell, or None."""
         c = self.u.cell(node)
-        return ("cell", *c) if c and self.u.regs[c[0]][0] + c[1] < 0x100 else None
+        return ("cell", *c) if c and self.zp_cell(c) else None
 
     def val(self, node, st):
         """Token of an expression that copies a variable, is a literal, or reads a zero-page
