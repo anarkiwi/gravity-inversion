@@ -414,9 +414,9 @@ def main(argv=None):
     song = None if args.song is None else args.song - 1
     q, orbit = segment(pathlib.Path(args.psid).read_bytes(), song, args.limit)
     rep = report(q, orbit)
-    out = pathlib.Path(args.out)
-    flowgraph.render(out, dot(q, rep), "png", "svg")
-    out.with_suffix(".json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
+    stem = args.out
+    flowgraph.render(f"{stem}.dot", dot(q, rep), "png", "svg")
+    pathlib.Path(f"{stem}.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
     print(json.dumps({k: rep[k] for k in ("nodes", "roles", "coverage")}))
     return 0
 

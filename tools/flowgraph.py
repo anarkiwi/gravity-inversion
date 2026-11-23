@@ -171,10 +171,10 @@ def dot(g):
     return "\n".join(out + ["}"]) + "\n"
 
 
-def render(stem, text, *formats):
-    """Write DOT ``text`` to ``stem``.dot and Graphviz's rendering of it to ``stem``.<format>
-    for each of ``formats``."""
-    src = pathlib.Path(stem).with_suffix(".dot")
+def render(src, text, *formats):
+    """Write DOT ``text`` to the .dot path ``src`` and Graphviz's rendering of it beside, its
+    suffix each of ``formats``."""
+    src = pathlib.Path(src)
     src.parent.mkdir(parents=True, exist_ok=True)
     src.write_text(text, encoding="utf-8")
     for f in formats:
@@ -204,7 +204,7 @@ def main(argv=None):
         c_path.with_suffix(".h").write_text(h, encoding="utf-8")
         g, summary = graph(c_path, labels)
     out = pathlib.Path(args.out)
-    render(out, dot(g), "svg")
+    render(out.with_suffix(".dot"), dot(g), "svg")
     out.with_suffix(".json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print({k: v for k, v in summary.items() if k != "value_cycles"})
     print("value cycles:", [len(c) for c in summary["value_cycles"]])

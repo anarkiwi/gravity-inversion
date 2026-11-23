@@ -256,7 +256,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     q = segment(args.c[0] if len(args.c) == 1 else args.c, args.entry, args.header)
     out = pathlib.Path(args.out)
-    flowgraph.render(out, flowgraph.dot(q), "png")
+    flowgraph.render(out.with_suffix(".dot"), flowgraph.dot(q), "png")
     report = {**summary(q), "roles": roles(q)}
     out.with_suffix(".json").write_text(json.dumps(report, indent=1), encoding="utf-8")
     print(json.dumps(report))

@@ -56,9 +56,9 @@ def run(family, out, frames=None):
         row["trace"] = str(e)[:80]
     g, summary = flowgraph.graph(units, header=d / "gen.h")
     row["residual"] = summary["residual_calls"]
-    flowgraph.render(d / "graph", flowgraph.dot(g), "png")
+    flowgraph.render(d / "graph.dot", flowgraph.dot(g), "png")
     m = flowsegment.segment(units, header=d / "gen.h")
-    flowgraph.render(d / "machines", flowgraph.dot(m), "png")
+    flowgraph.render(d / "machines.dot", flowgraph.dot(m), "png")
     row["machines"] = flowsegment.summary(m)
     row["roles"] = {n: list(r) for n, r in flowsegment.roles(m).items()}
     (d / "row.json").write_text(json.dumps(row, indent=1), encoding="utf-8")
