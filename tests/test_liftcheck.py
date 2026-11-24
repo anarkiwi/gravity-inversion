@@ -89,6 +89,32 @@ def test_table():
     assert next(r for r in rows if r.startswith("unbounded")).split()[1:] == ["-", "-"]
 
 
+def test_opacity(monkeypatch, tmp_path):
+    """Opacity is the census' opaque names plus twice its raw-memory accesses, as
+    virtuous-cycles.toml weighs them, its components beside it in the table."""
+    assert liftcheck.COMBINE == {"opacity": {"opaque-name": 1, "raw-memory": 2}}
+    counts = {"goto": 1, "opaque-name": 3, "raw-memory": 4}
+    monkeypatch.setattr(liftcheck, "census", lambda *_: counts)
+    monkeypatch.setattr(liftcheck.transliterate, "compile_prg", lambda *_, **__: None)
+    monkeypatch.setattr(liftcheck, "replay", lambda *_: "OK")
+    monkeypatch.setattr(
+        liftcheck.fcomplex, "score", lambda _: {"total": {"cognitive": 0}}
+    )
+    got = liftcheck.measure(tmp_path, b"", 1)
+    assert got["opacity"] == 11 and got["goto"] == 1
+    row = next(r for r in liftcheck.table(got, {}).splitlines() if "opacity" in r)
+    assert row.split()[2:] == [
+        "11",
+        "=",
+        "1*3",
+        "opaque-name",
+        "+",
+        "2*4",
+        "raw-memory",
+        "-",
+    ]
+
+
 def test_main(sample_psid, tmp_path, capsys):
     """The CLI lifts, measures and prints the table; its JSON holds the lift's measures."""
     psid, out = tmp_path / "t.sid", tmp_path / "t.json"

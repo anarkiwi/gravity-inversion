@@ -21,6 +21,10 @@ local variables by why they exist: `single-use`, the removable temporaries, `mul
 `clobbered`, `check-only`, `merged`, `unused`; wayward-eagle's
 [locals by reason](https://github.com/anarkiwi/wayward-eagle/blob/main/docs/census.md#locals-by-reason)),
 and `<name>:lines` and `<name>:statements` (the file's largest function).
+`opaque-name` and `raw-memory` are held as one key, `<name>:opacity`: their sites weighted
+by the adapter's `combine` option in `virtuous-cycles.toml` (`opacity = opaque-name +
+2 × raw-memory`, since a raw-memory subscript carries an opaque array name and a number).
+`tools/liftcheck.py` reads the same weights and shows opacity beside its components.
 
 CI runs `make readability AGAINST=origin/main` (`virtuous-cycles check --against origin/main`): no value may exceed its budget, and
 no budget may loosen. Budget files merge by keeping the stricter value per key:
