@@ -5,7 +5,7 @@
 
 ARG GHIDRA_URL=https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.2_build/ghidra_12.1.2_PUBLIC_20260605.zip
 
-FROM eclipse-temurin:24-jdk AS ghidra
+FROM eclipse-temurin:25-jdk AS ghidra
 ARG GHIDRA_URL
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl unzip ca-certificates \
@@ -15,7 +15,7 @@ RUN curl -fsSL -o /tmp/ghidra.zip "$GHIDRA_URL" \
     && mv /opt/ghidra_* /opt/ghidra \
     && rm /tmp/ghidra.zip
 
-FROM eclipse-temurin:24-jdk AS run
+FROM eclipse-temurin:25-jdk AS run
 ARG DEITY_INFORMANT
 RUN test -n "$DEITY_INFORMANT" \
     && apt-get update \
