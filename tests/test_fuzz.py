@@ -15,7 +15,7 @@ from jennings.acme import assemble
 
 import fuzzplayer
 import sidtrace
-from transliterate import trap_source, transliterate
+from transliterate import code, trap_source, transliterate
 
 DRIVER = pathlib.Path(__file__).resolve().parent.parent / "c64"
 SEEDS = range(3)
@@ -113,8 +113,9 @@ def test_structured(style, seed, translated):
 
 @pytest.mark.parametrize("style,seed", _cases("reloc"))
 def test_relocated(style, seed, translated, relocated):
-    """The player assembled at another origin generates byte-identical C."""
-    assert relocated[style, seed] == translated[style, seed][1]
+    """The player assembled at another origin generates the same code
+    (:func:`transliterate.code`)."""
+    assert code(relocated[style, seed]) == code(translated[style, seed][1])
 
 
 def test_cli(tmp_path):

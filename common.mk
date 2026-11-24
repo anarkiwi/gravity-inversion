@@ -51,8 +51,8 @@ $(B)/lifter.stamp: FORCE
 	$(PY) $(ROOT)/tools/lifterstamp.py $@
 
 # The translation units, their paths listed in $(B)/gen/units.
-$(B)/gen/units $(B)/gen/$(TUNE).h $(B)/gen/cgen_trap.c &: $(PSID) $(ROOT)/tools/transliterate.py $(B)/lifter.stamp
-	$(PY) $(ROOT)/tools/transliterate.py $< $(B)/gen --header $(TUNE).h --list $(B)/gen/units
+$(B)/gen/units $(B)/gen/$(TUNE).h $(B)/gen/cgen_trap.c $(B)/gen/overruns.json &: $(PSID) $(ROOT)/tools/transliterate.py $(B)/lifter.stamp
+	$(PY) $(ROOT)/tools/transliterate.py $< $(B)/gen --header $(TUNE).h --list $(B)/gen/units --overruns $(B)/gen/overruns.json
 
 # Each unit's bitcode, left for the whole program's optimization, linked into one module
 # (tools/transliterate.py UNIT and MERGE): the PRG is optimized as one file is.
@@ -73,8 +73,8 @@ all: $(B)/hand-O0.prg
 $(B)/hand-O0.prg: src/$(TUNE).c $(B)/$(TUNE)_data.h $(DRIVER)
 	$(CC) -O0 -Wall -Wextra -Werror $(CFLAGS_TUNE) -I$(B) -I$(ROOT)/c64 -o $@ $< $(ROOT)/c64/driver.c
 
-check-gen: $(B)/gen.prg
-	$(PY) $(ROOT)/tools/sidtrace.py $(PSID) $< $(CHECK_ARGS)
+check-gen: $(B)/gen.prg $(B)/gen/overruns.json
+	$(PY) $(ROOT)/tools/sidtrace.py $(PSID) $< $(CHECK_ARGS) --overruns $(B)/gen/overruns.json
 
 .PHONY: check-gen
 endif

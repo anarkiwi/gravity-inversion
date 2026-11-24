@@ -17,6 +17,7 @@ import owners
 import sidtrace
 import sizes
 import survey
+import transliterate
 import constructs
 
 
@@ -153,6 +154,28 @@ def test_sizes(tmp_path, capsys):
     assert 0 < insns < len(image)
 
 
+def test_code_of_generated_c():
+    """The code of generated C names its constant tables by first use and elides their data;
+    other code, literals included, is kept."""
+    c = (
+        "static const uint8_t table_1850[] = {1, 2};\n"
+        "static const uint8_t table_1850_1857[] = {3};\n"
+        "x = table_1850_1857[i] + table_1850[0x10];\n"
+    )
+    moved = c.replace("1850", "2850").replace("{1, 2}", "{9, 9}")
+    assert (
+        transliterate.code(c)
+        == transliterate.code(moved)
+        == (
+            "static const uint8_t table0[] = {};\n"
+            "static const uint8_t table1[] = {};\n"
+            "x = table1[i] + table0[0x10];\n"
+        )
+    )
+    assert transliterate.code({"b.c": "y", "a.c": c}) == transliterate.code(c) + "y"
+    assert transliterate.code(c) != transliterate.code(c.replace("0x10", "0x11"))
+
+
 def test_lifter_stamp(tmp_path):
     """common.mk regenerates a tune's C when the lifter's identity changes, not otherwise."""
     assert lifterstamp.identity((("jennings", "jennings"),)).startswith("jennings ")
@@ -166,6 +189,7 @@ def test_lifter_stamp(tmp_path):
         "for p in (sys.argv[4], 'cgen_trap.c', 't_play.c'):\n"
         "    open(os.path.join(sys.argv[2], p), 'w').close()\n"
         "open(sys.argv[6], 'w').write(os.path.join(sys.argv[2], 't_play.c'))\n"
+        "open(sys.argv[sys.argv.index('--overruns') + 1], 'w').write('[]')\n"
         "open('lifts', 'a').write('.')\n",
         encoding="ascii",
     )
