@@ -4,41 +4,56 @@ Writes the player as deity-informant's translation units (the state's, each entr
 shared functions') and the C64 host (`tune_init`/`tune_play` for c64/driver.c) as its own unit
 into OUT_DIR, with the song data in the header. Init runs on sidtrace's C64 (`c64_init`) with A
 each song the PSID header counts; play is lifted from the state it leaves, which the header
-holds."""
+holds, its bounds and branch decisions from the code and the read-only data alone (play's orbit
+is `tools/liftcheck.py`'s check)."""
 
 import argparse
 import functools
+import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 
 from deity_informant import cgen
-from pysidtracker.emu import observe_data_access, run_to_rts, sync_ram, wire_mpu
+import numpy as np
+from pysidtracker.emu import observe_data_access, sync_ram, wire_mpu
 from pysidtracker.header import parse_sid_header
 from vagrant_moses.cgen import ENTRIES, HOST, SENSITIVE, TRAP, VOLATILE
 
 from sidtrace import MAX_CYCLES, boot_ram, header_model, psid_parts
 
 DRIVER = pathlib.Path(__file__).resolve().parent.parent / "c64"
+#: deity-informant's overrun rule, as `cgen` takes it (`info["overruns"]` are the sites the rule
+#: bounds, which `tools/sidtrace.py` applies to the reference).
+OVERRUN = "trap"
+#: The write bit of a key of jennings' access log (``pc << 17 | write << 16 | addr``).
+STORE = np.uint64(1 << 16)
+#: The stack page.
+STACK = range(0x100, 0x200)
 
 
 def c64_init(mem, pc, a, sid_model="6581"):
     """``postinit`` machine: init at ``pc`` with ``A = a`` on sidtrace's C64 (its `sid_model`
     SID answers hardware probes), ``mem`` left as init leaves it; (volatile writes, addresses
-    stored)."""
+    stored). The data stores come from the core's access log; only the volatile writes and
+    the stack page's (its pushes) reach Python."""
     io, stored = [], set()
-    mpu, bus = wire_mpu(mem, sid_model=sid_model)
 
     def on_write(addr, value):
-        stored.add(addr)
-        if any(lo <= addr < hi for lo, hi in VOLATILE):
+        if STACK.start <= addr < STACK.stop:
+            stored.add(addr)
+        else:
             io.append((addr, value))
 
-    observe_data_access(mpu, on_write=on_write)
-    run_to_rts(mpu, bus, pc, a, MAX_CYCLES)
+    mpu, _ = wire_mpu(mem, sid_model=sid_model)
+    writes = [STACK, *(range(lo, hi) for lo, hi in VOLATILE)]
+    observe_data_access(mpu, on_write=on_write, writes=writes)
+    _, log = mpu.run_to_rts_accesses(pc, a, MAX_CYCLES)
     sync_ram(mpu)
-    return io, stored
+    log = np.asarray(log, np.uint64)
+    return io, stored | set((log[log & STORE != 0] & 0xFFFF).tolist())
 
 
 def transliterate(psid, header, lines=False, split=False):
@@ -59,6 +74,7 @@ def transliterate(psid, header, lines=False, split=False):
         machine=functools.partial(c64_init, sid_model=header_model(psid)),
         lines=lines,
         split=split,
+        overrun=OVERRUN,
     )
     if split:
         return {**c, f"{stem(header)}_host.c": host_unit(header)}, h, info
@@ -92,6 +108,27 @@ def trap_source(out_dir):
     path = pathlib.Path(out_dir) / "cgen_trap.c"
     path.write_text(TRAP, encoding="utf-8")
     return path
+
+
+#: A ``static const`` table deity-informant names by the address of its first byte, and its data.
+TABLE = re.compile(r"\btable_[0-9a-f]{4}(?:_[0-9a-f]{4})?\b(\[\] = \{[^}]*\})?")
+
+
+def code(c):
+    """The code of generated C `c` (a text, or units by name): its constant tables renamed in
+    order of first use and their data elided, what a lift of the same program from data at
+    other addresses keeps (the tables' names carry their addresses, their data the data's
+    pointers)."""
+    text = "".join(c[k] for k in sorted(c)) if isinstance(c, dict) else c
+    names = {}
+
+    def sub(m):
+        name = m[0][: len(m[0]) - len(m[1] or "")]
+        return names.setdefault(name, f"table{len(names)}") + (
+            "[] = {}" if m[1] else ""
+        )
+
+    return TABLE.sub(sub, text)
 
 
 def build(psid, out_dir, name="gen", flags=()):
@@ -137,6 +174,7 @@ def main(argv=None):
     ap.add_argument("out", help="output directory (cgen_trap.c in it too)")
     ap.add_argument("--header", required=True, help="the units' header name")
     ap.add_argument("--list", help="write the units' paths, one per line, to this file")
+    ap.add_argument("--overruns", help="write info['overruns'] as JSON to this file")
     args = ap.parse_args(argv)
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -148,6 +186,10 @@ def main(argv=None):
     if args.list:
         pathlib.Path(args.list).write_text(
             "".join(f"{p}\n" for p in paths), encoding="utf-8"
+        )
+    if args.overruns:
+        pathlib.Path(args.overruns).write_text(
+            json.dumps(info["overruns"]), encoding="utf-8"
         )
     times = " ".join(f"{k} {v:.2f}s" for k, v in info["times"].items())
     size = sum(len(t) for t in c.values())

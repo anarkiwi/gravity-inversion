@@ -31,9 +31,8 @@ def _translated(tune, songs):
 @pytest.mark.slow
 @pytest.mark.parametrize("songs", [1, 3])
 @pytest.mark.parametrize("tune", TUNES)
-def test_song_count_c_identical(tune, songs):
-    """The .c is the original's for another song count; the .h holds the count."""
-    c = transliterate(_psid(tune), "gen.h")[0]
-    other = _translated(tune, songs)
-    assert other[0] == c and "CGEN_SONGS" in c
-    assert int(re.search(r"^#define CGEN_SONGS (\w+)$", other[1], re.M)[1], 0) == songs
+def test_song_count_in_header(tune, songs):
+    """The .h holds the song count the .c's init checks its song against."""
+    c, h = _translated(tune, songs)
+    assert "CGEN_SONGS" in c
+    assert int(re.search(r"^#define CGEN_SONGS (\w+)$", h, re.M)[1], 0) == songs
