@@ -266,6 +266,15 @@ def test_rewrite():
     assert cflow.rewrite("abcdef", [(1, 3, "X"), (3, 3, "+"), (2, 5, "Y")]) == "aX+def"
 
 
+def test_parse_header_records():
+    """A record array's initializer is its records' bytes in order, continued lines joined."""
+    defs, inits = cflow.parse_header(
+        "#define V0_ORG 0x10\n#define V0_INIT {0x01, 2}, \\\n {0x03, 0x04}\n#define K_INIT 5\n"
+    )
+    assert defs == {"V0_ORG": 0x10, "K_INIT": 5}
+    assert inits == {"V0": b"\x01\x02\x03\x04", "K": b"\x05"}
+
+
 def test_identity_returns(tiny):
     """A return global holding the caller's value and a function returning its argument use
     the argument."""

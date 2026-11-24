@@ -1,22 +1,39 @@
 """Trace SID register writes of a PSID or C64 PRG on pysidtracker's C64 and compare them."""
 
 import argparse
+import json
 import sys
 
+import numpy as np
 from jennings.acme import read_symbol_list
 from jennings.coverage.components import MAX_CYCLES
 from jennings.coverage.elf import load_elf
+from jennings.devices.mpu6502 import Remap
+from jennings.opcodes import OPCODES
 from pysidtracker.emu import SidWriteLog, wire_mpu
+from pysidtracker.errors import SidError
+from pysidtracker.gridcmp import verdict_lead
 from pysidtracker.header import parse_sid_header
 from pysidtracker.image import SidImage
-from pysidtracker.oracle import boot_flat
+from pysidtracker.oracle import aligned_match, boot_flat
 from pysidtracker.poweron import place_tune, power_on_ram
 from pysidtracker.registers import sid_model_for_flags
 from pysidtracker.reglog import first_divergence
-from pysidtracker.survey import song_frames, song_list
+from pysidtracker.survey import (
+    file_oracle,
+    oracle_frames,
+    read_sidtrace,
+    sidtrace_calls,
+    song_frames,
+    song_list,
+)
 from tqdm import tqdm
 
 MODEL_FLAGS = {"6581": 0x10, "8580": 0x20}
+#: The (zp,X) and (zp),Y opcodes: the overrun rule reads their pointer bytes as they are.
+POINTER_OPCODES = [op for op, (_, mode) in OPCODES.items() if mode in ("indx", "indy")]
+#: The I/O page: SID writes are logged there, and the overrun rule leaves it to the machine.
+IO = range(0xD000, 0xE000)
 
 
 def machine(load, image, poke=None, sid_model="6581"):
@@ -28,6 +45,43 @@ def machine(load, image, poke=None, sid_model="6581"):
         ram[addr] = value
     mpu, mem = wire_mpu(ram, sid_model=sid_model)
     return mem, mpu
+
+
+def overrun_sources(site):
+    """int64 [65536]: per address, what a data access by the instruction of overrun `site`
+    (deity-informant's `info["overruns"]`: `pc`, its accesses' address hull `addr`, the
+    object's runs `ok`, inclusive, ascending) there reads: -1 the address as it stands (inside
+    `ok`, outside `addr`, or I/O), -2 zero, else the address it reads instead. With `last`, a
+    read outside `ok` reads the last valid entry: `last` an address, or per run of `ok` a
+    (first, stride) pair, the run's last record, which a read past the nearest run below it
+    repeats."""
+    out = np.full(0x10000, -1, np.int64)
+    out[site["addr"][0] : site["addr"][1] + 1] = -2
+    for lo, hi in site["ok"]:
+        out[lo : hi + 1] = -1
+    out[IO.start : IO.stop] = -1
+    last = site.get("last")
+    at = np.flatnonzero(out == -2)
+    if last is None or not at.size:
+        return out
+    if isinstance(last, int):
+        out[at] = last
+        return out
+    first, step = np.array(last, np.int64).reshape(-1, 2).T
+    ends = np.array([hi for _, hi in site["ok"]], np.int64)
+    i = np.maximum(np.searchsorted(ends, at) - 1, 0)
+    out[at] = first[i] + (at - first[i]) % step[i]
+    return out
+
+
+def overrun_remap(sites):
+    """jennings' Remap of the translation's overrun rule: a data access by the instruction
+    of a site to an address of its `addr` outside its `ok` reads what :func:`overrun_sources`
+    gives (0, or with `last` the last valid entry) and writes nothing; an indirect
+    instruction's pointer bytes read as they are. None without sites."""
+    at = {s["pc"]: overrun_sources(s) for s in sites}
+    at = {pc: v.astype(np.int32) for pc, v in at.items() if (v != -1).any()}
+    return Remap(at, POINTER_OPCODES) if at else None
 
 
 def sid_image(data, sid_model=None):
@@ -106,9 +160,10 @@ def trace_psid(  # pylint: disable=too-many-arguments
     sid_model=None,
     detail=False,
     observe=None,
+    remap=None,
 ):
     """SID writes of init then `frames` play calls on `boot`'s machine: a list per frame,
-    init first.
+    init first; init and play run under the jennings Remap `remap` (:func:`overrun_remap`).
 
     Writes to `watch` addresses are passed to on_watch(frame, addr, value); each write is a
     (register, value) pair, with `detail` a pysidtracker SidWriteLog record (register, address
@@ -128,9 +183,18 @@ def trace_psid(  # pylint: disable=too-many-arguments
             observe(mpu, mpu.memory, log)
         log.start()
 
-    _, mem, play = boot(data, song, poke=poke, sid_model=sid_model, setup=setup)
+    def run_init(mpu, _mem, init, a, max_cycles):
+        mpu.run_to_rts(init, a, max_cycles, remap)
+
+    mpu, _, play = boot(
+        data, song, poke=poke, sid_model=sid_model, setup=setup, run_init=run_init
+    )
     for _ in tqdm(range(frames), desc="psid", unit="frame"):
-        box[0].call(mem, play, MAX_CYCLES)
+        depth = mpu.sp
+        box[0].start()
+        mpu.run_to_rts(play, 0, MAX_CYCLES, remap)
+        if mpu.sp < depth:
+            raise SidError("play call did not return")
     return box[0].calls
 
 
@@ -192,6 +256,20 @@ def song_calls(data, song, hvsc):
     return song_frames(data, song + 1, hvsc=hvsc)
 
 
+def against(path, data, song):
+    """None if the render of 1-based `song` of PSID `data` (pysidtracker's `file_oracle`)
+    matches the sidtrace capture at `path` over its play calls within a silent lead-in, else
+    (frame, register, capture, render) at their first difference."""
+    rows = read_sidtrace(path)
+    n, ref = oracle_frames(rows, nframes=sidtrace_calls(rows))
+    got = np.asarray(file_oracle(data, song, n)[1])
+    if aligned_match(ref.tolist(), got.tolist()):
+        return None
+    v = verdict_lead(ref, got, max_lead=0)
+    f, r = v.first, v.first_reg
+    return f, r, int(ref[f, r]), int(got[f, r])
+
+
 def songs(spec, data):
     """0-based subtunes of an HVSC-style 1-based spec ('all', '1,3-5')."""
     return [s - 1 for s in song_list(spec, parse_sid_header(data).songs)]
@@ -210,10 +288,26 @@ def loop_frame(psid, posoff, limit):
     return max(wrapped.values())
 
 
-def compare(psid, prg, frames, song):
+def read_sites(path):
+    """The overrun sites (deity-informant's `info["overruns"]`) of a translation's JSON at
+    `path` (`make`'s `build/gen/overruns.json`); none without a path."""
+    if not path:
+        return ()
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def reference(data, frames, sites=(), **kw):
+    """:func:`trace_psid` of `data` under the overrun rule of `sites` (:func:`overrun_remap`):
+    what a translation lifted under them is judged against."""
+    return trace_psid(data, frames, remap=overrun_remap(sites), **kw)
+
+
+def compare(psid, prg, frames, song, sites=()):
     """(frames, writes, first mismatch or None) of one subtune, the C build on the PSID's
-    SID model."""
-    ref = trace_psid(psid, frames, song=song)
+    SID model; the reference under the overrun rule of `sites` (:func:`reference`).
+    """
+    ref = reference(psid, frames, sites, song=song)
     got = trace_prg(prg, frames, song, sid_model=header_model(psid))
     return frames, sum(map(len, ref)), first_divergence(ref, got)
 
@@ -241,9 +335,15 @@ def main(argv=None):
     ap.add_argument(
         "--times", type=int, default=1, help="compare this multiple of the length"
     )
+    ap.add_argument(
+        "--overruns",
+        help="the translation's overrun sites (JSON): the reference reads past them as the "
+        "translation does",
+    )
     args = ap.parse_args(argv)
     with open(args.psid, "rb") as f:
         psid = f.read()
+    sites = read_sites(args.overruns)
     picked = songs(args.songs, psid) if args.songs else [default_song(psid)]
     failed = 0
     for song in picked:
@@ -254,7 +354,7 @@ def main(argv=None):
             with open(args.wrap[0], encoding="ascii") as f:
                 addr = read_symbol_list(f.read())[args.wrap[1]]
             frames = loop_frame(psid, addr, args.limit)
-        frames, writes, bad = compare(psid, args.prg, args.times * frames, song)
+        frames, writes, bad = compare(psid, args.prg, args.times * frames, song, sites)
         if bad:
             failed += 1
             print(

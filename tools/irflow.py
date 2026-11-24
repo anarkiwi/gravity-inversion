@@ -56,6 +56,33 @@ def bases(printed):
     return out
 
 
+def _scope(fn):
+    """``(defs, params)`` of function ``fn``: its instructions by text, its parameters'
+    positions by text."""
+    defs = {str(i).strip(): i for b in fn.blocks for i in b.instructions}
+    return defs, {str(a).strip(): k for k, a in enumerate(fn.arguments)}
+
+
+def _constant(defs, op):
+    """The constant sum of an index operand's terms under ``defs``, 0 where none."""
+    ins = defs.get(str(op).strip())
+    if ins is None:
+        m = re.fullmatch(r"i\d+ (-?\d+)", str(op).strip())
+        return int(m.group(1)) if m else 0
+    if ins.opcode in ("add", "zext", "sext", "trunc"):
+        return sum(_constant(defs, o) for o in ins.operands)
+    return 0
+
+
+def merge_cells(cells):
+    """The cell of a set of cells: their one cell, else the one global at offset 0, else
+    none."""
+    if len(cells) == 1:
+        return next(iter(cells))
+    gs = {g for g, _ in cells}
+    return (gs.pop(), 0) if len(gs) == 1 and None not in gs else (None, 0)
+
+
 #: The virtual exit every returning block joins, for post-dominators.
 EXIT = ("exit",)
 
@@ -165,11 +192,13 @@ class Flow:  # pylint: disable=too-many-instance-attributes
     returns; ``control`` the branches each store and ``io_write`` runs under."""
 
     def __init__(self, mod, helpers):
-        self.helpers, self.loc = helpers, _locations(str(mod))
-        self.bases = bases(str(mod))
+        printed = str(mod)
+        self.helpers, self.loc = helpers, _locations(printed)
+        self.bases, self.named = bases(printed), irmodule.types(printed)
         self.reads, self.stores, self.args, self.rets, self.cfg = {}, [], {}, {}, {}
         self.where, self.calls, self.conds, self.exits = {}, [], {}, {}
         self.gates, self.shape, self.actuals, self.arity = {}, {}, {}, {}
+        self.argcells = self._argcells(mod)
         for fn in mod.functions:
             if not fn.is_declaration and not helpers.fullmatch(fn.name):
                 self._function(fn)
@@ -180,9 +209,64 @@ class Flow:  # pylint: disable=too-many-instance-attributes
                 f = self.control.setdefault(t, {})
                 f[fn] = f.get(fn, frozenset()) | deps
 
+    def _cell(self, fn, defs, params, op):
+        """``(global, constant byte offset)`` of a pointer in function ``fn``, its index terms
+        dropped; a parameter's from its actuals (:meth:`_argcells`)."""
+        s = str(op).lstrip()
+        if s.startswith("@"):
+            return op.name, 0
+        if s.strip() in params:
+            return self.argcells.get((fn, params[s.strip()]), (None, 0))
+        ins = defs.get(s.strip())
+        if ins is None:
+            p = irmodule.pointer(s[4:] if s.startswith("ptr ") else s, self.named)
+            return (p[0], p[1] or 0) if p else (None, 0)
+        ops = list(ins.operands)
+        if ins.opcode == "load":
+            g = self._cell(fn, defs, params, ops[0])[0]
+            return (self.bases[g], 0) if g in self.bases else (None, 0)
+        if ins.opcode != "getelementptr":
+            return None, 0
+        g, c = self._cell(fn, defs, params, ops[0])
+        ty = irmodule.source_type(str(ins))
+        return g, c + irmodule.offset(
+            ty, [_constant(defs, o) for o in ops[1:]], self.named
+        )
+
+    def _argcells(self, mod):
+        """``{(function, parameter): cell}`` of each pointer parameter (:meth:`_cell`): the one
+        cell every call passes, else the global they all point into, else none; to a fixpoint
+        over parameters passed on."""
+        scopes = [
+            (fn.name, *_scope(fn))
+            for fn in mod.functions
+            if not fn.is_declaration and not self.helpers.fullmatch(fn.name)
+        ]
+        self.argcells, got = {}, None
+        for _ in range(len(scopes) + 1):
+            passed = {}
+            for name, defs, params in scopes:
+                for ins in defs.values():
+                    ops = list(ins.operands)
+                    if ins.opcode != "call":
+                        continue
+                    for k, o in enumerate(ops[:-1]):
+                        if str(o.type) == "ptr":
+                            passed.setdefault((ops[-1].name, k), set()).add(
+                                self._cell(name, defs, params, o)
+                            )
+            got = {a: merge_cells(cs) for a, cs in passed.items()}
+            if got == self.argcells:
+                break
+            self.argcells = got
+        return got
+
     def _function(self, fn):  # pylint: disable=too-many-locals,too-many-statements
-        defs = {str(i).strip(): i for b in fn.blocks for i in b.instructions}
-        params = {str(a).strip(): k for k, a in enumerate(fn.arguments)}
+        defs, params = _scope(fn)
+
+        def cell(op):
+            return self._cell(fn.name, defs, params, op)
+
         memo, gmemo, where, blocks = {}, {}, iter(self.loc[fn.name]), {}
         ends = {b.name: list(b.instructions)[-1] for b in fn.blocks}
         succ = {b: re.findall(r"label %([\w.]+)", str(t)) for b, t in ends.items()}
@@ -261,32 +345,6 @@ class Flow:  # pylint: disable=too-many-instance-attributes
                 )
             return gmemo[s]
 
-        def cell(op):
-            """``(global, constant offset)`` of a pointer, its index terms dropped."""
-            s = str(op).lstrip()
-            if s.startswith("@"):
-                return op.name, 0
-            ins = defs.get(s.strip())
-            if ins is None:
-                p = irmodule.pointer(s[4:] if s.startswith("ptr ") else s)
-                return (p[0], p[1] or 0) if p else (None, 0)
-            ops = list(ins.operands)
-            if ins.opcode == "load" and cell(ops[0])[0] in self.bases:
-                return self.bases[cell(ops[0])[0]], 0
-            if ins.opcode != "getelementptr":
-                return None, 0
-            g, c = cell(ops[0])
-            return g, c + sum(constant(o) for o in ops[1:])
-
-        def constant(op):
-            ins = defs.get(str(op).strip())
-            if ins is None:
-                m = re.fullmatch(r"i\d+ (-?\d+)", str(op).strip())
-                return int(m.group(1)) if m else 0
-            if ins.opcode in ("add", "zext", "sext", "trunc"):
-                return sum(constant(o) for o in ins.operands)
-            return 0
-
         for b in fn.blocks:
             acc = []
             for i in b.instructions:
@@ -310,7 +368,7 @@ class Flow:  # pylint: disable=too-many-instance-attributes
                     self.arity[ops[-1].name] = len(ops) - 1
                     if ops[-1].name == "io_write" and len(ops) > 2:
                         self.gates[("io", len(self.calls))] = (fn.name, gate(ops[1]))
-                    base = constant(ops[0]) & 0xFFFF if len(ops) > 1 else 0
+                    base = _constant(defs, ops[0]) & 0xFFFF if len(ops) > 1 else 0
                     self.calls.append((fn.name, loc, ops[-1].name, deps, base))
                     acc.append(("call", ops[-1].name, len(self.calls) - 1))
                 elif i.opcode == "store":

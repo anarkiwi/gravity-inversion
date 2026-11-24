@@ -501,12 +501,14 @@ class Ablation:  # pylint: disable=too-many-instance-attributes
         (self.work / header.name).write_text(htext, encoding="utf-8")
         defs, self.inits = parse_header(htext)
         self.regs = regions(defs)
-        self.psid, self.frames, self.song = None, 0, 0
+        self.psid, self.frames, self.song, self.sites = None, 0, 0, ()
         self.facts, self.early = Facts(Counter(), set(), {}), {"functions": set()}
 
-    def observe(self, psid, frames, song=None):
-        """Facts of the PSID's run of `frames` play calls and the baseline build's init."""
-        self.psid, self.frames = psid, frames
+    def observe(self, psid, frames, song=None, sites=()):
+        """Facts of the PSID's run of `frames` play calls and the baseline build's init;
+        `sites` the overrun sites of the translation's reference (`sidtrace.reference`).
+        """
+        self.psid, self.frames, self.sites = psid, frames, sites
         self.song = default_song(psid) if song is None else song
         addrs = {a for o, n in self.regs.values() for a in range(o, o + n)}
         self.facts = cell_facts(psid, frames, self.song, addrs)
@@ -566,7 +568,8 @@ class Ablation:  # pylint: disable=too-many-instance-attributes
             if verify:
                 prg = self.build(text, f"exact {s.name}")
                 checked[s.name] = (
-                    compare(self.psid, str(prg), self.frames, self.song)[2] is None
+                    compare(self.psid, str(prg), self.frames, self.song, self.sites)[2]
+                    is None
                 )
         rows, text, prev, prg = [], base, None, None
         for s in tqdm((BASELINE, *STEPS), desc="ablate", unit="step", leave=False):
@@ -620,10 +623,20 @@ def data_bytes(elf):
 
 
 def ablate(  # pylint: disable=too-many-arguments
-    psid, c_path, *, frames, work, hand=None, song=None, flags=(), verify=False
+    psid,
+    c_path,
+    *,
+    frames,
+    work,
+    hand=None,
+    song=None,
+    flags=(),
+    verify=False,
+    sites=(),
 ):
-    """Report of one translation: steps, hand .text and residual, data accounting."""
-    ab = Ablation(c_path, work=work, flags=flags).observe(psid, frames, song)
+    """Report of one translation: steps, hand .text and residual, data accounting; a verified
+    step against the reference under the overrun rule of `sites` (the translation's)."""
+    ab = Ablation(c_path, work=work, flags=flags).observe(psid, frames, song, sites)
     rows, prg = ab.run(verify)
     base = pathlib.Path(work) / "baseline.prg.elf"
     out = {
@@ -706,7 +719,7 @@ def main(argv=None):
         song = default_song(psid)
         build = ROOT / "tunes" / tune / "build"
         hand = build / f"{tune}.prg.elf"
-        c, h, _ = transliterate(psid, f"{tune}.h")
+        c, h, info = transliterate(psid, f"{tune}.h")
         (args.work / tune).mkdir(parents=True, exist_ok=True)
         out[tune] = ablate(
             psid,
@@ -716,6 +729,7 @@ def main(argv=None):
             hand=hand if hand.exists() else None,
             flags=tune_flags(tune),
             verify=args.verify,
+            sites=info["overruns"],
         )
     print(
         json.dumps(out, indent=1)

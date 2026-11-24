@@ -1,30 +1,50 @@
-"""Identity of the installed lifter: the generated C's dependency on it (common.mk).
+"""Identity of the lifter: the generated C's dependency on it (common.mk).
 
-Each distribution `tools/transliterate.py` lifts with, its version and every native
-module it installs (path, mtime, size). `lifterstamp.py STAMP` rewrites STAMP only when
-the identity differs, so make regenerates after a pin or wheel change and not otherwise.
+Each package `tools/transliterate.py` lifts with, as imported (the path PYTHONPATH gives it
+first), its version and a digest of its Python sources and native modules.
+`lifterstamp.py STAMP` rewrites STAMP only when the identity differs, so make regenerates
+after a pin, wheel or source change and not otherwise.
 """
 
 import argparse
+import hashlib
 import importlib.metadata
+import importlib.util
 import os
 import pathlib
 
-DISTS = ("deity-informant", "jennings", "vagrant-moses", "pysidtracker")
-NATIVE = (".so", ".pyd")
+#: The packages the lift runs on: ``(distribution, module)``.
+PACKAGES = (
+    ("deity-informant", "deity_informant"),
+    ("wayward-eagle", "wayward_eagle"),
+    ("jennings", "jennings"),
+    ("vagrant-moses", "vagrant_moses"),
+    ("pysidtracker", "pysidtracker"),
+)
+#: The files of a package its identity covers.
+SOURCES = (".py", ".so", ".pyd")
 
 
-def identity(dists=DISTS):
-    """Lines naming each of `dists`' version and native modules."""
+def digest(module):
+    """``(directory, sha256)`` of the Python sources and native modules of the package
+    ``module`` resolves to."""
+    spec = importlib.util.find_spec(module)
+    root = pathlib.Path(next(iter(spec.submodule_search_locations))).resolve()
+    h = hashlib.sha256()
+    for path in sorted(
+        p for p in root.rglob("*") if p.suffix in SOURCES and p.is_file()
+    ):
+        h.update(str(path.relative_to(root)).encode() + b"\0" + path.read_bytes())
+    return root, h.hexdigest()
+
+
+def identity(packages=PACKAGES):
+    """Lines naming each of ``packages``' version, where it is imported from and the digest
+    of its sources."""
     lines = []
-    for name in dists:
-        dist = importlib.metadata.distribution(name)
-        lines.append(f"{name} {dist.version}")
-        for file in sorted(dist.files or (), key=str):
-            if file.suffix in NATIVE:
-                path = pathlib.Path(dist.locate_file(file)).resolve()
-                st = path.stat()
-                lines.append(f"  {path} {st.st_mtime_ns} {st.st_size}")
+    for dist, module in packages:
+        root, sha = digest(module)
+        lines.append(f"{dist} {importlib.metadata.version(dist)} {root} {sha}")
     return "".join(f"{line}\n" for line in lines)
 
 

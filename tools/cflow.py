@@ -187,14 +187,15 @@ def rewrite(text, edits):
 
 
 def parse_header(text):
-    """({name: value} of numeric #defines, {name: bytes} of the _INIT lists) of a header."""
+    """({name: value} of numeric #defines, {name: bytes} of the _INIT lists) of a header; a
+    record array's list (``{f0, f1}, {f0, f1}``) is its records' bytes in order."""
     text = text.replace("\\\n", " ")
     defs = {
         k: int(v, 0)
         for k, v in re.findall(r"^#define (\w+) +(0x[0-9A-Fa-f]+|\d+)\s*$", text, re.M)
     }
     inits = {
-        k: bytes(int(x, 0) for x in v.split(",") if x.strip())
+        k: bytes(int(x, 0) for x in re.split(r"[,{}]", v) if x.strip())
         for k, v in re.findall(r"^#define (\w+)_INIT +(.*)$", text, re.M)
     }
     return defs, inits

@@ -155,8 +155,7 @@ def test_sizes(tmp_path, capsys):
 
 def test_lifter_stamp(tmp_path):
     """common.mk regenerates a tune's C when the lifter's identity changes, not otherwise."""
-    assert lifterstamp.identity(("jennings",)).startswith("jennings ")
-    assert ".so " in lifterstamp.identity(("deity-informant",))
+    assert lifterstamp.identity((("jennings", "jennings"),)).startswith("jennings ")
     tools = tmp_path / "tools"
     tools.mkdir()
     shutil.copy(constructs.ROOT / "common.mk", tmp_path)
@@ -177,22 +176,50 @@ def test_lifter_stamp(tmp_path):
         "PSID = t.sid\nGEN := 1\ninclude ../../common.mk\n", encoding="ascii"
     )
     stamp = tune / "build" / "lifter.stamp"
+    # The identity as make's PY (the tools, then the caller's PYTHONPATH) imports the packages.
+    path = ":".join(filter(None, (str(tools), os.environ.get("PYTHONPATH"))))
+    made = subprocess.run(
+        [
+            "python3",
+            "-c",
+            "import lifterstamp, sys; sys.stdout.write(lifterstamp.identity())",
+        ],
+        env={**os.environ, "PYTHONPATH": path},
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
 
     def lifts():
         subprocess.run(["make", "-s", "build/gen/units"], cwd=tune, check=True)
         return len((tune / "lifts").read_text())
 
     assert lifts() == 1
-    assert stamp.read_text() == lifterstamp.identity()
+    assert stamp.read_text() == made
     assert lifts() == 1
     stamp.write_text("deity-informant 0\n")
     os.utime(stamp, ns=(0, 0))
     assert lifts() == 2
-    assert stamp.read_text() == lifterstamp.identity()
+    assert stamp.read_text() == made
     assert lifts() == 2
-    assert not lifterstamp.write(stamp, lifterstamp.identity())
+    assert not lifterstamp.write(stamp, made)
     lifterstamp.main([str(tmp_path / "s" / "lifter.stamp")])
     assert (tmp_path / "s" / "lifter.stamp").read_text() == lifterstamp.identity()
+
+
+def test_lifter_stamp_follows_sources(tmp_path, monkeypatch):
+    """A package first on the path is the one stamped, and editing one of its Python files
+    alone changes the identity."""
+    pkg = tmp_path / "lifterpkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("X = 1\n", encoding="ascii")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    before = lifterstamp.digest("lifterpkg")
+    assert before[0] == pkg.resolve()
+    (pkg / "__init__.py").write_text("X = 2\n", encoding="ascii")
+    assert lifterstamp.digest("lifterpkg")[1] != before[1]
+    (pkg / "notes.txt").write_text("x", encoding="ascii")
+    assert lifterstamp.digest("lifterpkg")[1] != before[1]
 
 
 def test_opclass():

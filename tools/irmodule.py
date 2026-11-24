@@ -14,7 +14,9 @@ import tempfile
 import llvmlite.binding as llvm
 
 SIZE = {"i1": 1, "i8": 1, "i16": 2, "i32": 4, "i64": 8, "ptr": 8}
+NAMED = re.compile(r"^(%[\w.]+) = type (.*)$", re.M)
 LOAD = re.compile(r"\s*(%[\w.]+) = load i8, ptr (.+?), align \d+")
+LOADPTR = re.compile(r"\s*(%[\w.]+) = load ptr, ptr (.+?), align \d+")
 STORE = re.compile(r"\s*store i8 (.+?), ptr (.+?), align \d+")
 CALL = re.compile(r".*\bcall [^@]*@([\w.]+)\(")
 DEFINE = re.compile(r"define [^@]*@([\w.]+)\(([^)]*)\)")
@@ -35,11 +37,17 @@ declare void @cgen_region(ptr, i32, i32)
 """
 
 
+def types(text):
+    """``{name: body}`` of the module's named types (``%struct.voice = type { i8, i8 }``)."""
+    return dict(NAMED.findall(text))
+
+
 def _type(s):
-    """``(type, rest)``: the IR type at the start of ``s`` (arrays and structs nested)."""
+    """``(type, rest)``: the IR type at the start of ``s`` (arrays and structs nested, a named
+    type by its name)."""
     s = s.lstrip()
     if s[0] not in "[{<":
-        m = re.match(r"[\w.]+", s)
+        m = re.match(r"%?[\w.]+", s)
         return m.group(0), s[m.end() :]
     depth = 0
     for i, ch in enumerate(s):
@@ -50,8 +58,9 @@ def _type(s):
     raise ValueError(s)
 
 
-def _fields(ty):
-    """The field types of a (packed) struct type."""
+def _fields(ty, named=None):
+    """The field types of a (packed) struct type, a named one by its body in ``named``."""
+    ty = (named or {}).get(ty, ty)
     body, out, depth, start = (ty[2:-2] if ty[0] == "<" else ty[1:-1]), [], 0, 0
     for i, ch in enumerate(body + ","):
         depth += {"[": 1, "{": 1, "<": 1, "]": -1, "}": -1, ">": -1}.get(ch, 0)
@@ -61,32 +70,43 @@ def _fields(ty):
     return out
 
 
-def size(ty):
-    """Byte size of an IR type (structs packed)."""
+def size(ty, named=None):
+    """Byte size of an IR type (structs packed; named types by their bodies in ``named``)."""
+    ty = (named or {}).get(ty, ty)
     if ty[0] == "[":
         n, rest = ty[1:].split(" x ", 1)
-        return int(n) * size(rest[:-1])
+        return int(n) * size(rest[:-1], named)
     if ty[0] in "{<":
-        return sum(size(f) for f in _fields(ty))
+        return sum(size(f, named) for f in _fields(ty, named))
     return SIZE[ty]
 
 
-def offset(ty, idx):
-    """Byte offset of GEP indices ``idx`` over source element type ``ty``."""
-    off = idx[0] * size(ty)
+def offset(ty, idx, named=None):
+    """Byte offset of GEP indices ``idx`` over source element type ``ty`` (named types by
+    their bodies in ``named``)."""
+    off = idx[0] * size(ty, named)
     for i in idx[1:]:
+        ty = (named or {}).get(ty, ty)
         if ty[0] in "{<":
-            fields = _fields(ty)
-            off += sum(size(f) for f in fields[:i])
+            fields = _fields(ty, named)
+            off += sum(size(f, named) for f in fields[:i])
             ty = fields[i]
         else:
             ty = ty[1:-1].split(" x ", 1)[1]
-            off += i * size(ty)
+            off += i * size(ty, named)
     return off
 
 
-def pointer(text):
-    """``(global, byte offset or None)`` of a pointer operand's text; None for a value."""
+def source_type(gep):
+    """The source element type of a ``getelementptr`` instruction's or expression's text."""
+    return _type(
+        re.split(r"getelementptr (?:inbounds |nuw |nusw )*\(?", gep, maxsplit=1)[1]
+    )[0]
+
+
+def pointer(text, named=None):
+    """``(global, byte offset or None)`` of a pointer operand's text; None for a value; named
+    types by their bodies in ``named``."""
     text = text.strip()
     m = re.fullmatch(r"getelementptr (?:inbounds |nuw |nusw )*\((.*)\)", text)
     if not m:
@@ -95,7 +115,7 @@ def pointer(text):
     ty, rest = _type(m.group(1))
     rest = rest.split("ptr ", 1)[1]
     first = _operand(rest)
-    base = pointer(first)
+    base = pointer(first, named)
     idx = re.findall(r"i\d+ ([^,]+)", rest[len(first) :])
     if (
         base is None
@@ -103,7 +123,7 @@ def pointer(text):
         or not all(re.fullmatch(r"-?\d+", i) for i in idx)
     ):
         return base and (base[0], None)
-    return base[0], base[1] + offset(ty, [int(i) for i in idx])
+    return base[0], base[1] + offset(ty, [int(i) for i in idx], named)
 
 
 def _operand(text):
@@ -161,30 +181,45 @@ def compile_object(text, path):
 
 def globals_of(text):
     """``{name: byte size}`` of the module's defined global variables."""
+    named = types(text)
     return {
-        m.group(1): size(_type(m.group(2))[0])
+        m.group(1): size(_type(m.group(2))[0], named)
         for m in re.finditer(
             r"^@([\w.]+) = (?:[\w()]+ )*?(?:global|constant) (.*)$", text, re.M
         )
     }
 
 
-def instrument(
-    text, regions, kinds, helpers=(), copies=()
-):  # pylint: disable=too-many-locals,too-many-branches
+def shadow(table, part):
+    """The name of the bytes ``part`` of the elements of pointer table ``table`` are
+    (:func:`instrument`)."""
+    return f"cgen_pt.{table}.{part}"
+
+
+def instrument(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    text, regions, kinds, helpers=(), copies=(), tables=None
+):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     """``(IR text, [(function, line, column, kind)])``: ``text`` reporting each site's reads
     (``cgen_ld``), stores (``cgen_st``), ``regions`` (``{global: {byte offset: origin}}``, each
     run to the next) and copies for tools/eventlog.c; kinds from ``kinds``, else ``table``.
+    A read of an element of a table of pointers ``tables`` (``{global: [bytes per element]
+    per part]}``) reads its parts' bytes, arrays :func:`shadow` names.
     """
     lines, locs = text.split("\n"), {
         int(a): (int(b), int(c)) for a, b, c in LOC.findall(text)
     }
-    sizes, sites, out = globals_of(text), [], []
+    sizes, sites, out, named = globals_of(text), [], [], types(text)
+    tables = tables or {}
+    sizes.update(
+        (shadow(g, j), len(b))
+        for g, parts in tables.items()
+        for j, b in enumerate(parts)
+    )
     fn, bases, arg, pending = None, {}, None, False
 
     def base(ptr):
         """``(global, offset or None)``, LOCAL, or None for a pointer from memory."""
-        return bases.get(ptr) if ptr.startswith("%") else pointer(ptr)
+        return bases.get(ptr) if ptr.startswith("%") else pointer(ptr, named)
 
     def loc(line):
         m = DBG.search(line)
@@ -193,6 +228,14 @@ def instrument(
     def site(line):
         sites.append((*loc(line), kinds.get(loc(line), "table")))
         return len(sites) - 1
+
+    def at(line):
+        """The site operand of a read at ``line``: a helper's caller's."""
+        if fn not in helpers:
+            return str(site(line))
+        s = f"%cg.s{len(out)}"
+        out.append(f"  {s} = load i32, ptr @cgen_site, align 4")
+        return s
 
     def held(ptr):
         b = base(ptr)
@@ -230,14 +273,25 @@ def instrument(
             else:
                 out[-1:-1] = enter
         if ld and held(ld.group(2)):
-            s = f"%cg.s{len(out)}"
-            if fn in helpers:
-                out.append(f"  {s} = load i32, ptr @cgen_site, align 4")
-            else:
-                s = site(line)
+            s = at(line)
             out.append(
                 f"  call void @cgen_ld(i32 {s}, ptr {ld.group(2)}, i8 {ld.group(1)})"
             )
+        lp = LOADPTR.match(line)
+        b = base(lp.group(2)) if lp else None
+        if b not in (None, LOCAL) and b[0] in tables:
+            s, v = at(line), f"%cg.p{len(out)}"
+            out += [
+                f"  {v}.a = ptrtoint ptr {lp.group(2)} to i64",
+                f"  {v}.d = sub i64 {v}.a, ptrtoint (ptr @{b[0]} to i64)",
+                f"  {v}.k = udiv i64 {v}.d, {SIZE['ptr']}",
+            ]
+            for j in range(len(tables[b[0]])):
+                out += [
+                    f"  {v}.{j} = getelementptr i8, ptr @{shadow(b[0], j)}, i64 {v}.k",
+                    f"  {v}.{j}.v = load i8, ptr {v}.{j}, align 1",
+                    f"  call void @cgen_ld(i32 {s}, ptr {v}.{j}, i8 {v}.{j}.v)",
+                ]
     reg = []
     for g, runs in regions.items():
         ends = sorted(runs)[1:] + [sizes.get(g)]
@@ -247,5 +301,10 @@ def instrument(
                 reg.append(
                     f"  call void @cgen_region(ptr {ptr}, i32 {end - o}, i32 {runs[o]})"
                 )
+    out += [
+        f"@{shadow(g, j)} = internal constant [{len(b)} x i8] [{', '.join(f'i8 {x}' for x in b)}]"
+        for g, parts in tables.items()
+        for j, b in enumerate(parts)
+    ]
     out += [HOOKS, "define void @cgen_regions() {", *reg, "  ret void", "}"]
     return "\n".join(out) + "\n", sites

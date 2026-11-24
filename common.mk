@@ -7,7 +7,7 @@ ifeq ($(origin CC),default)
 CC := mos-c64-clang
 endif
 CFLAGS := -Os -Wall -Wextra -Werror
-PY := PYTHONPATH=$(ROOT)/tools python3
+PY := PYTHONPATH=$(ROOT)/tools$(if $(PYTHONPATH),:$(PYTHONPATH)) python3
 UNIT := -flto -Xclang -disable-llvm-passes -c
 MERGE := -flto -r -nostdlib -Wl,--lto-O0,--lto-emit-llvm
 DRIVER := $(ROOT)/c64/driver.c $(ROOT)/c64/driver.h
