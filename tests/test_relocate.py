@@ -429,9 +429,14 @@ def _pointer_player(word):
 def _relocated(word):
     """(original post-init, plan, relocated post-init) of :func:`_pointer_player`."""
     post = relocate.post_init(_pointer_player(word))
+    p, *moved = _apply(post)
+    return post, p, relocate.post_init(relocate.psid([post], *moved))
+
+
+def _apply(post):
+    """(plan, load, image, init) of the relocation of one post-init state."""
     p = relocate.plan([post], [FRAMES])
-    out = relocate.post_init(relocate.psid([post], *relocate.apply([post], p)))
-    return post, p, out
+    return (p, *relocate.apply([post], p))
 
 
 def _word(post):
@@ -649,10 +654,9 @@ def test_in_place():
     code[0x40:0x42] = (0x21, 0x22)
     code[0x180:0x182] = (0x31, 0x32)
     post = relocate.post_init(_psid(code))
-    p = relocate.plan([post], [FRAMES])
+    p, load, image, init = _apply(post)
     moved = {(lo, hi): d for lo, hi, d in p.moved}
     assert moved[(0x1180, 0x1181)] == 0 and moved[(0x1040, 0x1041)] != 0
-    load, image, init = relocate.apply([post], p)
     mem = np.zeros(0x10000, np.uint8)
     mem[load : load + len(image)] = np.frombuffer(image, np.uint8)
     assert mem[0x1180:0x1182].tolist() == [0x31, 0x32]
