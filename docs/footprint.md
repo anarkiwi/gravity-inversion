@@ -33,5 +33,7 @@ lengths, patched variants). The CLI checks every song for the construct map's fr
 Where the original's behaviour depends on addresses (absolute pointers in its data, reads past a
 table's end), the hand C resolves an original address to the array holding it. An access to an
 address it does not hold traps: `trap(k)` in `c64/driver.c` (the generated C's, `cgen_trap`
-set to the site's code `k`, then a JAM), which `tools/sidtrace.py` reports. Each tune's
+set to the site's code `k`, then a JAM), which `tools/sidtrace.py` reports. The generated C
+traps only on guards other than the memory map's: an access the map bounds reads 0 outside
+its object, and a store there writes nothing (deity-informant's `overrun="zero"`). Each tune's
 `test_outside_data_traps` drives its traps from patched data.

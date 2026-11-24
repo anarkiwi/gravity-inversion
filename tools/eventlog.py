@@ -45,6 +45,7 @@ REC = [("frame", "i4")] + [(n, t) for n, _, t in COLS]
 READS = np.dtype([("frame", "u4"), ("addr", "u2"), ("value", "u1")])
 ORG = re.compile(r"^#define (\w+)_ORG 0x([0-9A-F]+)$", re.M)
 KONST = re.compile(r"^#define (\w+)_K([0-9A-F]+) (0x[0-9A-F]+)$", re.M)
+RECORD = re.compile(r"^struct (\w+) \{([^}]*)\};\s*(?:extern )?struct \1 (\w+)\[", re.M)
 
 
 def song_mask(psid, starts=()):
@@ -65,6 +66,65 @@ def origins(h_text):
         m[1]: int(m[2], 16)
         for m in ORG.finditer(h_text)
         if re.fullmatch(r"[BCR]\d+|CODE", m[1])
+    }
+
+
+def element_runs(addrs):
+    """``{offset: origin}`` of an array whose element ``i`` reads address ``addrs[i]``: a run
+    starts wherever an element's address does not follow the one before it."""
+    a = np.asarray(addrs, np.int64)
+    start = np.flatnonzero(np.r_[True, a[1:] != a[:-1] + 1])
+    return dict(zip(start.tolist(), a[start].tolist()))
+
+
+def records(text):
+    """``{array: [field]}`` of the record arrays C ``text`` declares (``struct V0 { uint8_t f00;
+    uint8_t f13; }`` then ``struct V0 V0[3]``), each field one byte in declaration order.
+    """
+    return {m[3]: re.findall(r"uint8_t (\w+);", m[2]) for m in RECORD.finditer(text)}
+
+
+def cell_offset(ref, recs):
+    """``(array, byte offset)`` of a promoted variable's C lvalue (``S_8``, ``X[2]``,
+    ``V0[1].f13``) over the record arrays ``recs`` (:func:`records`)."""
+    m = re.fullmatch(r"(\w+)(?:\[(\d+)\])?(?:\.(\w+))?", ref)
+    k = int(m[2] or 0)
+    if m[3] is None:
+        return m[1], k
+    fields = recs[m[1]]
+    return m[1], k * len(fields) + fields.index(m[3])
+
+
+def regions_of(
+    origins_, text, cells=None, arrays=None, tables=None
+):  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    """``{global: {byte offset: origin}}`` (:func:`irmodule.instrument`) of the arrays at
+    ``origins_``, the constant tables ``arrays`` maps element by element (``info["arrays"]``),
+    the parts of the tables of pointers ``tables`` (:func:`pointer_tables`) and the promoted
+    ``cells`` (C ``text`` declaring their records)."""
+    regions = {g: {0: org} for g, org in {**origins_, "cgen_k": 0}.items()}
+    regions.update((g, element_runs(a)) for g, a in (arrays or {}).items())
+    regions.update(
+        (irmodule.shadow(g, j), element_runs(a))
+        for g, parts in (tables or {}).items()
+        for j, (a, _) in enumerate(parts)
+    )
+    recs = records(text)
+    for ref, addr in (cells or {}).items():
+        g, off = cell_offset(ref, recs)
+        regions.setdefault(g, {})[off] = addr
+    return regions
+
+
+def pointer_tables(tables, psid):
+    """``{table: [(addresses, bytes) per part]}`` of the tables of pointers ``tables``
+    (``info["ptr_tables"]``: the addresses of each element's low and high bytes) with the
+    bytes the PSID loads there."""
+    load, _, _, image = sidtrace.psid_parts(psid)
+    mem = np.zeros(0x10000, np.uint8)
+    mem[load : load + len(image)] = np.frombuffer(image, np.uint8)
+    return {
+        g: [(a, mem[a].tolist()) for a in parts] for g, parts in (tables or {}).items()
     }
 
 
@@ -92,31 +152,32 @@ def unfold(h_text):
 
 class Player:  # pylint: disable=too-few-public-methods
     """The generated C built natively with its song data read sites instrumented; ``cells``
-    maps its promoted variables (``S_8``, ``V0_f00[1]``) to their original addresses."""
+    maps its promoted variables (``S_8``, ``V0[1].f13``) to their original addresses,
+    ``arrays`` its constant tables to the address each element reads (``info["arrays"]``) and
+    ``tables`` its tables of pointers to the bytes each element is (:func:`pointer_tables`).
+    """
 
     def __init__(
-        self, c_path, out_dir, song, copies=(), cells=None
+        self, c_path, out_dir, song, copies=(), cells=None, arrays=None, tables=None
     ):  # pylint: disable=too-many-arguments,too-many-positional-arguments
         c_path = pathlib.Path(c_path).resolve()
         out = pathlib.Path(out_dir).resolve()
         h_text = c_path.with_suffix(".h").read_text(encoding="utf-8")
+        c_text = c_path.read_text(encoding="utf-8")
         src = out / "unfolded" / c_path.name
         src.parent.mkdir(exist_ok=True)
-        src.write_text(c_path.read_text(encoding="utf-8"), encoding="utf-8")
+        src.write_text(c_text, encoding="utf-8")
         src.with_suffix(".h").write_text(unfold(h_text), encoding="utf-8")
         text = irmodule.lower(src, [c_path.parent, DRIVER], ["CGEN_HOST"], passes=True)
         helpers = set(re.findall(rf"^define [^@]*@({irmodule.HELPERS})\(", text, re.M))
         self.origins = origins(h_text)
-        regions = {g: {0: org} for g, org in {**self.origins, "cgen_k": 0}.items()}
-        for ref, addr in (cells or {}).items():
-            m = re.fullmatch(r"(\w+)(?:\[(\d+)\])?", ref)
-            regions.setdefault(m[1], {})[int(m[2] or 0)] = addr
         text, self.sites = irmodule.instrument(
             text,
-            regions,
+            regions_of(self.origins, h_text + c_text, cells, arrays, tables),
             irflow.classify(text),
             helpers,
             set(copies),
+            {g: [b for _, b in parts] for g, parts in (tables or {}).items()},
         )
         obj, lib = out / "eventlog.o", out / "eventlog.so"
         irmodule.compile_object(text, obj)
@@ -182,9 +243,10 @@ def _reads(calls, addrs, values=None):
     return out
 
 
-def reference(psid, frames, song, loaded):
-    """``(writes, io, reads, mask)`` of the original over init and `frames` play calls: SID
-    writes per call, I/O reads ``{call: [(address, value)]}``, the play calls' ``READS`` of
+def reference(psid, frames, song, loaded, overruns=()):
+    """``(writes, io, reads, mask)`` of the original over init and `frames` play calls under
+    the translation's overrun rule of the sites ``overruns`` (:func:`sidtrace.overrun_remap`):
+    SID writes per call, I/O reads ``{call: [(address, value)]}``, the play calls' ``READS`` of
     song data ``mask``, the bytes of ``loaded`` it never writes."""
     io, written = {}, np.zeros(0x10000, bool)
     calls, addrs, values = array.array("I"), array.array("H"), array.array("B")
@@ -207,7 +269,13 @@ def reference(psid, frames, song, loaded):
             mpu, log, on_read, set(IO) | watched, on_write=on_write, writes=watched
         )
 
-    writes = sidtrace.trace_psid(psid, frames, song=song, observe=observe)
+    writes = sidtrace.trace_psid(
+        psid,
+        frames,
+        song=song,
+        observe=observe,
+        remap=sidtrace.overrun_remap(overruns),
+    )
     mask = loaded & ~written
     reads = _reads(calls, addrs, values)
     return writes, io, reads[mask[reads["addr"]]], mask
@@ -351,7 +419,8 @@ class Log:
 def run_tune(psid, frames, song=None):
     """``(log, summary, reads, mask)`` of a PSID over init and `frames` play calls,
     translated by tools/transliterate.py; ``reads`` and the song data ``mask`` are
-    :func:`reference`'s, of the loaded bytes of no instruction the lift translates."""
+    :func:`reference`'s under the translation's overrun rule, of the loaded bytes of no
+    instruction the lift translates."""
     import transliterate  # pylint: disable=import-outside-toplevel
 
     song = sidtrace.default_song(psid) if song is None else song
@@ -361,10 +430,18 @@ def run_tune(psid, frames, song=None):
         c_path.write_text(c, encoding="utf-8")
         c_path.with_suffix(".h").write_text(h, encoding="utf-8")
         ref, io, orig, mask = reference(
-            psid, frames, song, song_mask(psid, info["starts"])
+            psid, frames, song, song_mask(psid, info["starts"]), info["overruns"]
         )
         copies = [f for f, v in info["provenance"]["functions"].items() if v["index"]]
-        player = Player(c_path, tmp, mask, copies, info["state"].get("vars"))
+        player = Player(
+            c_path,
+            tmp,
+            mask,
+            copies,
+            info["state"].get("vars"),
+            info.get("arrays"),
+            pointer_tables(info.get("ptr_tables"), psid),
+        )
         rec = player.run(song, frames, io)
     log = Log(rec, player.sites, player.origins)
     assert np.array_equal(

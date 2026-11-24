@@ -652,12 +652,21 @@ class Census:  # pylint: disable=too-many-instance-attributes
         return list(out.values())
 
     def gotos(self):
-        """Gotos beyond the construct map's."""
-        gotos = {tuple(e) for e in self.info["provenance"]["gotos"]}
-        return [
-            Site("goto", a, f"goto ${b:04X}")
-            for a, b in sorted(gotos - self._mapped_gotos())
+        """Gotos beyond the construct map's, by their machine-code edges (an edge neither end
+        of which is an original instruction is none; one with no source is at its target).
+        """
+        gotos = {
+            tuple(e) for e in self.info["provenance"]["gotos"] if e != [None, None]
+        }
+        out = [
+            (
+                Site("goto", b, f"goto ${b:04X} from no instruction")
+                if a is None
+                else Site("goto", a, f"goto ${b:04X}")
+            )
+            for a, b in gotos - self._mapped_gotos()
         ]
+        return sorted(out)
 
     def stray_functions(self):
         """Functions for no procedure nor shared tail of the original."""

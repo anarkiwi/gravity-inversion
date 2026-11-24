@@ -1,8 +1,11 @@
 """Tests for the generic parts of tools/sidtrace.py."""
 
 import hashlib
+import pathlib
 
+import pytest
 from pysidtracker.header import write_psid
+from pysidtracker.survey import hvsc_capture
 from vagrant_moses.memmap import PAL
 
 import sidtrace
@@ -57,6 +60,103 @@ def test_detail():
         (1, None, 0x1006, 1, 8),
     ]
     assert sidtrace.trace_psid(data, 1)[1] == [(0, 1), (1, 1)]
+
+
+def _overrun_code():
+    """An indexed load, an indirect load and an indexed store leaving $1000-$10FF, then a
+    plain read of the stored byte, each value written to the SID."""
+    return [
+        *(0xA2, 0x10),  # $1000 ldx #$10
+        *(0xBD, 0xF8, 0x10),  # $1002 lda $10f8,x ($1108)
+        *(0x8D, 0x00, 0xD4),  # $1005 sta $d400
+        *(0xA0, 0x05),  # $1008 ldy #5
+        *(0xB1, 0xFB),  # $100a lda ($fb),y ($2005)
+        *(0x8D, 0x01, 0xD4),  # $100c sta $d401
+        *(0xA9, 0x33),  # $100f lda #$33
+        *(0x9D, 0xF8, 0x10),  # $1011 sta $10f8,x ($1108)
+        *(0xAD, 0x08, 0x11),  # $1014 lda $1108
+        *(0x8D, 0x02, 0xD4),  # $1017 sta $d402
+        0x60,
+    ]
+
+
+def test_overrun_remap():
+    """Under the overrun rule a site's accesses outside its object read 0 and write nothing;
+    its pointer bytes, other instructions and accesses inside the object are the machine's.
+    """
+    data = _code_psid(_overrun_code())
+    poke = {0x1108: 0x77, 0x2005: 0x66, 0xFB: 0x00, 0xFC: 0x20}
+    obj = [[0x1000, 0x10FF]]
+    sites = [
+        {"pc": 0x1002, "ok": obj, "addr": [0x10F8, 0x11F7]},
+        {"pc": 0x100A, "ok": obj, "addr": [0x0000, 0xFFFF]},
+        {"pc": 0x1011, "ok": obj, "addr": [0x10F8, 0x11F7]},
+    ]
+
+    def run(s):
+        return sidtrace.trace_psid(data, 0, poke=poke, remap=sidtrace.overrun_remap(s))
+
+    assert run(()) == [[(0, 0x77), (1, 0x66), (2, 0x33)]]
+    assert run(sites) == [[(0, 0), (1, 0), (2, 0x77)]]
+    inside = [{**s, "ok": [[0x0000, 0xFFFF]]} for s in sites]
+    assert run(inside) == run(())
+
+
+def test_overrun_remap_last():
+    """A site with `last` reads the byte there instead of 0 outside its object."""
+    data = _code_psid(_overrun_code())
+    poke = {0x1108: 0x77, 0x10FF: 0x55, 0x2005: 0x66, 0xFB: 0x00, 0xFC: 0x20}
+    obj = [[0x1000, 0x10FF]]
+    sites = [
+        {"pc": 0x1002, "ok": obj, "addr": [0x10F8, 0x11F7], "last": 0x10FF},
+        {"pc": 0x100A, "ok": obj, "addr": [0x0000, 0xFFFF]},
+    ]
+    got = sidtrace.trace_psid(data, 0, poke=poke, remap=sidtrace.overrun_remap(sites))
+    assert got == [[(0, 0x55), (1, 0), (2, 0x33)]]
+
+
+def test_overrun_remap_indexed_pointer():
+    """A (zp,X) site reads its pointer bytes at operand + X as they are, then the access
+    outside its object its `last` byte."""
+    code = [0xA2, 0x02, 0xA1, 0xFB, 0x8D, 0x00, 0xD4, 0x60]  # ldx #2: lda ($fb,x): sta
+    poke = {0xFD: 0x00, 0xFE: 0x30, 0x3000: 0x42, 0x3001: 0x24, 0x2000: 0x99}
+    site = {"pc": 0x1002, "addr": [0x0000, 0xCFFF], "ok": [[0x3000, 0x3000]]}
+    data = _code_psid(code)
+    for ok, want in (([[0x3000, 0x3000]], 0x42), ([[0x3001, 0x3001]], 0x99)):
+        remap = sidtrace.overrun_remap([{**site, "ok": ok, "last": 0x2000}])
+        assert sidtrace.trace_psid(data, 0, poke=poke, remap=remap) == [[(0, want)]]
+
+
+def test_overrun_sources():
+    """Outside its runs a site reads 0, or its `last` address, or the last record of the
+    nearest run below, repeated; its runs and I/O read as they stand."""
+    site = {
+        "pc": 1,
+        "addr": [0x2000, 0x2020],
+        "ok": [[0x2000, 0x2005], [0x2010, 0x2013]],
+    }
+    zero = sidtrace.overrun_sources(site)
+    assert zero[0x2006] == -2 and zero[0x2003] == zero[0x2021] == -1
+    clamp = sidtrace.overrun_sources({**site, "last": [[0x2004, 2], [0x2013, 1]]})
+    got = [int(clamp[a]) for a in (0x2006, 0x2007, 0x200F, 0x2014, 0x2020)]
+    assert got == [0x2004, 0x2005, 0x2005, 0x2013, 0x2013]
+    assert (
+        sidtrace.overrun_sources({**site, "last": 0x2002})[0x2006:0x2010] == 0x2002
+    ).all()
+    io = sidtrace.overrun_sources({"pc": 1, "addr": [0xCFFF, 0xD001], "ok": []})
+    assert io[0xCFFF] == -2 and io[0xD000] == -1
+
+
+CAPTURES = pathlib.Path("/scratch/datasets/hvsc/C64Music")
+
+
+@pytest.mark.skipif(not CAPTURES.exists(), reason="no HVSC captures")
+def test_against():
+    """The original renders as its capture."""
+    fixtures = pathlib.Path(__file__).resolve().parents[1] / "fixtures"
+    data = (fixtures / "Emomyst.sid").read_bytes()
+    path = hvsc_capture(data, 0, fixtures, CAPTURES)
+    assert path is not None and sidtrace.against(path, data, 1) is None
 
 
 def test_boot_ram():

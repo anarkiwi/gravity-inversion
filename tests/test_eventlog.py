@@ -11,6 +11,7 @@ import pytest
 from jennings.acme import assemble
 
 import fuzzplayer
+import irflow
 import irmodule
 import sidtrace
 
@@ -97,6 +98,23 @@ def test_pointer():
     s = "getelementptr inbounds ({ [2 x i8], i16 }, ptr @s, i64 0, i32 1)"
     assert irmodule.pointer(s) == ("s", 2) and irmodule.pointer("%5") is None
     assert irmodule.size("<{ i8, [3 x i16] }>") == 7
+
+
+def test_pointer_named_types():
+    """A named struct type is laid out by its body: a record array's field of a constant
+    record is at the record's size times its index plus the field's offset."""
+    text = (
+        "%struct.voice = type { i8, i16, [2 x i8] }\n"
+        "@voices = global [3 x %struct.voice] zeroinitializer, align 1\n"
+        "  %p = getelementptr inbounds %struct.voice, ptr @voices, i64 %i, i32 2\n"
+    )
+    named = irmodule.types(text)
+    assert named == {"%struct.voice": "{ i8, i16, [2 x i8] }"}
+    assert irmodule.globals_of(text) == {"voices": 15}
+    gep = "getelementptr inbounds (%struct.voice, ptr @voices, i64 2, i32 2, i64 1)"
+    assert irmodule.pointer(gep, named) == ("voices", 2 * 5 + 3 + 1)
+    assert irmodule.source_type(text.splitlines()[2]) == "%struct.voice"
+    assert irmodule.source_type(gep) == "%struct.voice"
 
 
 PLAYER = """#include <stdint.h>
@@ -190,26 +208,31 @@ PROMOTED = """#include <stdint.h>
 void io_write(uint16_t a, uint8_t v);
 uint8_t C0[2] = {5, 6};
 uint8_t S_3 = 1;
-uint8_t V0_f01[2] = {2, 3};
+struct V0 {
+  uint8_t f00;
+  uint8_t f01;
+};
+struct V0 V0[2] = {{7, 2}, {8, 3}};
 void cgen_init(uint8_t a) { (void)a; }
 void cgen_play(uint8_t a) {
   (void)a;
   S_3 = C0[S_3 & 1];
-  V0_f01[S_3 & 1] = S_3 + V0_f01[1];
+  V0[S_3 & 1].f01 = S_3 + V0[1].f01;
   io_write(0xD400, S_3);
 }
 """
 
 
 def test_promoted_cells(tmp_path):
-    """Stores to a promoted scalar and to the elements of a field array log the cells'
-    original addresses; the bytes the original never writes read from them are reads."""
+    """Stores to a promoted scalar and to a field of a record array log the cells' original
+    addresses; the bytes the original never writes read from them are reads."""
     path = tmp_path / "promoted.c"
     path.write_text(PROMOTED, encoding="ascii")
     path.with_suffix(".h").write_text("#define C0_ORG 0x2000\n", encoding="ascii")
     song = np.zeros(0x10000, bool)
     song[[0x2000, 0x2001, 0x1031]] = True
-    cells = {"S_3": 0x1003, "V0_f01[0]": 0x1011, "V0_f01[1]": 0x1031}
+    cells = {"S_3": 0x1003, "V0[0].f01": 0x1011, "V0[1].f01": 0x1031}
+    assert eventlog.cell_offset("V0[1].f01", eventlog.records(PROMOTED)) == ("V0", 3)
     player = eventlog.Player(path, tmp_path, song, (), cells)
     rec = player.run(0, 2)
     got = [(r["frame"], r["kind"], r["addr"], r["value"]) for r in rec]
@@ -225,6 +248,65 @@ def test_promoted_cells(tmp_path):
         (2, eventlog.CELL, 0x1031, 8),
         (2, eventlog.SIDW, 0, 5),
     ]
+
+
+POINTERS = """#include <stdint.h>
+#include "pointers.h"
+void io_write(uint16_t a, uint8_t v);
+static const uint8_t region_3000[] = {1, 2, 3, 4, 5, 6};
+static const uint8_t *const ptrs_3010[] = {&region_3000[1], &region_3000[3]};
+uint8_t S_0 = 0;
+static __attribute__((noinline)) void out(const uint8_t *p, uint8_t y) {
+  io_write(0xD400, p[y]);
+}
+void cgen_init(uint8_t a) { (void)a; }
+void cgen_play(uint8_t a) {
+  (void)a;
+  out(ptrs_3010[S_0], 1);
+  S_0 = (S_0 + 1) & 1;
+}
+"""
+
+
+def test_pointer_table(tmp_path):
+    """A read of a table of pointers reads its element's low and high bytes at their original
+    addresses; a read through the pointer, passed to a function, reads the region it points
+    into, its cell that region's."""
+    path = tmp_path / "pointers.c"
+    path.write_text(POINTERS, encoding="ascii")
+    path.with_suffix(".h").write_text("#define POINTERS 1\n", encoding="ascii")
+    song = np.zeros(0x10000, bool)
+    song[0x3000:0x3014] = True
+    arrays = {"region_3000": list(range(0x3000, 0x3006))}
+    tables = {
+        "ptrs_3010": [([0x3010, 0x3011], [1, 3]), ([0x3012, 0x3013], [0x30, 0x30])]
+    }
+    rec = eventlog.Player(path, tmp_path, song, (), None, arrays, tables).run(0, 3)
+    got = [
+        (r["frame"], r["addr"], r["value"]) for r in rec if r["kind"] == eventlog.READ
+    ]
+    assert got == [
+        (1, 0x3010, 1),
+        (1, 0x3012, 0x30),
+        (1, 0x3002, 3),
+        (2, 0x3011, 3),
+        (2, 0x3013, 0x30),
+        (2, 0x3004, 5),
+        (3, 0x3010, 1),
+        (3, 0x3012, 0x30),
+        (3, 0x3002, 3),
+    ]
+    text = irmodule.lower(path, [tmp_path, eventlog.DRIVER], ["CGEN_HOST"], passes=True)
+    flow = irflow.Flow(irflow.sroa(text), re.compile(irmodule.HELPERS))
+    assert {r[2] for r in flow.reads.values() if r[0] == "out"} == {("region_3000", 0)}
+    assert irflow.merge_cells({("a", 1), ("a", 2)}) == (
+        "a",
+        0,
+    )
+    assert irflow.merge_cells({("a", 1), ("b", 1)}) == (
+        None,
+        0,
+    )
 
 
 def _fuzz(style, seed, seq=None):
@@ -288,11 +370,13 @@ def _dispatched(psid, frames, song, table, code):
 
 @pytest.mark.slow
 @pytest.mark.parametrize("tune", sorted(PSIDS))
-def test_hand(tune):
-    """Over the song the generated C's song data reads are the original's; those in the
-    -O0 hand C's arrays (its SID writes the original's) are the hand C's play reads, but for
-    the DISPATCH (the original stores the value to a code cell) and UNUSED (the C to a cell)
-    bytes it never reads."""
+def test_hand(tune):  # pylint: disable=too-many-locals
+    """Over the song the generated C's SID writes and song data reads are the original's
+    under the translation's overrun rule (:func:`eventlog.run_tune`); those in the -O0 hand C's
+    arrays (its SID writes the original's) are the hand C's play reads, but for the DISPATCH
+    (the original stores the value to a code cell) and UNUSED (the C to a cell) bytes it never
+    reads, and for the reads the rule moves: those the reference under it and the plain
+    original differ in (a read past a table reads its last entry)."""
     prg = ROOT / "tunes" / tune / "build" / "hand-O0.prg"
     if not (PSIDS[tune].exists() and prg.exists()):
         pytest.skip("needs `make` builds")
@@ -309,9 +393,7 @@ def test_hand(tune):
         HAND_CYCLES,
         sid_model=sidtrace.header_model(psid),
     )
-    trace = sidtrace.trace_psid(psid, frames, song=song)
-    assert writes == trace
-    assert np.array_equal(log.sid(), eventlog.flat(trace))
+    assert writes == sidtrace.trace_psid(psid, frames, song=song)
     table, unused = np.zeros(0x10000, bool), np.zeros(0x10000, bool)
     for lo, hi in DISPATCH.get(tune, ()):
         table[lo:hi] = True
@@ -329,7 +411,15 @@ def test_hand(tune):
         held[list(addrs)] = True
     gen = gen[held[gen["addr"]] & ~table[gen["addr"]]]
     assert not table[hand["addr"]].any()
-    assert np.array_equal(eventlog.keys(gen, False), eventlog.keys(hand, False))
+    plain = eventlog.reference(psid, frames, song, mask)[2]
+    moved = [
+        set(eventlog.keys(r[held[r["addr"]] & ~table[r["addr"]]], False).tolist())
+        for r in (orig, plain)
+    ]
+    differ = set(eventlog.keys(gen, False).tolist()) ^ set(
+        eventlog.keys(hand, False).tolist()
+    )
+    assert differ <= moved[0] ^ moved[1]
 
 
 def test_main(tmp_path):

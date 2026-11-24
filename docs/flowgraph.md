@@ -27,7 +27,10 @@ call). Nodes:
 - **cell**: a global plus constant offset, its index dropped, named by original address
   (`$1063`) or symbol (`cgen_ptr+4`); a cell some store writes.
   A pointer loaded from a constant pointer table into one span (a per-voice table, `K4 =
-  {C1, C1 + 0x88, ...}`) is that span, its element dropped like an index.
+  {C1, C1 + 0x88, ...}`) is that span, its element dropped like an index. A pointer
+  parameter is the cell every call passes it, else the one global they all point into
+  (to a fixpoint over parameters passed on), so outlining a read through a pointer keeps its
+  cell.
 - **song**: a cell no store writes; a read through a pointer is `Cj[...]` of its address
   cells.
 - **sid**: the register of an `io_write` (`SID+$05`), its voice index dropped.

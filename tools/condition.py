@@ -37,20 +37,21 @@ def tune_path(tune):
 
 
 def run(family, out, frames=None):
-    """Lift, build and trace ``family``'s tune into ``out``/family: graph.* the whole
-    program's value flow, machines.* play's state machines, row.json the results."""
+    """Lift, build and trace ``family``'s tune (against the reference under its overrun rule)
+    into ``out``/family: graph.* the whole program's value flow, machines.* play's state
+    machines, row.json the results."""
     tune = FAMILIES[family]
     psid = tune_path(tune).read_bytes()
     d = pathlib.Path(out) / family
     d.mkdir(parents=True, exist_ok=True)
-    c, h, _ = transliterate.transliterate(psid, "gen.h", split=True)
+    c, h, info = transliterate.transliterate(psid, "gen.h", split=True)
     row = {"family": family, "tune": tune}
     units = transliterate.write(d, c, h, "gen.h")
     prg = transliterate.compile_prg(units)
     song = sidtrace.default_song(psid)
     frames = frames or sidtrace.song_calls(psid, song, str(HVSC))
     try:
-        _, _, bad = sidtrace.compare(psid, str(prg), frames, song)
+        _, _, bad = sidtrace.compare(psid, str(prg), frames, song, info["overruns"])
         row["trace"] = f"exact {frames}" if not bad else f"differs {str(bad)[:60]}"
     except AssertionError as e:
         row["trace"] = str(e)[:80]

@@ -38,7 +38,11 @@ This writes `OUT/events.jsonl` and `OUT/summary.json`.
    the `.h` origin) and each store to a region, span or promoted variable (the cell's original
    address, value and old value), each with the copy index. A promoted variable (`S_<offset>`,
    an element of a field array `V<s>_f<offset>[copy]`) maps to its original address by the
-   lift's `info["state"]["vars"]`. Init's reads (its copy of the `.h` state) are dropped.
+   lift's `info["state"]["vars"]`. A read of an element of a table of pointers
+   (`ptrs_<table>`, `const uint8_t *`) is the reads of its low and high bytes at the addresses
+   `info["ptr_tables"]` gives, with the bytes the PSID loads there; a read through the pointer
+   is one of the region array it points into. Init's reads (its copy of the `.h` state) are
+   dropped.
    A copy index is the first argument of a function the lift lists as `index`
    (`info["provenance"]["functions"]`): one instance of code the original repeats per voice or
    channel. SID writes are logged too.
@@ -77,7 +81,8 @@ built on demand (`log[g]`, iteration), so a long song never holds per-read objec
 `tests/test_eventlog.py`:
 
 - **Synthetic C.** Site selection and kinds (a byte read by name included), helper and copy
-  attribution, the stores and SID writes after each read and the replayed I/O reads.
+  attribution, the stores and SID writes after each read and the replayed I/O reads; a table
+  of pointers' element read as its two bytes and a read through a pointer parameter.
 - **Song data.** The loaded bytes of no instruction the original never writes: not the operands
   play patches.
 - **Fuzz players** (`tools/fuzzplayer.py`, every style, sequencer SID writes direct or through a
