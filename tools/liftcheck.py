@@ -12,6 +12,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import tomllib
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 import numpy as np
@@ -23,7 +24,15 @@ from tqdm import tqdm
 import fcomplex
 import sidtrace
 import transliterate
+from constructs import ROOT
 
+#: The census measures virtuous-cycles.toml's readability metric combines:
+#: {measure: {class: weight}}.
+COMBINE = next(
+    m["options"]["combine"]
+    for m in tomllib.loads((ROOT / "virtuous-cycles.toml").read_text("utf-8"))["metric"]
+    if m["name"] == "readability"
+)
 #: The measures in table order: (key, label).
 MEASURES = (
     ("unbounded", "unbounded/checked"),
@@ -32,8 +41,7 @@ MEASURES = (
     ("werror", "-Werror"),
     ("sidtrace", "sidtrace"),
     ("cognitive", "fcomplex cognitive"),
-    ("raw-memory", "census raw-memory"),
-    ("opaque-name", "census opaque-name"),
+    *((k, f"census {k}") for k in COMBINE),
 )
 #: The suffixes of the units holding play: its entry's and the functions entries share.
 PLAY = ("_play.c", "_shared.c")
@@ -95,7 +103,10 @@ def measure(d, psid, frames):
     play = play_units(paths)
     out["cognitive"] = fcomplex.score(play)["total"]["cognitive"]
     counts = census(play, [d, transliterate.DRIVER])
-    out.update({k: counts.get(k, 0) for k in ("goto", "raw-memory", "opaque-name")})
+    out["goto"] = counts.get("goto", 0)
+    for k, w in COMBINE.items():
+        out.update({c: counts.get(c, 0) for c in w})
+        out[k] = sum(n * out[c] for c, n in w.items())
     return out
 
 
@@ -201,13 +212,20 @@ def lift(psid, out):
     return None if found is None else len(found)
 
 
+def cell(got, k):
+    """Measure `k` of `got` as text, a combined measure's weighted components beside it."""
+    v = str(got.get(k, "-"))
+    if k not in COMBINE or k not in got:
+        return v
+    return f"{v} = " + " + ".join(f"{n}*{got[c]} {c}" for c, n in COMBINE[k].items())
+
+
 def table(got, hand):
     """The rows of measures `got` beside `hand` as text."""
     w = max(len(label) for _, label in MEASURES)
     rows = [f"{'':{w}}  {'lift':<34}  hand"]
     rows += [
-        f"{label:{w}}  {str(got.get(k, '-')):<34}  {hand.get(k, '-')}"
-        for k, label in MEASURES
+        f"{label:{w}}  {cell(got, k):<34}  {cell(hand, k)}" for k, label in MEASURES
     ]
     return "\n".join(rows)
 
