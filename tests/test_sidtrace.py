@@ -3,6 +3,7 @@
 import hashlib
 import pathlib
 
+import numpy as np
 import pytest
 from pysidtracker.header import write_psid
 from pysidtracker.survey import hvsc_capture
@@ -129,8 +130,8 @@ def test_overrun_remap_indexed_pointer():
 
 def test_effects(tmp_path):
     """A site takes effect where the original accesses outside its object: from init (frame
-    0), once per call; a site inside its object, or one `allowed` names, is no failure.
-    """
+    0), once per call, at the addresses it took; it hides song data only where those are
+    song data, and every effect counts where the lift gives none."""
     data = _code_psid(_overrun_code())
     obj = [[0x1000, 0x10FF]]
     sites = [
@@ -138,13 +139,18 @@ def test_effects(tmp_path):
         {"pc": 0x1011, "ok": [[0x1100, 0x11FF]], "addr": [0x10F8, 0x11F7]},
     ]
     found = sidtrace.effects(data, 2, sites)
-    assert found == {0x1002: (0, 3)}
-    assert [s["pc"] for s, *_ in sidtrace.unallowed(sites, found, [])] == [0x1002]
-    allowed = tmp_path / "allowed.json"
-    allowed.write_text('[{"ok": ["$1000-$10FF"], "why": "test"}]', encoding="utf-8")
-    assert sidtrace.read_allowed(str(allowed)) == [obj]
-    assert not sidtrace.unallowed(sites, found, sidtrace.read_allowed(str(allowed)))
-    assert sidtrace.read_allowed(None) == []
+    assert list(found) == [0x1002] and found[0x1002][:2] == (0, 3)
+    assert list(np.flatnonzero(found[0x1002][2])) == [0x1108]
+    song = tmp_path / "song.json"
+    song.write_text("[[4352, 4607]]", encoding="utf-8")
+    lost = sidtrace.hidden(sites, found, sidtrace.read_song_data(str(song)))
+    assert [(s["pc"], list(a)) for s, _, _, a in lost] == [(0x1002, [0x1108])]
+    song.write_text("[[8192, 8447]]", encoding="utf-8")
+    assert not sidtrace.hidden(sites, found, sidtrace.read_song_data(str(song)))
+    song.write_text("null", encoding="utf-8")
+    assert sidtrace.read_song_data(str(song)) is None
+    assert len(sidtrace.hidden(sites, found, None)) == 1
+    assert sidtrace.read_song_data(None) is None
 
 
 def test_overrun_sources():

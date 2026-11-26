@@ -175,6 +175,10 @@ def main(argv=None):
     ap.add_argument("--header", required=True, help="the units' header name")
     ap.add_argument("--list", help="write the units' paths, one per line, to this file")
     ap.add_argument("--overruns", help="write info['overruns'] as JSON to this file")
+    ap.add_argument(
+        "--song-data",
+        help="write info['song_data'] (null where the lifter has none) here",
+    )
     args = ap.parse_args(argv)
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -190,6 +194,10 @@ def main(argv=None):
     if args.overruns:
         pathlib.Path(args.overruns).write_text(
             json.dumps(info["overruns"]), encoding="utf-8"
+        )
+    if args.song_data:
+        pathlib.Path(args.song_data).write_text(
+            json.dumps(info.get("song_data")), encoding="utf-8"
         )
     times = " ".join(f"{k} {v:.2f}s" for k, v in info["times"].items())
     size = sum(len(t) for t in c.values())

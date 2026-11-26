@@ -190,6 +190,7 @@ def test_lifter_stamp(tmp_path):
         "    open(os.path.join(sys.argv[2], p), 'w').close()\n"
         "open(sys.argv[6], 'w').write(os.path.join(sys.argv[2], 't_play.c'))\n"
         "open(sys.argv[sys.argv.index('--overruns') + 1], 'w').write('[]')\n"
+        "open(sys.argv[sys.argv.index('--song-data') + 1], 'w').write('null')\n"
         "open('lifts', 'a').write('.')\n",
         encoding="ascii",
     )

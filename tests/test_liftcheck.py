@@ -82,7 +82,8 @@ def test_replay_mismatch(lifted, sample_psid):
 
 
 def test_overrun_effects(lifted, sample_psid, tmp_path):
-    """A lift's sites that take effect on the original are listed unless allowed."""
+    """A lift's sites whose rule replaces song data on the original are listed; one that
+    replaces no byte of it is none; with no song data every site taking effect is."""
     d, _, _ = lifted
     site = {"pc": 0, "addr": [0x200, 0xCFFF], "ok": [[0x200, 0x200]]}
     pcs = survey.executed(sample_psid, FRAMES)
@@ -98,9 +99,10 @@ def test_overrun_effects(lifted, sample_psid, tmp_path):
     (out / "overruns.json").write_text(json.dumps(sites), "utf-8")
     got = liftcheck.overrun_effects(out, sample_psid, FRAMES)
     assert got.split()[1:3] == ["sites", "from"] and int(got.split()[0]) > 0
-    assert (
-        liftcheck.overrun_effects(out, sample_psid, FRAMES, [[[0x200, 0x200]]]) == "OK"
-    )
+    (out / "song_data.json").write_text("[[512, 512]]", "utf-8")
+    assert liftcheck.overrun_effects(out, sample_psid, FRAMES) == "OK"
+    (out / "song_data.json").write_text("[[512, 53247]]", "utf-8")
+    assert liftcheck.overrun_effects(out, sample_psid, FRAMES) == got
     assert liftcheck.overrun_effects(d, sample_psid, FRAMES) == "OK"
 
 

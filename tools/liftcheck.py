@@ -1,4 +1,4 @@
-"""Judge a lift of a tune against its hand rewrite (docs/lifter-brief.md, *Method per tune*).
+"""Judge a lift of a tune against its hand rewrite.
 
 liftcheck.py PSID OUT --hand DIR (--frames N | --hvsc ROOT [--times T]): unbounded accesses,
 gotos, -Werror, sidtrace under each one's overrun sites, fcomplex and census of the play units,
@@ -91,20 +91,21 @@ def replay(psid, prg, frames, sites):
     return f"MISMATCH frame {bad[0]} write {bad[1]}"
 
 
-def overrun_effects(d, psid, frames, allowed=()):
-    """`OK` or the overrun sites of the translation in `d` that take effect when `psid` plays
-    with no overrun rule, other than those of `allowed` objects (sidtrace.read_allowed).
+def overrun_effects(d, psid, frames):
+    """`OK` or the overrun sites of the translation in `d` whose rule replaces a read of its
+    song data (`song_data.json`) when `psid` plays with no overrun rule (sidtrace.hidden).
     """
-    ov = pathlib.Path(d) / "overruns.json"
+    d = pathlib.Path(d)
+    ov = d / "overruns.json"
     sites = json.loads(ov.read_text("utf-8")) if ov.exists() else []
+    data = d / "song_data.json"
+    song_data = sidtrace.read_song_data(data if data.exists() else None)
     song = sidtrace.default_song(psid)
-    bad = sidtrace.unallowed(
-        sites, sidtrace.effects(psid, frames, sites, song), allowed
-    )
+    bad = sidtrace.hidden(sites, sidtrace.effects(psid, frames, sites, song), song_data)
     if not bad:
         return "OK"
-    first = min(f for _, f, _ in bad)
-    return f"{len(bad)} sites from frame {first}: {_pcs(s['pc'] for s, _, _ in bad)}"
+    first = min(f for _, f, _, _ in bad)
+    return f"{len(bad)} sites from frame {first}: {_pcs(s['pc'] for s, *_ in bad)}"
 
 
 def measure(d, psid, frames):
@@ -226,6 +227,7 @@ def lift(psid, out):
     paths = transliterate.write(out, c, h, header)
     (out / "units").write_text("".join(f"{p}\n" for p in paths), "utf-8")
     (out / "overruns.json").write_text(json.dumps(info["overruns"]), "utf-8")
+    (out / "song_data.json").write_text(json.dumps(info.get("song_data")), "utf-8")
     bounds = {"tables": info.get("tables", []), "starts": info["starts"]}
     (out / "bounds.json").write_text(json.dumps(bounds), "utf-8")
     found = info.get("unbounded")
@@ -266,11 +268,6 @@ def main(argv=None):
     ap.add_argument("--times", type=int, default=1, help="multiple of the length")
     ap.add_argument("--json", type=pathlib.Path, help="write both measures here")
     ap.add_argument(
-        "--allowed",
-        help="objects whose overrun sites may take effect on the original (JSON, as make "
-        "check's overruns_allowed.json)",
-    )
-    ap.add_argument(
         "--orbit-calls", type=int, default=ORBIT_CALLS, help="play calls per song state"
     )
     args = ap.parse_args(argv)
@@ -286,8 +283,7 @@ def main(argv=None):
         got = dict(zip(("unbounded", "noset"), lift(psid, args.out)))
         progress.update()
         orbit = pool.submit(check_orbit, args.out, psid, args.orbit_calls)
-        allowed = sidtrace.read_allowed(args.allowed)
-        effects = pool.submit(overrun_effects, args.out, psid, frames, allowed)
+        effects = pool.submit(overrun_effects, args.out, psid, frames)
         got.update(measure(args.out, psid, frames))
         progress.update()
         got["orbit"] = orbit.result()

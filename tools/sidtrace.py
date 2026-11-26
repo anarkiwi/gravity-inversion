@@ -298,10 +298,11 @@ def read_sites(path):
 
 
 def effects(data, frames, sites, song=None):
-    """{pc: (first frame, accesses)} of the overrun `sites` that take effect when `data` plays
-    with no overrun rule: an access by a site's instruction to an address
-    :func:`overrun_sources` redirects, an indirect instruction's pointer bytes aside. Init is
-    frame 0, play call n frame n."""
+    """{pc: (first frame, accesses, addresses)} of the overrun `sites` that take effect when
+    `data` plays with no overrun rule: an access by a site's instruction to an address
+    :func:`overrun_sources` redirects, an indirect instruction's pointer bytes aside;
+    `addresses` a [65536] bool mask of those it took. Init is frame 0, play call n frame n.
+    """
     image = boot_ram(data)
     hit = {}
     for s in sites:
@@ -317,10 +318,14 @@ def effects(data, frames, sites, song=None):
         k = np.asarray(log, np.int64)
         pc, addr = k >> 17, k & 0xFFFF
         for p in np.intersect1d(np.unique(pc), np.fromiter(hit, np.int64)):
-            n = int(hit[int(p)][addr[pc == p]].sum())
-            if n:
-                first, count = got.get(int(p), (frame, 0))
-                got[int(p)] = (first, count + n)
+            at = addr[pc == p]
+            at = at[hit[int(p)][at]]
+            if at.size:
+                first, count, mask = got.get(
+                    int(p), (frame, 0, np.zeros(0x10000, bool))
+                )
+                mask[at] = True
+                got[int(p)] = (first, count + int(at.size), mask)
 
     def run_init(mpu, _mem, init, a, max_cycles):
         note(0, mpu.run_to_rts_accesses(init, a, max_cycles)[1])
@@ -331,29 +336,33 @@ def effects(data, frames, sites, song=None):
     return got
 
 
-def _runs(text):
-    """`$LO-$HI` texts as inclusive [lo, hi] pairs."""
-    return [[int(x.strip("$"), 16) for x in r.split("-")] for r in text]
-
-
-def read_allowed(path):
-    """The objects of a tune's `overruns_allowed.json` whose overrun sites may take effect on
-    the original (a read past a table the brief means to clamp): a list of their runs
-    `[[lo, hi], ...]`; none without a path."""
+def read_song_data(path):
+    """[65536] bool mask of a lift's song data (`info["song_data"]`: the bytes play reads,
+    minus those it may write, minus its instructions', as inclusive runs), or None when the
+    file holds none or there is no path."""
     if not path:
-        return []
+        return None
     with open(path, encoding="utf-8") as f:
-        return [_runs(o["ok"]) for o in json.load(f)]
+        runs = json.load(f)
+    if runs is None:
+        return None
+    out = np.zeros(0x10000, bool)
+    for lo, hi in runs:
+        out[lo : hi + 1] = True
+    return out
 
 
-def unallowed(sites, found, allowed):
-    """The sites of `found` (:func:`effects`) whose object is none of `allowed`
-    (:func:`read_allowed`), each ``(site, first frame, accesses)``."""
+def hidden(sites, found, song_data):
+    """The sites of `found` (:func:`effects`) whose rule replaces a read of song data, each
+    ``(site, first frame, accesses, song bytes)``: an extent ending inside the data block.
+    A rule that only takes the place of code, state play writes or I/O is the tune never
+    stopping. Without `song_data` every site of `found` is one."""
     by_pc = {s["pc"]: s for s in sites}
     out = []
-    for pc, (first, count) in sorted(found.items()):
-        if [list(r) for r in by_pc[pc]["ok"]] not in allowed:
-            out.append((by_pc[pc], first, count))
+    for pc, (first, count, mask) in sorted(found.items()):
+        lost = mask if song_data is None else mask & song_data
+        if lost.any():
+            out.append((by_pc[pc], first, count, np.flatnonzero(lost)))
     return out
 
 
@@ -370,6 +379,20 @@ def compare(psid, prg, frames, song, sites=()):
     ref = reference(psid, frames, sites, song=song)
     got = trace_prg(prg, frames, song, sid_model=header_model(psid))
     return frames, sum(map(len, ref)), first_divergence(ref, got)
+
+
+def report_hidden(psid, frames, sites, song, song_data):
+    """Print each site of `sites` whose rule replaces song data on the original's `song`
+    (:func:`hidden`) as an `OVERRUN` line; their count."""
+    found = hidden(sites, effects(psid, frames, sites, song), song_data)
+    for site, first, count, lost in found:
+        ok = ",".join(f"${lo:04X}-${hi:04X}" for lo, hi in site["ok"])
+        print(
+            f"song {song} OVERRUN ${site['pc']:04X} (object {ok}) replaces song data "
+            f"${lost[0]:04X}-${lost[-1]:04X} on the original from frame {first}, "
+            f"{count} accesses"
+        )
+    return len(found)
 
 
 def main(argv=None):
@@ -401,15 +424,15 @@ def main(argv=None):
         "translation does",
     )
     ap.add_argument(
-        "--allowed",
-        help="objects whose overrun sites may take effect on the original (JSON); any other "
-        "site of --overruns that does fails",
+        "--song-data",
+        help="the lift's song data (JSON runs, `info['song_data']`): a site of --overruns whose "
+        "rule replaces a read of it on the original fails",
     )
     args = ap.parse_args(argv)
     with open(args.psid, "rb") as f:
         psid = f.read()
     sites = read_sites(args.overruns)
-    allowed = read_allowed(args.allowed)
+    song_data = read_song_data(args.song_data)
     picked = songs(args.songs, psid) if args.songs else [default_song(psid)]
     failed = 0
     for song in picked:
@@ -429,14 +452,7 @@ def main(argv=None):
         else:
             print(f"song {song} OK: {frames} frames, {writes} SID writes identical")
         if sites:
-            found = effects(psid, frames, sites, song)
-            for site, first, count in unallowed(sites, found, allowed):
-                failed += 1
-                ok = ",".join(f"${lo:04X}-${hi:04X}" for lo, hi in site["ok"])
-                print(
-                    f"song {song} OVERRUN ${site['pc']:04X} (object {ok}) takes effect on "
-                    f"the original from frame {first}, {count} accesses"
-                )
+            failed += report_hidden(psid, frames, sites, song, song_data)
     return 1 if failed else 0
 
 
