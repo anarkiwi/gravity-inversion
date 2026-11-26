@@ -301,7 +301,8 @@ def effects(data, frames, sites, song=None):
     """{pc: (first frame, accesses, addresses)} of the overrun `sites` that take effect when
     `data` plays with no overrun rule: an access by a site's instruction to an address
     :func:`overrun_sources` redirects, an indirect instruction's pointer bytes aside;
-    `addresses` a [65536] bool mask of those it took. Init is frame 0, play call n frame n.
+    `addresses` a per-address bool mask of those it took. Init is the first frame, each play
+    call the next.
     """
     image = boot_ram(data)
     hit = {}
@@ -337,7 +338,7 @@ def effects(data, frames, sites, song=None):
 
 
 def read_song_data(path):
-    """[65536] bool mask of a lift's song data (`info["song_data"]`: the bytes play reads,
+    """Per-address bool mask of a lift's song data (`info["song_data"]`: the bytes play reads,
     minus those it may write, minus its instructions', as inclusive runs), or None when the
     file holds none or there is no path."""
     if not path:
@@ -352,17 +353,32 @@ def read_song_data(path):
     return out
 
 
+def own_block(site, song_data):
+    """Per-address bool mask of the data blocks (maximal runs of `song_data`) holding any byte of
+    `site`'s object."""
+    edges = np.flatnonzero(
+        np.diff(np.concatenate(([0], song_data.astype(np.int8), [0])))
+    )
+    out = np.zeros(0x10000, bool)
+    for lo, hi in zip(edges[::2], edges[1::2]):
+        if any(a <= hi - 1 and lo <= b for a, b in site["ok"]):
+            out[lo:hi] = True
+    return out
+
+
 def hidden(sites, found, song_data):
-    """The sites of `found` (:func:`effects`) whose rule replaces a read of song data, each
-    ``(site, first frame, accesses, song bytes)``: an extent ending inside the data block.
-    A rule that only takes the place of code, state play writes or I/O is the tune never
-    stopping. Without `song_data` every site of `found` is one."""
+    """The sites of `found` (:func:`effects`) whose rule replaces a read of their own data
+    block (:func:`own_block`), each ``(site, first frame, accesses, bytes)``: an extent ending
+    inside the block it starts in. A rule past the block, in place of code, state play writes,
+    I/O or another block beyond them, is the tune never stopping. Without `song_data` every
+    site of `found` is one."""
     by_pc = {s["pc"]: s for s in sites}
     out = []
     for pc, (first, count, mask) in sorted(found.items()):
-        lost = mask if song_data is None else mask & song_data
+        site = by_pc[pc]
+        lost = mask if song_data is None else mask & own_block(site, song_data)
         if lost.any():
-            out.append((by_pc[pc], first, count, np.flatnonzero(lost)))
+            out.append((site, first, count, np.flatnonzero(lost)))
     return out
 
 
@@ -388,7 +404,7 @@ def report_hidden(psid, frames, sites, song, song_data):
     for site, first, count, lost in found:
         ok = ",".join(f"${lo:04X}-${hi:04X}" for lo, hi in site["ok"])
         print(
-            f"song {song} OVERRUN ${site['pc']:04X} (object {ok}) replaces song data "
+            f"song {song} OVERRUN ${site['pc']:04X} (object {ok}) replaces its block's data "
             f"${lost[0]:04X}-${lost[-1]:04X} on the original from frame {first}, "
             f"{count} accesses"
         )

@@ -129,9 +129,10 @@ def test_overrun_remap_indexed_pointer():
 
 
 def test_effects(tmp_path):
-    """A site takes effect where the original accesses outside its object: from init (frame
-    0), once per call, at the addresses it took; it hides song data only where those are
-    song data, and every effect counts where the lift gives none."""
+    """A site takes effect where the original accesses outside its object: from init, once
+    per call, at the addresses it took; it is a lift error only where those are
+    bytes of its own data block, not another block past state, and every effect counts where
+    the lift gives none."""
     data = _code_psid(_overrun_code())
     obj = [[0x1000, 0x10FF]]
     sites = [
@@ -142,11 +143,17 @@ def test_effects(tmp_path):
     assert list(found) == [0x1002] and found[0x1002][:2] == (0, 3)
     assert list(np.flatnonzero(found[0x1002][2])) == [0x1108]
     song = tmp_path / "song.json"
-    song.write_text("[[4352, 4607]]", encoding="utf-8")
+    song.write_text("[[4096, 4607]]", encoding="utf-8")
     lost = sidtrace.hidden(sites, found, sidtrace.read_song_data(str(song)))
     assert [(s["pc"], list(a)) for s, _, _, a in lost] == [(0x1002, [0x1108])]
     song.write_text("[[8192, 8447]]", encoding="utf-8")
     assert not sidtrace.hidden(sites, found, sidtrace.read_song_data(str(song)))
+    song.write_text("[[4096, 4351], [4353, 4607]]", encoding="utf-8")
+    beyond = sidtrace.read_song_data(str(song))
+    assert not sidtrace.hidden(sites, found, beyond)
+    assert list(np.flatnonzero(sidtrace.own_block(sites[0], beyond))) == list(
+        range(4096, 4352)
+    )
     song.write_text("null", encoding="utf-8")
     assert sidtrace.read_song_data(str(song)) is None
     assert len(sidtrace.hidden(sites, found, None)) == 1
