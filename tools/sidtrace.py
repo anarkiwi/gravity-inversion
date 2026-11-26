@@ -297,6 +297,66 @@ def read_sites(path):
         return json.load(f)
 
 
+def effects(data, frames, sites, song=None):
+    """{pc: (first frame, accesses)} of the overrun `sites` that take effect when `data` plays
+    with no overrun rule: an access by a site's instruction to an address
+    :func:`overrun_sources` redirects, an indirect instruction's pointer bytes aside. Init is
+    frame 0, play call n frame n."""
+    image = boot_ram(data)
+    hit = {}
+    for s in sites:
+        t = overrun_sources(s) != -1
+        if image[s["pc"]] in POINTER_OPCODES:
+            zp = image[s["pc"] + 1]
+            t[[zp, (zp + 1) & 0xFF]] = False
+        if t.any():
+            hit[s["pc"]] = t
+    got = {}
+
+    def note(frame, log):
+        k = np.asarray(log, np.int64)
+        pc, addr = k >> 17, k & 0xFFFF
+        for p in np.intersect1d(np.unique(pc), np.fromiter(hit, np.int64)):
+            n = int(hit[int(p)][addr[pc == p]].sum())
+            if n:
+                first, count = got.get(int(p), (frame, 0))
+                got[int(p)] = (first, count + n)
+
+    def run_init(mpu, _mem, init, a, max_cycles):
+        note(0, mpu.run_to_rts_accesses(init, a, max_cycles)[1])
+
+    mpu, _, play = boot(data, song, run_init=run_init)
+    for frame in tqdm(range(1, frames + 1), desc="overrun effects", unit="frame"):
+        note(frame, mpu.run_to_rts_accesses(play, 0, MAX_CYCLES)[1])
+    return got
+
+
+def _runs(text):
+    """`$LO-$HI` texts as inclusive [lo, hi] pairs."""
+    return [[int(x.strip("$"), 16) for x in r.split("-")] for r in text]
+
+
+def read_allowed(path):
+    """The objects of a tune's `overruns_allowed.json` whose overrun sites may take effect on
+    the original (a read past a table the brief means to clamp): a list of their runs
+    `[[lo, hi], ...]`; none without a path."""
+    if not path:
+        return []
+    with open(path, encoding="utf-8") as f:
+        return [_runs(o["ok"]) for o in json.load(f)]
+
+
+def unallowed(sites, found, allowed):
+    """The sites of `found` (:func:`effects`) whose object is none of `allowed`
+    (:func:`read_allowed`), each ``(site, first frame, accesses)``."""
+    by_pc = {s["pc"]: s for s in sites}
+    out = []
+    for pc, (first, count) in sorted(found.items()):
+        if [list(r) for r in by_pc[pc]["ok"]] not in allowed:
+            out.append((by_pc[pc], first, count))
+    return out
+
+
 def reference(data, frames, sites=(), **kw):
     """:func:`trace_psid` of `data` under the overrun rule of `sites` (:func:`overrun_remap`):
     what a translation lifted under them is judged against."""
@@ -340,10 +400,16 @@ def main(argv=None):
         help="the translation's overrun sites (JSON): the reference reads past them as the "
         "translation does",
     )
+    ap.add_argument(
+        "--allowed",
+        help="objects whose overrun sites may take effect on the original (JSON); any other "
+        "site of --overruns that does fails",
+    )
     args = ap.parse_args(argv)
     with open(args.psid, "rb") as f:
         psid = f.read()
     sites = read_sites(args.overruns)
+    allowed = read_allowed(args.allowed)
     picked = songs(args.songs, psid) if args.songs else [default_song(psid)]
     failed = 0
     for song in picked:
@@ -362,6 +428,15 @@ def main(argv=None):
             )
         else:
             print(f"song {song} OK: {frames} frames, {writes} SID writes identical")
+        if sites:
+            found = effects(psid, frames, sites, song)
+            for site, first, count in unallowed(sites, found, allowed):
+                failed += 1
+                ok = ",".join(f"${lo:04X}-${hi:04X}" for lo, hi in site["ok"])
+                print(
+                    f"song {song} OVERRUN ${site['pc']:04X} (object {ok}) takes effect on "
+                    f"the original from frame {first}, {count} accesses"
+                )
     return 1 if failed else 0
 
 

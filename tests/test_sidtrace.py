@@ -127,6 +127,26 @@ def test_overrun_remap_indexed_pointer():
         assert sidtrace.trace_psid(data, 0, poke=poke, remap=remap) == [[(0, want)]]
 
 
+def test_effects(tmp_path):
+    """A site takes effect where the original accesses outside its object: from init (frame
+    0), once per call; a site inside its object, or one `allowed` names, is no failure.
+    """
+    data = _code_psid(_overrun_code())
+    obj = [[0x1000, 0x10FF]]
+    sites = [
+        {"pc": 0x1002, "ok": obj, "addr": [0x10F8, 0x11F7]},
+        {"pc": 0x1011, "ok": [[0x1100, 0x11FF]], "addr": [0x10F8, 0x11F7]},
+    ]
+    found = sidtrace.effects(data, 2, sites)
+    assert found == {0x1002: (0, 3)}
+    assert [s["pc"] for s, *_ in sidtrace.unallowed(sites, found, [])] == [0x1002]
+    allowed = tmp_path / "allowed.json"
+    allowed.write_text('[{"ok": ["$1000-$10FF"], "why": "test"}]', encoding="utf-8")
+    assert sidtrace.read_allowed(str(allowed)) == [obj]
+    assert not sidtrace.unallowed(sites, found, sidtrace.read_allowed(str(allowed)))
+    assert sidtrace.read_allowed(None) == []
+
+
 def test_overrun_sources():
     """Outside its runs a site reads 0, or its `last` address, or the last record of the
     nearest run below, repeated; its runs and I/O read as they stand."""

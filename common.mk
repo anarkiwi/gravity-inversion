@@ -74,7 +74,8 @@ $(B)/hand-O0.prg: src/$(TUNE).c $(B)/$(TUNE)_data.h $(DRIVER)
 	$(CC) -O0 -Wall -Wextra -Werror $(CFLAGS_TUNE) -I$(B) -I$(ROOT)/c64 -o $@ $< $(ROOT)/c64/driver.c
 
 check-gen: $(B)/gen.prg $(B)/gen/overruns.json
-	$(PY) $(ROOT)/tools/sidtrace.py $(PSID) $< $(CHECK_ARGS) --overruns $(B)/gen/overruns.json
+	$(PY) $(ROOT)/tools/sidtrace.py $(PSID) $< $(CHECK_ARGS) --overruns $(B)/gen/overruns.json \
+	  $(if $(wildcard overruns_allowed.json),--allowed overruns_allowed.json)
 
 .PHONY: check-gen
 endif
