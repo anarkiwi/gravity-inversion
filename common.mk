@@ -51,8 +51,9 @@ $(B)/lifter.stamp: FORCE
 	$(PY) $(ROOT)/tools/lifterstamp.py $@
 
 # The translation units, their paths listed in $(B)/gen/units.
-$(B)/gen/units $(B)/gen/$(TUNE).h $(B)/gen/cgen_trap.c $(B)/gen/overruns.json &: $(PSID) $(ROOT)/tools/transliterate.py $(B)/lifter.stamp
-	$(PY) $(ROOT)/tools/transliterate.py $< $(B)/gen --header $(TUNE).h --list $(B)/gen/units --overruns $(B)/gen/overruns.json
+$(B)/gen/units $(B)/gen/$(TUNE).h $(B)/gen/cgen_trap.c $(B)/gen/overruns.json $(B)/gen/song_data.json &: $(PSID) $(ROOT)/tools/transliterate.py $(B)/lifter.stamp
+	$(PY) $(ROOT)/tools/transliterate.py $< $(B)/gen --header $(TUNE).h --list $(B)/gen/units --overruns $(B)/gen/overruns.json \
+	  --song-data $(B)/gen/song_data.json
 
 # Each unit's bitcode, left for the whole program's optimization, linked into one module
 # (tools/transliterate.py UNIT and MERGE): the PRG is optimized as one file is.
@@ -73,9 +74,9 @@ all: $(B)/hand-O0.prg
 $(B)/hand-O0.prg: src/$(TUNE).c $(B)/$(TUNE)_data.h $(DRIVER)
 	$(CC) -O0 -Wall -Wextra -Werror $(CFLAGS_TUNE) -I$(B) -I$(ROOT)/c64 -o $@ $< $(ROOT)/c64/driver.c
 
-check-gen: $(B)/gen.prg $(B)/gen/overruns.json
+check-gen: $(B)/gen.prg $(B)/gen/overruns.json $(B)/gen/song_data.json
 	$(PY) $(ROOT)/tools/sidtrace.py $(PSID) $< $(CHECK_ARGS) --overruns $(B)/gen/overruns.json \
-	  $(if $(wildcard overruns_allowed.json),--allowed overruns_allowed.json)
+	  --song-data $(B)/gen/song_data.json
 
 .PHONY: check-gen
 endif

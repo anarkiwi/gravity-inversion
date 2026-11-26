@@ -27,8 +27,8 @@ when init and play share functions, and the host's `<tune>_host.c`) and `<tune>.
 `tools/transliterate.py`: each unit's bitcode is linked into one module (`build/gen.bc`) that is
 optimized as one file is. `make check` compares it with sidtrace too, the reference run
 under the translation's overrun rule (`build/gen/overruns.json`: the sites the rule bounds), and
-fails where a site's rule takes effect on the original played without it, unless the tune's
-`overruns_allowed.json` names that site's object (a read past a table meant to be clamped). The
+fails where a site's rule replaces a read of song data (`build/gen/song_data.json`: bytes play
+reads, minus those it may write and its instructions') on the original played without it. The
 generated C depends on `build/lifter.stamp` (`tools/lifterstamp.py`: the installed lifter's
 versions and native modules), so a pin or wheel change regenerates it.
 

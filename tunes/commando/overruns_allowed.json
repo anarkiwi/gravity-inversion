@@ -1,4 +1,0 @@
-[
-  {"ok": ["$139E-$145D"], "why": "frequency table lo bytes: note 104 reads past the 96 entries into the voices' notes (lifter brief rule 3)"},
-  {"ok": ["$139F-$145E"], "why": "frequency table hi bytes: note 104 reads past the 96 entries into the voices' notes (lifter brief rule 3)"}
-]
