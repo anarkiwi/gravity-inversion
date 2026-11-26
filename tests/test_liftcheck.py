@@ -26,7 +26,7 @@ done:
 
 @pytest.fixture(scope="module", name="lifted")
 def _lifted(sample_psid, tmp_path_factory):
-    """(directory, unbounded count, measures) of the sample PSID's lift."""
+    """(directory, unbounded counts (all, no set), measures) of the sample PSID's lift."""
     d = tmp_path_factory.mktemp("lift")
     n = liftcheck.lift(sample_psid, d)
     return d, n, liftcheck.measure(d, sample_psid, FRAMES)
@@ -37,8 +37,9 @@ def test_lift_measures(lifted):
     d, n, got = lifted
     assert got["werror"] == "clean"
     assert got["sidtrace"].startswith(f"OK {FRAMES} frames")
-    if n is not None:
-        assert n == len(json.loads((d / "unbounded.json").read_text("utf-8")))
+    if n[0] is not None:
+        found = json.loads((d / "unbounded.json").read_text("utf-8"))
+        assert n == (len(found), sum(why == "no set" for _, why, *_ in found))
     play = liftcheck.play_units(liftcheck.units(d))
     assert play and all(p.name.endswith(liftcheck.PLAY) for p in play)
     text = "".join(p.read_text("utf-8") for p in play)
@@ -78,6 +79,29 @@ def test_replay_mismatch(lifted, sample_psid):
     assert sites
     got = liftcheck.replay(sample_psid, d / "gen.prg", FRAMES, sites)
     assert got.startswith("MISMATCH")
+
+
+def test_overrun_effects(lifted, sample_psid, tmp_path):
+    """A lift's sites that take effect on the original are listed unless allowed."""
+    d, _, _ = lifted
+    site = {"pc": 0, "addr": [0x200, 0xCFFF], "ok": [[0x200, 0x200]]}
+    pcs = survey.executed(sample_psid, FRAMES)
+    load, _, _, data = sidtrace.psid_parts(sample_psid)
+    image = bytes(load) + bytes(data)
+    sites = [
+        {**site, "pc": p}
+        for p in sorted(pcs)
+        if load <= p < load + len(data) and OPCODES[image[p]][1] in ("absx", "absy")
+    ]
+    out = tmp_path / "lift"
+    out.mkdir()
+    (out / "overruns.json").write_text(json.dumps(sites), "utf-8")
+    got = liftcheck.overrun_effects(out, sample_psid, FRAMES)
+    assert got.split()[1:3] == ["sites", "from"] and int(got.split()[0]) > 0
+    assert (
+        liftcheck.overrun_effects(out, sample_psid, FRAMES, [[[0x200, 0x200]]]) == "OK"
+    )
+    assert liftcheck.overrun_effects(d, sample_psid, FRAMES) == "OK"
 
 
 def test_table():

@@ -36,6 +36,8 @@ COMBINE = next(
 #: The measures in table order: (key, label).
 MEASURES = (
     ("unbounded", "unbounded/checked"),
+    ("noset", "unbounded/no set"),
+    ("effects", "overruns on original"),
     ("orbit", "orbit"),
     ("goto", "gotos"),
     ("werror", "-Werror"),
@@ -84,6 +86,22 @@ def replay(psid, prg, frames, sites):
     if bad is None:
         return f"OK {frames} frames, {writes} writes"
     return f"MISMATCH frame {bad[0]} write {bad[1]}"
+
+
+def overrun_effects(d, psid, frames, allowed=()):
+    """`OK` or the overrun sites of the translation in `d` that take effect when `psid` plays
+    with no overrun rule, other than those of `allowed` objects (sidtrace.read_allowed).
+    """
+    ov = pathlib.Path(d) / "overruns.json"
+    sites = json.loads(ov.read_text("utf-8")) if ov.exists() else []
+    song = sidtrace.default_song(psid)
+    bad = sidtrace.unallowed(
+        sites, sidtrace.effects(psid, frames, sites, song), allowed
+    )
+    if not bad:
+        return "OK"
+    first = min(f for _, f, _ in bad)
+    return f"{len(bad)} sites from frame {first}: {_pcs(s['pc'] for s, _, _ in bad)}"
 
 
 def measure(d, psid, frames):
@@ -196,8 +214,9 @@ def _pcs(pcs):
 
 
 def lift(psid, out):
-    """Translate `psid` into directory `out` as tools/transliterate.py does; the count of
-    unbounded accesses, None when the lifter does not report them."""
+    """Translate `psid` into directory `out` as tools/transliterate.py does; the counts of
+    unbounded accesses, all and those of no address set (the rest a memory-map check into
+    a block), each None when the lifter does not report them."""
     out.mkdir(parents=True, exist_ok=True)
     header = "tune.h"
     c, h, info = transliterate.transliterate(psid, header, split=True)
@@ -209,7 +228,9 @@ def lift(psid, out):
     found = info.get("unbounded")
     if found is not None:
         (out / "unbounded.json").write_text(json.dumps(found), "utf-8")
-    return None if found is None else len(found)
+    if found is None:
+        return None, None
+    return len(found), sum(why == "no set" for _, why, *_ in found)
 
 
 def cell(got, k):
@@ -242,6 +263,11 @@ def main(argv=None):
     ap.add_argument("--times", type=int, default=1, help="multiple of the length")
     ap.add_argument("--json", type=pathlib.Path, help="write both measures here")
     ap.add_argument(
+        "--allowed",
+        help="objects whose overrun sites may take effect on the original (JSON, as make "
+        "check's overruns_allowed.json)",
+    )
+    ap.add_argument(
         "--orbit-calls", type=int, default=ORBIT_CALLS, help="play calls per song state"
     )
     args = ap.parse_args(argv)
@@ -254,21 +280,24 @@ def main(argv=None):
     progress = tqdm(total=4 if args.hand else 3, desc="liftcheck", unit="step")
     with ProcessPoolExecutor(3) as pool:
         hand = pool.submit(measure, args.hand, psid, frames) if args.hand else None
-        got = {"unbounded": lift(psid, args.out)}
+        got = dict(zip(("unbounded", "noset"), lift(psid, args.out)))
         progress.update()
         orbit = pool.submit(check_orbit, args.out, psid, args.orbit_calls)
+        allowed = sidtrace.read_allowed(args.allowed)
+        effects = pool.submit(overrun_effects, args.out, psid, frames, allowed)
         got.update(measure(args.out, psid, frames))
         progress.update()
         got["orbit"] = orbit.result()
+        got["effects"] = effects.result()
         progress.update()
-        ref = {"unbounded": 0, **hand.result()} if hand else {}
+        ref = {"unbounded": 0, "noset": 0, **hand.result()} if hand else {}
         progress.update(bool(hand))
     progress.close()
     print(table(got, ref))
     if args.json:
         args.json.write_text(json.dumps({"lift": got, "hand": ref}), "utf-8")
-    ok = all(got[k].startswith("OK") for k in ("sidtrace", "orbit"))
-    return 0 if ok and got["werror"] == "clean" else 1
+    ok = all(got[k].startswith("OK") for k in ("sidtrace", "orbit", "effects"))
+    return 0 if ok and got["werror"] == "clean" and not got["noset"] else 1
 
 
 if __name__ == "__main__":
