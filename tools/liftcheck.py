@@ -66,7 +66,8 @@ def play_units(paths):
 
 
 def census(paths, includes):
-    """{class: count} summed over the census of `paths` (wayward-eagle)."""
+    """{class: count} summed over the census of `paths` (wayward-eagle), and the most lines
+    and statements of one of their functions."""
     args = ["wayward-eagle", "census", "--json"]
     args += [x for d in includes for x in ("-I", str(d))]
     r = subprocess.run(
@@ -76,6 +77,8 @@ def census(paths, includes):
     for v in json.loads(r.stdout).values():
         for k, n in v["counts"].items():
             out[k] = out.get(k, 0) + n
+        for k in ("lines", "statements"):
+            out[k] = max(out.get(k, 0), *v[k].values(), 0)
     return out
 
 

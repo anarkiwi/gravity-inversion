@@ -20,10 +20,14 @@ changes no count.
 local variables by why they exist: `single-use`, the removable temporaries, `multi-use`,
 `clobbered`, `check-only`, `merged`, `unused`; wayward-eagle's
 [locals by reason](https://github.com/anarkiwi/wayward-eagle/blob/main/docs/census.md#locals-by-reason)),
-and `<name>:lines` and `<name>:statements` (the file's largest function).
+and `<name>:lines` and `<name>:statements` (the file's largest function), as held below.
 `opaque-name` and `raw-memory` are held as one key, `<name>:opacity`: their sites weighted
 by the adapter's `combine` option in `virtuous-cycles.toml` (`opacity = opaque-name +
 2 × raw-memory`, since a raw-memory subscript carries an opaque array name and a number).
+`lines` and `statements` are held as one key, `<name>:size` (`size = lines + statements`
+of the file's largest functions), and locals by their total alone (`reasons = ""`): a
+rewrite trading one function measure or one kind of local for another moves no key, while
+`virtuous-cycles report` without the option still lists each.
 `tools/liftcheck.py` reads the same weights and shows opacity beside its components.
 
 CI runs `make readability AGAINST=origin/main` (`virtuous-cycles check --against origin/main`): no value may exceed its budget, and

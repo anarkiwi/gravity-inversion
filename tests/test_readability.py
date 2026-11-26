@@ -2,7 +2,7 @@
 
 import tomllib
 
-from wayward_eagle.census import adapter
+from wayward_eagle.adapter import adapter
 
 import readability
 from constructs import ROOT

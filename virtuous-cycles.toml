@@ -7,4 +7,5 @@ files = ["out/readability/*.c"]
 include = ["out/readability", "c64"]
 key = "{stem}:{class}"
 total = "{stem}:cognitive-complexity"
-combine = {opacity = {opaque-name = 1, raw-memory = 2}}
+reasons = ""
+combine = {opacity = {opaque-name = 1, raw-memory = 2}, size = {lines = 1, statements = 1}}
