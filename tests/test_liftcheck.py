@@ -92,8 +92,11 @@ def test_table():
 def test_opacity(monkeypatch, tmp_path):
     """Opacity is the census' opaque names plus twice its raw-memory accesses, as
     virtuous-cycles.toml weighs them, its components beside it in the table."""
-    assert liftcheck.COMBINE == {"opacity": {"opaque-name": 1, "raw-memory": 2}}
-    counts = {"goto": 1, "opaque-name": 3, "raw-memory": 4}
+    assert liftcheck.COMBINE == {
+        "opacity": {"opaque-name": 1, "raw-memory": 2},
+        "size": {"lines": 1, "statements": 1},
+    }
+    counts = {"goto": 1, "opaque-name": 3, "raw-memory": 4, "lines": 9, "statements": 5}
     monkeypatch.setattr(liftcheck, "census", lambda *_: counts)
     monkeypatch.setattr(liftcheck.transliterate, "compile_prg", lambda *_, **__: None)
     monkeypatch.setattr(liftcheck, "replay", lambda *_: "OK")
@@ -101,7 +104,7 @@ def test_opacity(monkeypatch, tmp_path):
         liftcheck.fcomplex, "score", lambda _: {"total": {"cognitive": 0}}
     )
     got = liftcheck.measure(tmp_path, b"", 1)
-    assert got["opacity"] == 11 and got["goto"] == 1
+    assert got["opacity"] == 11 and got["goto"] == 1 and got["size"] == 14
     row = next(r for r in liftcheck.table(got, {}).splitlines() if "opacity" in r)
     assert row.split()[2:] == [
         "11",
