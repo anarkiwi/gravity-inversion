@@ -4,6 +4,7 @@ semantics-preserving permutations of its code and a relocation."""
 import json
 import pathlib
 import re
+import resource
 import time
 
 import pytest
@@ -28,12 +29,18 @@ PERMUTATIONS["all"] = sum(PERMUTATIONS.values(), [])
 RELOCATE = [["ADDR    = $1000", "ADDR    = $2345"]]
 
 
+def cpu_seconds():
+    """CPU time of this process and its waited-for children (``mlir-opt``)."""
+    child = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return time.process_time() + child.ru_utime + child.ru_stime
+
+
 @pytest.fixture(scope="module", name="generated")
 def fixture_generated(ref_psid):
     """(units, .h, info, seconds) of the original."""
-    start = time.perf_counter()
+    start = cpu_seconds()
     c, h, info = transliterate.transliterate(ref_psid, "commando.h", split=True)
-    return c, h, info, time.perf_counter() - start
+    return c, h, info, cpu_seconds() - start
 
 
 @pytest.fixture(scope="module", name="wrap")
