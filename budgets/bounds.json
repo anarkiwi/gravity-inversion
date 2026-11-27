@@ -1,0 +1,10 @@
+{
+ "direction": "lower",
+ "budgets": {
+  "automatas:alarms": 19,
+  "commando:alarms": 7,
+  "emomyst:alarms": 13,
+  "ghouls:alarms": 46,
+  "incoherent:alarms": 5
+ }
+}

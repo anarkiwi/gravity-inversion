@@ -22,3 +22,10 @@ budget = "budgets/prg.json"
 tolerance = {"*" = 0.10}
 [metric.options]
 run = "python3 tools/prgsize.py"
+
+[[metric]]
+name = "bounds"
+adapter = "command"
+budget = "budgets/bounds.json"
+[metric.options]
+run = "python3 tools/eva.py --metric"
