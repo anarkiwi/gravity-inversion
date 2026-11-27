@@ -19,6 +19,7 @@ or, with `mos-c64-clang` and `requirements-dev.txt` installed:
     make check                # compare each tune's SID writes against its original
     make test lint
     make readability          # readability defects of the generated C against budgets/
+    make prg                  # generated PRG bytes against budgets/prg.json
 
 Each tune Makefile sets `GEN := 1` (with `PSID` and `CHECK_ARGS`) before including
 `common.mk`, so `make` also builds `build/gen.prg` from the translation units in `build/gen`
@@ -59,6 +60,7 @@ versions and native modules), so a pin or wheel change regenerates it.
 | `tools/orbitflow.py` | state machines of a PSID's play straight from the 6502 (jennings components), with cycle periods and tracker roles ([docs/flowgraph.md](docs/flowgraph.md#orbit-source)) |
 | `tools/residue.py` | residue census: each site where generated C keeps the 6502's machine model, against `tests/residue_manifest.json` ([docs/residue.md](docs/residue.md)) |
 | `tools/readability.py` | the generated C whose readability defects (wayward-eagle's census) `virtuous-cycles.toml` ratchets ([docs/readability.md](docs/readability.md)) |
+| `tools/prgsize.py` | each generated tune's PRG bytes, the `prg` metric `virtuous-cycles.toml` ratchets ([docs/readability.md](docs/readability.md#prg-bytes)) |
 | `tools/costs.py` | constructs in generated C that cost code size ([docs/costs.md](docs/costs.md)) |
 | `tools/ablate.py` | where a generated translation's PRG bytes go: cumulative ablation of its C (AST model in `tools/cflow.py`) and a data accounting ([docs/ablate.md](docs/ablate.md)) |
 | `tools/ghidra_ref.py`, `tools/ghidra/` | Ghidra headless reference decompilation of each target, seeded at the PSID's and the lifter's entries; image `docker/ghidra.Dockerfile` ([docs/ghidra_ref.md](docs/ghidra_ref.md)) |

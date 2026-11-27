@@ -8,11 +8,14 @@ test: all
 
 readability: psid
 	python3 tools/readability.py
-	virtuous-cycles check $(if $(AGAINST),--against $(AGAINST))
+	virtuous-cycles -m readability check $(if $(AGAINST),--against $(AGAINST))
+
+prg: all
+	virtuous-cycles -m prg check $(if $(AGAINST),--against $(AGAINST))
 
 lint:
 	clang-format --style=LLVM --dry-run -Werror $(wildcard tunes/*/src/*.[ch])
 	black --check tools tests tunes
 	pylint tools tests tunes
 
-.PHONY: all check fixture clean psid test lint readability
+.PHONY: all check fixture clean psid test lint readability prg

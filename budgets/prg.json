@@ -1,0 +1,10 @@
+{
+ "direction": "lower",
+ "budgets": {
+  "automatas": 11606,
+  "commando": 4744,
+  "emomyst": 13786,
+  "ghouls": 35772,
+  "incoherent": 8695
+ }
+}
