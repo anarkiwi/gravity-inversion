@@ -68,6 +68,9 @@ holds each tune's `<tune>:alarms` to `budgets/bounds.json`, exactly: no toleranc
 
 ## CI
 
-The `bounds` job generates the C in the deps image, runs `tools/eva.py` on the runner with
+The `bounds` workflow (`.github/workflows/bounds.yml`) runs only when a change can alter the
+generated C or the check: the lifter pins, the Dockerfile, `c64/`, `tunes/`, the transliterate
+and readability tools, the EVA tool and harness, its budget or the ratchet config. It is not a
+required check. It generates the C in the deps image, runs `tools/eva.py` on the runner with
 the `framac/frama-c:30.0` image, then `virtuous-cycles -m bounds check --against
 origin/main` in the deps image.
