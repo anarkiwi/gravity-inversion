@@ -32,8 +32,9 @@ jobs:
           load: true
           tags: gravity-inversion-deps
           cache-from: type=gha
-      - name: Readability ratchet
+      - name: Readability and PRG ratchets
         run: >-
           docker run --rm -v "$PWD:/src" -w /src gravity-inversion-deps
           sh -c 'git config --global --add safe.directory /src
-          && make readability AGAINST=origin/main'
+          && make readability AGAINST=origin/main
+          && make prg AGAINST=origin/main'

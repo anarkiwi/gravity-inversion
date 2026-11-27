@@ -8,4 +8,17 @@ include = ["out/readability", "c64"]
 key = "{stem}:{class}"
 total = "{stem}:cognitive-complexity"
 reasons = ""
-combine = {opacity = {opaque-name = 1, raw-memory = 2}, size = {lines = 1, statements = 1}}
+lines = ""
+combine = {opacity = {opaque-name = 1, raw-memory = 2}, size = {statements = 1}}
+[metric.tolerance]
+"*:size" = 0.05
+"*:locals" = 0.05
+"*:opacity" = 0.05
+
+[[metric]]
+name = "prg"
+adapter = "command"
+budget = "budgets/prg.json"
+tolerance = {"*" = 0.10}
+[metric.options]
+run = "python3 tools/prgsize.py"

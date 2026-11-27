@@ -20,10 +20,12 @@ def test_ratchet_config_counts_the_generated_c(tmp_path):
     """The ratchet's adapter options give each generated file's classes and complexity."""
     readability.main(["fuzz-loop-0", "fuzz-jsr3-0", "--out", str(tmp_path), "-j", "2"])
     cfg = tomllib.loads((ROOT / "virtuous-cycles.toml").read_text(encoding="utf-8"))
-    (metric,) = cfg["metric"]
+    metric = next(m for m in cfg["metric"] if m["name"] == "readability")
     assert metric["adapter"] == "wayward-census"
     options = dict(metric["options"], files=[str(tmp_path / "*.c")])
     options["include"] = [str(tmp_path), str(ROOT / "c64")]
     got = adapter(options)
     assert got["fuzz-loop-0:goto"] == 0
     assert got["fuzz-jsr3-0:cognitive-complexity"] > 0
+    assert got["fuzz-loop-0:size"] > 0
+    assert not any(k.endswith((":lines", ":statements")) for k in got)

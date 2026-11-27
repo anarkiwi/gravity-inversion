@@ -120,7 +120,7 @@ def test_opacity(monkeypatch, tmp_path):
     virtuous-cycles.toml weighs them, its components beside it in the table."""
     assert liftcheck.COMBINE == {
         "opacity": {"opaque-name": 1, "raw-memory": 2},
-        "size": {"lines": 1, "statements": 1},
+        "size": {"statements": 1},
     }
     counts = {"goto": 1, "opaque-name": 3, "raw-memory": 4, "lines": 9, "statements": 5}
     monkeypatch.setattr(liftcheck, "census", lambda *_: counts)
@@ -130,7 +130,7 @@ def test_opacity(monkeypatch, tmp_path):
         liftcheck.fcomplex, "score", lambda _: {"total": {"cognitive": 0}}
     )
     got = liftcheck.measure(tmp_path, b"", 1)
-    assert got["opacity"] == 11 and got["goto"] == 1 and got["size"] == 14
+    assert got["opacity"] == 11 and got["goto"] == 1 and got["size"] == 5
     row = next(r for r in liftcheck.table(got, {}).splitlines() if "opacity" in r)
     assert row.split()[2:] == [
         "11",
