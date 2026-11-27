@@ -47,8 +47,6 @@ compiler output, judged only for large growth: tolerance 0.10 on every key.
 
 Whether a PRG fits the C64 memory map is the link's ([diagnostics.md](diagnostics.md)).
 
-The `bounds` metric, Frama-C EVA alarms of the generated C, is [bounds.md](bounds.md)'s.
-
 ## CI
 
 CI runs `make readability AGAINST=origin/main` and `make prg AGAINST=origin/main`
