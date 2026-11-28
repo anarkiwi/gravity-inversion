@@ -388,7 +388,7 @@ class Facts:
     known: frozenset = frozenset()
 
 
-def writer(base, at, loc, facts):
+def writer(base, at, loc, facts):  # pylint: disable=too-many-return-statements
     """Where the value of `loc` read by record `at` ``(call, record)`` was set: ``(call,
     record)``, or a :class:`Source` or :class:`Stop` where it is an input of the call.
     """
