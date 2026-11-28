@@ -62,6 +62,7 @@ versions and native modules), so a pin or wheel change regenerates it.
 | `tools/readability.py` | the generated C whose readability defects (wayward-eagle's census) `virtuous-cycles.toml` ratchets ([docs/readability.md](docs/readability.md)) |
 | `tools/prgsize.py` | each generated tune's PRG bytes, the `prg` metric `virtuous-cycles.toml` ratchets ([docs/readability.md](docs/readability.md#prg-bytes)) |
 | `tools/costs.py` | constructs in generated C that cost code size ([docs/costs.md](docs/costs.md)) |
+| `tools/forced.py` | the code of play a song never runs: each one-way branch forced to its other side from the certified trace ([docs/forced.md](docs/forced.md)) |
 | `tools/ablate.py` | where a generated translation's PRG bytes go: cumulative ablation of its C (AST model in `tools/cflow.py`) and a data accounting ([docs/ablate.md](docs/ablate.md)) |
 | `tools/ghidra_ref.py`, `tools/ghidra/` | Ghidra headless reference decompilation of each target, seeded at the PSID's and the lifter's entries; image `docker/ghidra.Dockerfile` ([docs/ghidra_ref.md](docs/ghidra_ref.md)) |
 | `tools/copies.py` | repeated playroutine code: unrolled copies with operand strides, JSR targets, fall-through entries |
