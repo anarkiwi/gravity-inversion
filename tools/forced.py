@@ -39,6 +39,12 @@ def gaps(keys, mem):
     return dict(zip(src[sel].tolist(), (keys[sel] & 0xFFFF).tolist()))
 
 
+def instructions(keys):
+    """The instruction addresses of edge keys `keys`, ascending."""
+    keys = np.asarray(keys, np.int64)
+    return np.unique(np.concatenate([keys >> 16, keys & 0xFFFF]))
+
+
 def other_side(mem, pc, nxt):
     """The successor of the conditional branch at `pc` that is not `nxt`."""
     off = int(mem[pc + 1])
@@ -46,10 +52,11 @@ def other_side(mem, pc, nxt):
     return target if nxt == (pc + 2) & 0xFFFF else (pc + 2) & 0xFFFF
 
 
-def proven(image, play, volatile):
+def proven(image, play, volatile, stores=None):
     """(edge keys, {pc: first call running it}, song data bool [65536]) play's verified
     certificate proves from `image`: song data the bytes loaded, never stored, no
-    instruction's. Raises RuntimeError where play has no verified certificate."""
+    instruction's; `stores` (bool [65536]) gets the bytes stored set. Raises RuntimeError
+    where play has no verified certificate."""
     exclude = [(C.STACK.start, C.STACK.stop), *volatile]
     cert = V.certify(
         image, play, LIMIT, max_cycles=sidtrace.MAX_CYCLES, exclude=exclude
@@ -69,6 +76,8 @@ def proven(image, play, volatile):
     for (_, kind), addrs in cert.accesses.items():
         (stored if kind == C.STORE else loaded)[list(addrs)] = True
     ran[np.unique(e)] = True
+    if stores is not None:
+        stores |= stored
     code = instruction_bytes(np.frombuffer(image, np.uint8), ran)
     return (
         np.unique(e[:, 0] << 16 | e[:, 1]),
@@ -171,14 +180,11 @@ def report(psid):  # pylint: disable=too-many-locals
         extra, runs, strays = np.union1d(extra, e), runs + n, strays | lost
     both = np.union1d(base, np.setdiff1d(extra, base))
 
-    def count(keys):
-        return len(np.unique(np.concatenate([keys >> 16, keys & 0xFFFF])))
-
     return {
         "play": play,
         "states": len(states),
         "runs": runs,
-        "instructions": [count(base), count(both)],
+        "instructions": [len(instructions(base)), len(instructions(both))],
         "one_way": [len(gaps(base, mem)), len(gaps(both, mem))],
         "forced_edges": [
             [int(k >> 16), int(k & 0xFFFF)] for k in np.setdiff1d(both, base)
