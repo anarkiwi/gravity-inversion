@@ -64,6 +64,7 @@ versions and native modules), so a pin or wheel change regenerates it.
 | `tools/costs.py` | constructs in generated C that cost code size ([docs/costs.md](docs/costs.md)) |
 | `tools/forced.py` | the code of play a song never runs: each one-way branch forced to its other side from the certified trace ([docs/forced.md](docs/forced.md)) |
 | `tools/walkback.py` | song-data patches that run that code unforced: each one-way branch and computed transfer walked back through data flow to the song byte deciding it ([docs/forced.md](docs/forced.md#walking-back)) |
+| `tools/gensongs.py`, `tools/gtpack.py`, `tools/songchecks.py` | seeded GoatTracker 2 songs packed with the real playroutine, with the packer's layout; certificates against the plain orbit and forcing and walking back against the union of real songs ([docs/gensongs.md](docs/gensongs.md)) |
 | `tools/ablate.py` | where a generated translation's PRG bytes go: cumulative ablation of its C (AST model in `tools/cflow.py`) and a data accounting ([docs/ablate.md](docs/ablate.md)) |
 | `tools/ghidra_ref.py`, `tools/ghidra/` | Ghidra headless reference decompilation of each target, seeded at the PSID's and the lifter's entries; image `docker/ghidra.Dockerfile` ([docs/ghidra_ref.md](docs/ghidra_ref.md)) |
 | `tools/copies.py` | repeated playroutine code: unrolled copies with operand strides, JSR targets, fall-through entries |
