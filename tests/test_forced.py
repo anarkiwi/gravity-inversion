@@ -17,18 +17,17 @@ PLAYER = """
 init:
     rts
 play:
-    ldx pos
-    lda song,x
+    ldy pos
+    lda song,y
 bsong bmi special
 back:
     sta $d400
     lda mode
 bmode bne song
-    inx
-    cpx #4
-    bne +
-    ldx #0
-+   stx pos
+    iny
+    tya
+    and #3
+    sta pos
     rts
 special:
     lda deep
