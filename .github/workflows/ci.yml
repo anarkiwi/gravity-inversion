@@ -15,7 +15,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: fixtures
-          key: fixtures-${{ hashFiles('tunes/*/Makefile') }}
+          key: fixtures-${{ hashFiles('Makefile', 'tunes/*/Makefile') }}
           restore-keys: fixtures-
       - run: make fixture
       - uses: docker/setup-buildx-action@v4
