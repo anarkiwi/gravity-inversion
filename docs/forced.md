@@ -62,4 +62,4 @@ runs leaving it one-way.
 | `unresolved` | guards still open: the hop (`call`, `pc`, `loc`) and `reason` |
 | `seconds` | the certificates, forcing, walking and the patched runs |
 
-`--images DIR` writes each tune's kept patched images, 64 KiB each, to `DIR/<tune>.npz`.
+`--images DIR` writes each tune's kept patched images (each a whole address space) to `DIR/<tune>.npz`.

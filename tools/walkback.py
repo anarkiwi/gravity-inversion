@@ -130,7 +130,7 @@ def stack(sp, k):
 
 
 def _at(pc, code):
-    """64 KiB holding instruction bytes `code` at `pc`."""
+    """A blank address space holding instruction bytes `code` at `pc`."""
     mem = bytearray(0x10000)
     for i, b in enumerate(code):
         mem[(pc + i) & 0xFFFF] = b
@@ -410,7 +410,10 @@ def writer(base, at, loc, facts):
             "player code" if facts.code[loc] else "init's value, never stored by play"
         )
         return Stop(call, pc, loc, NO_DATA, what)
-    return before, base.trace(before).writer(len(base.trace(before).records), loc)
+    j = base.trace(before).writer(len(base.trace(before).records), loc)
+    if j is None:
+        return Stop(before, pc, loc, NO_DATA, f"call {before}'s store has no data flow")
+    return before, j
 
 
 def _order(deps):
