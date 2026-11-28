@@ -17,6 +17,7 @@ What to run to compare, trace and measure a translation, before writing a new to
 | Readability defects against budgets | `make readability`, `tools/readability.py` ([readability.md](readability.md)), `tools/fcomplex.py` ([fcomplex.md](fcomplex.md)) |
 | Generated PRG bytes against budgets | `make prg`, `tools/prgsize.py` ([readability.md](readability.md#prg-bytes)) |
 | Whether a PRG fits the C64 memory map | the link: llvm-mos' `c64/lib/link.ld` places every section, `.bss` and `.noinit` included, in `ram` (`$0801-$CFFF`) and its imaginary registers and zero-page sections in `$02-$8F` (`commodore.ld` region `zp`), the driver linked into the same image; `ld.lld` fails a build whose sections reach `$D000` (I/O) with `section '...' will not fit in region 'ram'`. The PRG carries its song data, so no original load area is resident. The soft stack grows down from `$D000` into the space above the sections, which the link does not bound; `make check` runs it |
+| Which code of play a song never runs | `tools/forced.py PSID... [--json PATH]` ([forced.md](forced.md)) |
 | What costs code size | `tools/costs.py` ([costs.md](costs.md)), `tools/ablate.py` ([ablate.md](ablate.md)), `tools/sizes.py` ([sizes.md](sizes.md)) |
 | Whether a test catches source edits | `tools/mutate.py` |
 | Whether the lifter that generated the C changed | `tools/lifterstamp.py` |
